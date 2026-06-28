@@ -412,27 +412,46 @@ export const TabSheetEditor: React.FC = () => {
   const setActiveMeasureBpm = (bpm: number) => {
     setSong(prev => ({
       ...prev,
-      measures: prev.measures.map((measure, index) => (
-        index === activeMeasureIndex ? { ...measure, bpm } : measure
-      ))
+      bpm: activeMeasureIndex === 0 ? bpm : prev.bpm,
+      measures: prev.measures.map((measure, index) => {
+        if (index !== activeMeasureIndex) return measure;
+        if (activeMeasureIndex === 0) {
+          const normalized = { ...measure };
+          delete normalized.bpm;
+          return normalized;
+        }
+        return { ...measure, bpm };
+      })
     }));
   };
 
   const setActiveMeasureTimeSignature = (field: 'numerator' | 'denominator', value: number) => {
-    setSong(prev => ({
-      ...prev,
-      measures: prev.measures.map((measure, index) => {
-        if (index !== activeMeasureIndex) return measure;
-        const current = getEffectiveTimeSignature(activeMeasureIndex);
-        return {
-          ...measure,
-          timeSignature: {
-            ...current,
-            [field]: value
+    setSong(prev => {
+      const effective = (() => {
+        for (let i = activeMeasureIndex; i >= 0; i--) {
+          const ts = prev.measures[i]?.timeSignature;
+          if (ts) return ts;
+        }
+        return prev.timeSignature;
+      })();
+      const nextTimeSignature = { ...effective, [field]: value };
+      return {
+        ...prev,
+        timeSignature: activeMeasureIndex === 0 ? nextTimeSignature : prev.timeSignature,
+        measures: prev.measures.map((measure, index) => {
+          if (index !== activeMeasureIndex) return measure;
+          if (activeMeasureIndex === 0) {
+            const normalized = { ...measure };
+            delete normalized.timeSignature;
+            return normalized;
           }
-        };
-      })
-    }));
+          return {
+            ...measure,
+            timeSignature: nextTimeSignature
+          };
+        })
+      };
+    });
   };
 
   const updateActiveBeatNotes = (updateFn: (notes: TabNote[]) => TabNote[]) => {
@@ -1161,8 +1180,8 @@ export const TabSheetEditor: React.FC = () => {
             <input
               type="number"
               className="control-input"
-              value={song.bpm}
-              onChange={(e) => setSong({ ...song, bpm: Math.max(20, Math.min(300, parseInt(e.target.value) || 120)) })}
+              value={activeMeasureBpm}
+              onChange={(e) => setActiveMeasureBpm(Math.max(20, Math.min(300, parseInt(e.target.value) || 120)))}
             />
           </div>
 
@@ -1171,13 +1190,10 @@ export const TabSheetEditor: React.FC = () => {
             <select
               className="control-select"
               style={{ padding: '2px 4px', width: '42px', textAlign: 'center' }}
-              value={song.timeSignature.numerator}
+              value={activeMeasureTimeSignature.numerator}
               onChange={(e) => {
                 const num = parseInt(e.target.value) || 4;
-                setSong(prev => ({
-                  ...prev,
-                  timeSignature: { ...prev.timeSignature, numerator: num }
-                }));
+                setActiveMeasureTimeSignature('numerator', num);
               }}
             >
               {[2, 3, 4, 5, 6, 7, 8, 9, 12].map(n => (
@@ -1188,13 +1204,10 @@ export const TabSheetEditor: React.FC = () => {
             <select
               className="control-select"
               style={{ padding: '2px 4px', width: '42px', textAlign: 'center' }}
-              value={song.timeSignature.denominator}
+              value={activeMeasureTimeSignature.denominator}
               onChange={(e) => {
                 const den = parseInt(e.target.value) || 4;
-                setSong(prev => ({
-                  ...prev,
-                  timeSignature: { ...prev.timeSignature, denominator: den }
-                }));
+                setActiveMeasureTimeSignature('denominator', den);
               }}
             >
               {[2, 4, 8, 16].map(d => (
@@ -1380,8 +1393,11 @@ export const TabSheetEditor: React.FC = () => {
             const measureEnd = measureX + measureW;
             const isLast = mIdx === song.measures.length - 1;
             const rowY = getRowY(mIdx);
+            const effectiveTimeSignature = getEffectiveTimeSignature(mIdx);
+            const effectiveBpm = getEffectiveBpm(mIdx);
+            const showTimingChange = mIdx === 0 || typeof measure.bpm === 'number' || !!measure.timeSignature;
 
-            const { isValid, actual, expected } = checkMeasureBeats(measure);
+            const { isValid, actual, expected } = checkMeasureBeats(measure, mIdx);
 
             return (
               <g key={measure.id}>
@@ -1451,6 +1467,18 @@ export const TabSheetEditor: React.FC = () => {
                   strokeWidth={!isValid ? (isLast ? 3 : 1.5) : undefined}
                 />
 
+                {showTimingChange && (
+                  <text
+                    x={measureX + 6}
+                    y={rowY + 8}
+                    className="music-text"
+                    fontSize="10"
+                    style={{ pointerEvents: 'none' }}
+                  >
+                    {`${effectiveTimeSignature.numerator}/${effectiveTimeSignature.denominator} • ♩=${effectiveBpm}`}
+                  </text>
+                )}
+
                 {/* Warning Badge if time signature mismatch */}
                 {!isValid && (
                   <g>
@@ -1497,11 +1525,11 @@ export const TabSheetEditor: React.FC = () => {
                     {/* Time Signature (only in measure 0) */}
                     {mIdx === 0 && (
                       <g>
-                        <text x="50" y="25" className="music-text" fontSize="16" textAnchor="middle">{song.timeSignature.numerator}</text>
-                        <text x="50" y="45" className="music-text" fontSize="16" textAnchor="middle">{song.timeSignature.denominator}</text>
+                        <text x="50" y="25" className="music-text" fontSize="16" textAnchor="middle">{effectiveTimeSignature.numerator}</text>
+                        <text x="50" y="45" className="music-text" fontSize="16" textAnchor="middle">{effectiveTimeSignature.denominator}</text>
                         
-                        <text x="50" y={TAB_STAFF_TOP + TAB_STAFF_HEIGHT / 2 - 8} className="music-text" fontSize="16" textAnchor="middle">{song.timeSignature.numerator}</text>
-                        <text x="50" y={TAB_STAFF_TOP + TAB_STAFF_HEIGHT / 2 + 12} className="music-text" fontSize="16" textAnchor="middle">{song.timeSignature.denominator}</text>
+                        <text x="50" y={TAB_STAFF_TOP + TAB_STAFF_HEIGHT / 2 - 8} className="music-text" fontSize="16" textAnchor="middle">{effectiveTimeSignature.numerator}</text>
+                        <text x="50" y={TAB_STAFF_TOP + TAB_STAFF_HEIGHT / 2 + 12} className="music-text" fontSize="16" textAnchor="middle">{effectiveTimeSignature.denominator}</text>
                       </g>
                     )}
                   </g>
@@ -2106,8 +2134,8 @@ export const TabSheetEditor: React.FC = () => {
             <input
               type="number"
               className="control-input"
-              value={song.bpm}
-              onChange={(e) => setSong({ ...song, bpm: Math.max(20, Math.min(300, parseInt(e.target.value) || 120)) })}
+              value={activeMeasureBpm}
+              onChange={(e) => setActiveMeasureBpm(Math.max(20, Math.min(300, parseInt(e.target.value) || 120)))}
             />
           </label>
           <label className="compact-field">
@@ -2142,13 +2170,10 @@ export const TabSheetEditor: React.FC = () => {
                 <span className="control-label">Sig</span>
                 <select
                   className="control-select"
-                  value={song.timeSignature.numerator}
+                  value={activeMeasureTimeSignature.numerator}
                   onChange={(e) => {
                     const num = parseInt(e.target.value) || 4;
-                    setSong(prev => ({
-                      ...prev,
-                      timeSignature: { ...prev.timeSignature, numerator: num }
-                    }));
+                    setActiveMeasureTimeSignature('numerator', num);
                   }}
                 >
                   {[2, 3, 4, 5, 6, 7, 8, 9, 12].map(n => (
@@ -2158,13 +2183,10 @@ export const TabSheetEditor: React.FC = () => {
                 <span>/</span>
                 <select
                   className="control-select"
-                  value={song.timeSignature.denominator}
+                  value={activeMeasureTimeSignature.denominator}
                   onChange={(e) => {
                     const den = parseInt(e.target.value) || 4;
-                    setSong(prev => ({
-                      ...prev,
-                      timeSignature: { ...prev.timeSignature, denominator: den }
-                    }));
+                    setActiveMeasureTimeSignature('denominator', den);
                   }}
                 >
                   {[2, 4, 8, 16].map(d => (

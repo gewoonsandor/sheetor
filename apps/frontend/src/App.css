@@ -5,15 +5,6 @@
   min-height: 100vh;
 }
 
-body {
-  background-color: #0b0d0f;
-  color: #f8fafc;
-  margin: 0;
-  font-family: 'Outfit', 'Inter', system-ui, -apple-system, sans-serif;
-  display: block;
-  min-height: 100vh;
-}
-
 .app-wrapper {
   display: flex;
   flex-direction: column;
@@ -67,13 +58,4 @@ body {
 
 .app-footer {
   display: none;
-}
-
-@keyframes logo-float {
-  0%, 100% {
-    transform: translateY(0);
-  }
-  50% {
-    transform: translateY(-4px);
-  }
 }

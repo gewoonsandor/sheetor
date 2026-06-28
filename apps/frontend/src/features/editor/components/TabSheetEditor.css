@@ -571,9 +571,9 @@
 
 .bottom-command-bar {
   position: fixed;
-  left: 16px;
-  right: 16px;
-  bottom: 12px;
+  left: 0;
+  right: 0;
+  bottom: 0;
   z-index: 50;
   display: flex;
   justify-content: space-between;
@@ -581,8 +581,8 @@
   gap: 12px;
   padding: 10px;
   background: rgba(11, 13, 15, 0.96);
-  border: 1px solid rgba(255, 255, 255, 0.14);
-  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.45);
+  border-top: 1px solid rgba(255, 255, 255, 0.14);
+  box-shadow: 0 -10px 24px rgba(0, 0, 0, 0.35);
   backdrop-filter: blur(10px);
 }
 
@@ -732,7 +732,11 @@ kbd {
 }
 
 @media (max-width: 900px) {
-  .bottom-command-bar,
+  .bottom-command-bar {
+    left: 0;
+    right: 0;
+  }
+
   .note-options-panel {
     left: 8px;
     right: 8px;
