@@ -363,7 +363,7 @@
   fill: #f8fafc;
   font-family: monospace;
   font-weight: 900;
-  font-size: 11px;
+  font-size: 9px;
 }
 
 .tab-fret-container.active-note .tab-fret-text {
@@ -652,6 +652,12 @@
   box-shadow: 0 12px 28px rgba(0, 0, 0, 0.45);
 }
 
+.note-options-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+}
+
 .note-options-panel {
   position: fixed;
   left: 50%;
@@ -659,6 +665,7 @@
   transform: translateX(-50%);
   z-index: 51;
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   gap: 10px;
   padding: 10px;
@@ -678,6 +685,35 @@
 
 .note-options-summary span {
   color: #9ca3af;
+}
+
+.technique-row {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.technique-btn {
+  background: #1e293b;
+  border: 1px solid #334155;
+  color: #94a3b8;
+  padding: 4px 8px;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 0.75rem;
+  font-family: monospace;
+  line-height: 1;
+}
+
+.technique-btn:hover {
+  background: #334155;
+  color: #f1f5f9;
+}
+
+.technique-btn.active {
+  background: #fbbf24;
+  border-color: #f59e0b;
+  color: #1e293b;
 }
 
 .shortcut-overlay {
@@ -719,6 +755,18 @@
   padding: 12px;
   background: #171a1d;
   color: #d1d5db;
+}
+
+.shortcut-button-grid span.shortcut-divider {
+  grid-column: 1 / -1;
+  background: transparent;
+  color: #94a3b8;
+  font-size: 0.7rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  padding: 4px 0 0;
+  border-top: 1px solid rgba(255,255,255,0.08);
+  margin-top: 4px;
 }
 
 kbd {

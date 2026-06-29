@@ -1,105 +1,32 @@
 import React, { useState, useEffect, useRef } from 'react';
 import './TabSheetEditor.css';
 
-// --- DATA STRUCTURES & TYPES ---
-
-export interface TabNote {
-  stringIndex: number; // 0 = high E, 5 = low E
-  fret: number;        // 0 to 24
-}
-
-export interface TabBeat {
-  id: string;
-  duration: '1' | '2' | '4' | '8' | '16'; // 1=whole, 2=half, 4=quarter, 8=eighth, 16=sixteenth
-  notes: TabNote[];
-  isRest?: boolean;
-}
-
-export interface TabMeasure {
-  id: string;
-  beats: TabBeat[];
-  bpm?: number;
-  timeSignature?: {
-    numerator: number;
-    denominator: number;
-  };
-}
-
-export interface TabSong {
-  title: string;
-  artist: string;
-  bpm: number;
-  timeSignature: {
-    numerator: number;
-    denominator: number;
-  };
-  measures: TabMeasure[];
-}
-
-// --- CONSTANTS ---
-// Full 12-string tuning pool (high to low)
-// Strings 1-6: standard guitar  [E4, B3, G3, D3, A2, E2]
-// Strings 7-12: extended range   [B1, F#1, C#1, G#0, Eb0, Bb-1]
-const allStringPitches = [64, 59, 55, 50, 45, 40, 35, 30, 25, 20, 15, 10];
-
-const getStringPitches = (count: number): number[] => {
-  return allStringPitches.slice(0, count);
-};
-
-// Helper to convert duration string to beat multiplier (relative to quarter note)
-const getDurationVal = (dur: '1' | '2' | '4' | '8' | '16'): number => {
-  switch (dur) {
-    case '1': return 4.0;
-    case '2': return 2.0;
-    case '4': return 1.0;
-    case '8': return 0.5;
-    case '16': return 0.25;
-    default: return 1.0;
-  }
-};
-
-const getBeatDurationInSeconds = (dur: '1' | '2' | '4' | '8' | '16', bpm: number): number => {
-  const beatLength = 60 / bpm; // duration of a quarter note in seconds
-  return getDurationVal(dur) * beatLength;
-};
-
-const midiToNoteName = (midi: number): string => {
-  const names = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
-  return names[midi % 12];
-};
-
-// Transpose MIDI to guitar treble clef (which is written 1 octave higher than sounding)
-const midiToDiatonicAndAccidental = (midi: number) => {
-  const writtenMidi = midi + 12;
-  const octave = Math.floor(writtenMidi / 12) - 1;
-  const pitchClass = writtenMidi % 12;
-  
-  // C major diatonic step offsets for pitch class (0 to 11)
-  const stepOffset = [0, 0, 1, 1, 2, 3, 3, 4, 4, 5, 5, 6];
-  const accidentals = ['', '#', '', '#', '', '', '#', '', '#', '', '#', ''];
-  
-  const diatonicStep = (octave - 4) * 7 + stepOffset[pitchClass];
-  const accidental = accidentals[pitchClass];
-  
-  return { diatonicStep, accidental };
-};
-
-const Y_of_step = (step: number) => 60 - step * 5;
-
-// --- SAMPLE SONGS ---
-
-const createEmptyMeasure = (): TabMeasure => {
-  const mId = Math.random().toString(36).substring(2, 9);
-  return {
-    id: mId,
-    beats: Array.from({ length: 4 }, () => ({
-      id: Math.random().toString(36).substring(2, 9),
-      duration: '4',
-      notes: [],
-      isRest: true
-    }))
-  };
-};
+import type { TabNote, TabBeat, TabMeasure, TabSong, MLayout } from './types';
+import {
+  getStringPitches,
+  getDurationVal,
+  getBeatDurationInSeconds,
+  computeBeamGroups,
+  midiToNoteName,
+  midiToDiatonicAndAccidental,
+  Y_of_step,
+  createEmptyMeasure,
+} from './songUtils';
+import { createGuitarBuffer } from './audioEngine';
+import {
+  computeRowHeight,
+  computeMeasureLayouts,
+  checkMeasureBeats,
+  computeFretboardNeckHeight,
+  getFretboardStringY as getFretboardStringYFromLayout,
+  getFretCellLeft,
+  getFretCellWidth,
+  getFretLeftPercentage,
+  FRET_COUNT as fretCount,
+  MAX_ROW_WIDTH,
+  TAB_STAFF_TOP,
+  TAB_STAFF_HEIGHT_PX,
+} from './layout';
 
 
 
@@ -124,6 +51,7 @@ export const TabSheetEditor: React.FC = () => {
   const [playbackBeat, setPlaybackBeat] = useState<{ measureIndex: number; beatIndex: number } | null>(null);
   
   const [durationSelect, setDurationSelect] = useState<'1' | '2' | '4' | '8' | '16'>('4');
+  const [dotSelect, setDotSelect] = useState<boolean>(false);
   const [synthType, setSynthType] = useState<string>('guitar');
   const [volume, setVolume] = useState<number>(0.8);
   const [showFretboard, setShowFretboard] = useState<boolean>(true);
@@ -161,53 +89,6 @@ export const TabSheetEditor: React.FC = () => {
     };
   }, []);
 
-  // --- AUDIO SYNTHESIS ---
-
-  // Karplus-Strong string synthesis for authentic guitar sound
-  const createGuitarBuffer = (audioCtx: AudioContext, frequency: number, duration: number): AudioBuffer => {
-    const sampleRate = audioCtx.sampleRate;
-    const bufferSize = sampleRate * duration;
-    const buffer = audioCtx.createBuffer(1, bufferSize, sampleRate);
-    const data = buffer.getChannelData(0);
-    
-    const period = Math.round(sampleRate / frequency);
-    if (period <= 0) return buffer;
-
-    const delayLine = new Float32Array(period);
-    // Fill delay line with noise (pluck energy)
-    for (let i = 0; i < period; i++) {
-      delayLine[i] = Math.random() * 2 - 1;
-    }
-    
-    // Feedback coefficient governs the decay speed (acoustic feel)
-    const decay = 0.995; 
-    let pointer = 0;
-    
-    for (let i = 0; i < bufferSize; i++) {
-      const currentVal = delayLine[pointer];
-      const nextPointer = (pointer + 1) % period;
-      const nextVal = delayLine[nextPointer];
-      
-      // Simple low pass filter (average adjacent samples) + decay feedback
-      const filteredVal = (currentVal + nextVal) * 0.5 * decay;
-      
-      data[i] = filteredVal;
-      delayLine[pointer] = filteredVal;
-      pointer = nextPointer;
-    }
-    
-    // Quick fade-out to prevent clicks at the end of buffer
-    const fadeLength = Math.round(sampleRate * 0.04);
-    for (let i = 0; i < fadeLength; i++) {
-      const idx = bufferSize - 1 - i;
-      if (idx >= 0) {
-        data[idx] *= (i / fadeLength);
-      }
-    }
-    
-    return buffer;
-  };
-
   const playBeat = (beat: TabBeat, time: number, bpm: number) => {
     if (beat.isRest || beat.notes.length === 0) return;
     
@@ -221,7 +102,7 @@ export const TabSheetEditor: React.FC = () => {
     beat.notes.forEach(note => {
       const midi = guitarStringPitches[note.stringIndex] + note.fret;
       const freq = 440 * Math.pow(2, (midi - 69) / 12);
-      const duration = getBeatDurationInSeconds(beat.duration, bpm);
+      const duration = getBeatDurationInSeconds(beat.duration, beat.dot, bpm);
       
       if (synthType === 'guitar') {
         const buffer = createGuitarBuffer(ctx, freq, duration + 0.5); // Add sustain window
@@ -317,7 +198,7 @@ export const TabSheetEditor: React.FC = () => {
           }
         }, Math.max(0, (schedTime - ctx.currentTime) * 1000));
         
-        const dur = getBeatDurationInSeconds(beat.duration, currentBpm);
+        const dur = getBeatDurationInSeconds(beat.duration, beat.dot, currentBpm);
         nextBeatTimeRef.current += dur;
         
         activeBeatIndexRef.current++;
@@ -477,9 +358,10 @@ export const TabSheetEditor: React.FC = () => {
 
   const setFretForActiveNote = (stringIndex: number, fret: number) => {
     updateActiveBeatNotes(currentNotes => {
+      const existing = currentNotes.find(n => n.stringIndex === stringIndex);
       const filtered = currentNotes.filter(n => n.stringIndex !== stringIndex);
       if (fret >= 0) {
-        filtered.push({ stringIndex, fret });
+        filtered.push({ ...(existing || {}), stringIndex, fret });
         // Play instant auditory preview
         const midi = guitarStringPitches[stringIndex] + fret;
         triggerSingleTone(midi);
@@ -488,6 +370,18 @@ export const TabSheetEditor: React.FC = () => {
     });
     // Set active string
     setActiveStringIndex(stringIndex);
+  };
+
+  const toggleNoteTechnique = (technique: keyof Pick<TabNote, 'harmonic' | 'palmMute' | 'letRing' | 'vibrato' | 'ghostNote' | 'slur' | 'legatoSlide' | 'bend'>) => {
+    updateActiveBeatNotes(currentNotes => {
+      const existing = currentNotes.find(n => n.stringIndex === activeStringIndex);
+      if (!existing) return currentNotes;
+      return currentNotes.map(n =>
+        n.stringIndex === activeStringIndex
+          ? { ...n, [technique]: !n[technique] }
+          : n
+      );
+    });
   };
 
   const removeActiveNoteOnString = (stringIndex: number) => {
@@ -534,6 +428,23 @@ export const TabSheetEditor: React.FC = () => {
     });
   };
 
+  const toggleDotForActiveBeat = () => {
+    setSong(prevSong => {
+      const nextMeasures = prevSong.measures.map((m, mIdx) => {
+        if (mIdx !== activeMeasureIndex) return m;
+        return {
+          ...m,
+          beats: m.beats.map((b, bIdx) => {
+            if (bIdx !== activeBeatIndex) return b;
+            return { ...b, dot: !b.dot };
+          })
+        };
+      });
+      return { ...prevSong, measures: nextMeasures };
+    });
+    setDotSelect(prev => !prev);
+  };
+
   // Grid/beat manipulation
   const insertBeatAfterActive = () => {
     setSong(prevSong => {
@@ -542,6 +453,7 @@ export const TabSheetEditor: React.FC = () => {
         const newBeat: TabBeat = {
           id: Math.random().toString(36).substring(2, 9),
           duration: durationSelect,
+          dot: dotSelect,
           notes: [],
           isRest: true
         };
@@ -686,7 +598,7 @@ export const TabSheetEditor: React.FC = () => {
         break;
       case 'ArrowRight': {
         e.preventDefault();
-        const measureDur = measure.beats.reduce((acc, b) => acc + getDurationVal(b.duration), 0);
+        const measureDur = measure.beats.reduce((acc, b) => acc + getDurationVal(b.duration, b.dot), 0);
         const timeSignature = getEffectiveTimeSignature(activeMeasureIndex);
         const targetDur = timeSignature.numerator * (4 / timeSignature.denominator);
 
@@ -751,18 +663,75 @@ export const TabSheetEditor: React.FC = () => {
         }
         break;
 
-      // Delete / Backspace removes note
+      // Note technique shortcuts (when note options panel is open)
+      case 'h':
+      case 'H':
+        e.preventDefault();
+        toggleNoteTechnique('slur');
+        break;
+      case 's':
+      case 'S':
+        e.preventDefault();
+        toggleNoteTechnique('legatoSlide');
+        break;
+      case 'v':
+      case 'V':
+        e.preventDefault();
+        toggleNoteTechnique('vibrato');
+        break;
+      case 'b':
+      case 'B':
+        e.preventDefault();
+        toggleNoteTechnique('bend');
+        break;
+      case 'm':
+      case 'M':
+        e.preventDefault();
+        toggleNoteTechnique('palmMute');
+        break;
+      case 'l':
+      case 'L':
+        e.preventDefault();
+        toggleNoteTechnique('letRing');
+        break;
+      case 'o':
+      case 'O':
+        e.preventDefault();
+        toggleNoteTechnique('harmonic');
+        break;
+      case 'g':
+      case 'G':
+        e.preventDefault();
+        toggleNoteTechnique('ghostNote');
+        break;
+
+      // Delete / Backspace removes a note, or deletes the beat if it's a rest
       case 'Backspace':
       case 'Delete':
         e.preventDefault();
-        removeActiveNoteOnString(activeStringIndex);
+        if (beat?.isRest) {
+          deleteActiveBeat();
+        } else if (showNoteOptions) {
+          removeActiveNoteOnString(activeStringIndex);
+          setShowNoteOptions(false);
+        } else {
+          removeActiveNoteOnString(activeStringIndex);
+        }
         break;
 
-      // Rest hotkey
+      // Rest hotkey (or toggle + close panel)
       case 'r':
       case 'R':
         e.preventDefault();
         toggleActiveBeatRest();
+        if (showNoteOptions) setShowNoteOptions(false);
+        break;
+
+      // Dot hotkey to toggle dotted note
+      case '.':
+        e.preventDefault();
+        toggleDotForActiveBeat();
+        if (showNoteOptions) setShowNoteOptions(false);
         break;
 
       // Plus / Equals / Minus to change duration (increase/decrease)
@@ -826,58 +795,37 @@ export const TabSheetEditor: React.FC = () => {
   }, [activeBeatIndex, activeMeasureIndex]);
 
   useEffect(() => {
-    if (!showShortcuts) return;
+    if (!showShortcuts && !openBottomMenu && !showNoteOptions) return;
 
-    const handleShortcutOverlayKeyDown = (e: KeyboardEvent) => {
+    const handleOverlayKeyDown = (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
         setShowShortcuts(false);
+        setOpenBottomMenu(null);
+        setShowNoteOptions(false);
       }
     };
 
-    window.addEventListener('keydown', handleShortcutOverlayKeyDown);
-    return () => window.removeEventListener('keydown', handleShortcutOverlayKeyDown);
-  }, [showShortcuts]);
+    window.addEventListener('keydown', handleOverlayKeyDown);
+    return () => window.removeEventListener('keydown', handleOverlayKeyDown);
+  }, [showShortcuts, openBottomMenu, showNoteOptions]);
 
   // --- SVG MEASUREMENT & LAYOUT CALCULATION ---
 
-  const MEASURE_WIDTHS = [320, 220, 220, 220];
-  const MEASURES_PER_ROW = MEASURE_WIDTHS.length;
-  // Dynamic row height: standard staff (60) + gap (20) + tab staff (stringCount * 10) + padding (30)
-  const TAB_STAFF_HEIGHT = stringCount * 10;
-  const TAB_STAFF_TOP = 90;
-  const ROW_HEIGHT = TAB_STAFF_TOP + TAB_STAFF_HEIGHT + 30;
+  const ROW_HEIGHT = computeRowHeight(stringCount);
 
-  const getMeasureWidth = (index: number): number => {
-    return MEASURE_WIDTHS[index % MEASURES_PER_ROW];
-  };
+  const measureLayouts: MLayout[] = computeMeasureLayouts(song.measures);
 
-  const getMeasurePadding = (index: number): number => {
-    const measure = song.measures[index];
-    if (measure?.bpm || measure?.timeSignature) return 46;
-    return index % MEASURES_PER_ROW === 0 ? 70 : 18;
-  };
+  const getMeasureWidth = (index: number): number => measureLayouts[index]?.width ?? 0;
+  const getMeasurePadding = (index: number): number => measureLayouts[index]?.padding ?? 18;
+  const getRowY = (index: number): number => (measureLayouts[index]?.row ?? 0) * ROW_HEIGHT;
+  const getMeasureX = (index: number): number => measureLayouts[index]?.x ?? 0;
 
-  const getRowY = (index: number): number => {
-    return Math.floor(index / MEASURES_PER_ROW) * ROW_HEIGHT;
-  };
-
-  const getMeasureX = (index: number): number => {
-    const colIndex = index % MEASURES_PER_ROW;
-    return MEASURE_WIDTHS.slice(0, colIndex).reduce((sum, width) => sum + width, 0);
-  };
-
-  const rowCount = Math.ceil(song.measures.length / MEASURES_PER_ROW);
+  const rowCount = (measureLayouts.length > 0 ? Math.max(...measureLayouts.map(l => l.row)) : 0) + 1;
   const totalSVGHeight = rowCount * ROW_HEIGHT + 10;
-  const FRETBOARD_STRING_TOP = 20;
-  const FRETBOARD_STRING_BOTTOM = 20;
-  const FRETBOARD_STRING_GAP = 24;
-  const fretboardStringSpan = (stringCount - 1) * FRETBOARD_STRING_GAP;
-  const fretboardNeckHeight = FRETBOARD_STRING_TOP + fretboardStringSpan + FRETBOARD_STRING_BOTTOM;
+  const fretboardNeckHeight = computeFretboardNeckHeight(stringCount);
 
-  const getFretboardStringY = (stringIdx: number): number => {
-    if (stringCount <= 1) return FRETBOARD_STRING_TOP + fretboardStringSpan / 2;
-    return FRETBOARD_STRING_TOP + stringIdx * FRETBOARD_STRING_GAP;
-  };
+  const getFretboardStringY = (stringIdx: number): number =>
+    getFretboardStringYFromLayout(stringIdx, stringCount);
 
   // Calculate coordinates for beats inside a measure
   const getBeatCoordinates = (mIdx: number, bIdx: number): number => {
@@ -887,12 +835,17 @@ export const TabSheetEditor: React.FC = () => {
     const width = getMeasureWidth(mIdx);
     const usableWidth = width - padding - 20;
 
+    // Center a single beat inside the measure's usable area
+    if (measure.beats.length === 1) {
+      return measureX + padding + usableWidth / 2;
+    }
+
     // Calculate sum of beat values to scale incomplete measures
     let totalDur = 0;
     const beatOffsets: number[] = [];
     measure.beats.forEach((b) => {
       beatOffsets.push(totalDur);
-      totalDur += getDurationVal(b.duration);
+      totalDur += getDurationVal(b.duration, b.dot);
     });
 
     const timeSignature = getEffectiveTimeSignature(mIdx);
@@ -903,68 +856,23 @@ export const TabSheetEditor: React.FC = () => {
     return measureX + padding + (startOffset / denom) * usableWidth;
   };
 
-  const checkMeasureBeats = (measure: TabMeasure, measureIndex: number) => {
-    const actual = measure.beats.reduce((acc, b) => acc + getDurationVal(b.duration), 0);
-    const timeSignature = getEffectiveTimeSignature(measureIndex);
-    const expected = timeSignature.numerator * (4 / timeSignature.denominator);
-    return {
-      isValid: Math.abs(actual - expected) < 0.001,
-      actual,
-      expected
-    };
-  };
-
   // Map standard notation click to pitch & tab note
   const handleStandardStaffClick = (mIdx: number, beatId: string, clickY: number) => {
-    // Determine diatonic step from click Y
-    // Y = 60 - step * 5 => step = (60 - Y) / 5
     const step = Math.round((60 - clickY) / 5);
-    
-    // Diatonic scales and accidentals mapping in C major (no accidentals by default)
-    // Map diatonic step back to MIDI pitch
-    // Diatonic step = (octave - 4) * 7 + stepOffset[pitchClass]
-    // Let's search for the closest guitar pitch
+
     const midiTable: Record<number, number> = {
-      // step -> midi note (sounding)
-      [-12]: 40, // E2 (Low E)
-      [-11]: 41, // F2
-      [-10]: 43, // G2
-      [-9]: 45,  // A2
-      [-8]: 47,  // B2
-      [-7]: 48,  // C3
-      [-6]: 50,  // D3
-      [-5]: 52,  // E3
-      [-4]: 53,  // F3
-      [-3]: 55,  // G3
-      [-2]: 57,  // A3
-      [-1]: 59,  // B3
-      [0]: 60,   // C4 (Middle C)
-      [1]: 62,   // D4
-      [2]: 64,   // E4
-      [3]: 65,   // F4
-      [4]: 67,   // G4
-      [5]: 69,   // A4
-      [6]: 71,   // B4
-      [7]: 72,   // C5
-      [8]: 74,   // D5
-      [9]: 76,   // E5
-      [10]: 77,  // F5
-      [11]: 79,  // G5
-      [12]: 81,  // A5
-      [13]: 83,  // B5
-      [14]: 84,  // C6
-      [15]: 86,  // D6
-      [16]: 88   // E6
+      [-12]: 40, [-11]: 41, [-10]: 43, [-9]: 45, [-8]: 47, [-7]: 48,
+      [-6]: 50, [-5]: 52, [-4]: 53, [-3]: 55, [-2]: 57, [-1]: 59,
+      [0]: 60, [1]: 62, [2]: 64, [3]: 65, [4]: 67, [5]: 69,
+      [6]: 71, [7]: 72, [8]: 74, [9]: 76, [10]: 77, [11]: 79,
+      [12]: 81, [13]: 83, [14]: 84, [15]: 86, [16]: 88,
     };
 
     let targetMidi = midiTable[step];
     if (targetMidi === undefined) {
-      if (step < -12) targetMidi = 40;
-      else targetMidi = 88;
+      targetMidi = step < -12 ? 40 : 88;
     }
 
-    // Find the best string/fret combination to play this midi note
-    // We prefer frets close to our current visual string, or low frets
     let bestString = activeStringIndex;
     let bestFret = -1;
     let minCost = Infinity;
@@ -973,7 +881,6 @@ export const TabSheetEditor: React.FC = () => {
       const baseMidi = guitarStringPitches[s];
       const fret = targetMidi - baseMidi;
       if (fret >= 0 && fret <= 22) {
-        // Cost heuristic: prefer frets 0-8, and prefer strings close to active string
         const cost = Math.abs(fret - 3) * 0.4 + Math.abs(s - activeStringIndex) * 1.0;
         if (cost < minCost) {
           minCost = cost;
@@ -989,27 +896,6 @@ export const TabSheetEditor: React.FC = () => {
       setActiveBeatIndex(bIdx);
       setFretForActiveNote(bestString, bestFret);
     }
-  };
-
-  // --- VIRTUAL FRETBOARD LOGARITHMIC LAYOUT ---
-  const fretCount = 15;
-  const scaleFactor = 1 - Math.pow(2, -fretCount / 12);
-  const getFretLeftPercentage = (fret: number): number => {
-    if (fret === 0) return 0;
-    // Logarithmic fret formula
-    return (1 - Math.pow(2, -fret / 12)) / scaleFactor * 100;
-  };
-
-  const getFretCellLeft = (fret: number): number => {
-    if (fret === 0) return 0;
-    return getFretLeftPercentage(fret - 1);
-  };
-
-  const getFretCellWidth = (fret: number): number => {
-    if (fret === 0) return 3.3; // % offset for the nut
-    const left = getFretLeftPercentage(fret - 1);
-    const right = getFretLeftPercentage(fret);
-    return right - left;
   };
 
   // --- EXPORT / IMPORT LOGIC ---
@@ -1131,6 +1017,23 @@ export const TabSheetEditor: React.FC = () => {
       </span>
     </button>
   ));
+
+  const dotButton = (
+    <button
+      className={`duration-btn ${(activeBeat?.dot ?? dotSelect) ? 'active' : ''}`}
+      onClick={() => {
+        toggleDotForActiveBeat();
+      }}
+      title="Dotted note"
+    >
+      <svg viewBox="0 0 24 24" fill="currentColor" width="18" height="18">
+        <circle cx="18" cy="18" r="3" />
+        <ellipse cx="10" cy="14" rx="5" ry="3.5" transform="rotate(-20 10 14)" />
+        <line x1="15" y1="14" x2="15" y2="4" stroke="currentColor" strokeWidth="2.2" />
+      </svg>
+      <span className="duration-label">.</span>
+    </button>
+  );
 
   return (
     <div 
@@ -1329,6 +1232,21 @@ export const TabSheetEditor: React.FC = () => {
             ))}
           </div>
 
+          <button
+            className={`btn ${(activeBeat?.dot ?? dotSelect) ? 'active' : ''}`}
+            onClick={() => {
+              toggleDotForActiveBeat();
+            }}
+            style={{ height: '44px', minWidth: '36px' }}
+            title="Dotted note"
+          >
+            <svg viewBox="0 0 24 24" fill="currentColor" width="18" height="18">
+              <circle cx="18" cy="18" r="3" />
+              <ellipse cx="10" cy="14" rx="5" ry="3.5" transform="rotate(-20 10 14)" />
+              <line x1="15" y1="14" x2="15" y2="4" stroke="currentColor" strokeWidth="2.2" />
+            </svg>
+          </button>
+
           <button className="btn" onClick={toggleActiveBeatRest} style={{ height: '44px' }}>
             ∅ {activeBeat?.isRest ? 'Set Playable' : 'Set Rest'}
           </button>
@@ -1373,13 +1291,13 @@ export const TabSheetEditor: React.FC = () => {
         }}
       >
         <svg 
-          viewBox={`0 0 980 ${totalSVGHeight}`}
+          viewBox={`0 0 ${MAX_ROW_WIDTH} ${totalSVGHeight}`}
           className="music-svg"
           style={{ width: '100%', height: 'auto', display: 'block' }}
         >
           {/* Background Interactivity Catcher */}
           <rect 
-            width={980} 
+            width={MAX_ROW_WIDTH} 
             height={totalSVGHeight} 
             fill="transparent" 
             className="svg-interactive-bg"
@@ -1397,7 +1315,7 @@ export const TabSheetEditor: React.FC = () => {
             const effectiveBpm = getEffectiveBpm(mIdx);
             const showTimingChange = mIdx === 0 || typeof measure.bpm === 'number' || !!measure.timeSignature;
 
-            const { isValid, actual, expected } = checkMeasureBeats(measure, mIdx);
+            const { isValid, actual, expected } = checkMeasureBeats(measure, mIdx, getEffectiveTimeSignature);
 
             return (
               <g key={measure.id}>
@@ -1407,7 +1325,7 @@ export const TabSheetEditor: React.FC = () => {
                     x={measureX}
                     y={rowY + 2}
                     width={measureW}
-                    height={TAB_STAFF_TOP + TAB_STAFF_HEIGHT - 2 + 8}
+                    height={TAB_STAFF_TOP + stringCount * TAB_STAFF_HEIGHT_PX - 2 + 8}
                     fill="rgba(239, 68, 68, 0.03)"
                     stroke="rgba(239, 68, 68, 0.15)"
                     strokeWidth="1"
@@ -1450,7 +1368,7 @@ export const TabSheetEditor: React.FC = () => {
                   x1={measureX}
                   y1={rowY + 10}
                   x2={measureX}
-                  y2={rowY + TAB_STAFF_TOP + TAB_STAFF_HEIGHT - 10}
+                  y2={rowY + TAB_STAFF_TOP + stringCount * TAB_STAFF_HEIGHT_PX - 10}
                   className="bar-line"
                   stroke={!isValid ? "#ef4444" : undefined}
                   strokeWidth={!isValid ? 1.5 : undefined}
@@ -1461,7 +1379,7 @@ export const TabSheetEditor: React.FC = () => {
                   x1={measureEnd}
                   y1={rowY + 10}
                   x2={measureEnd}
-                  y2={rowY + TAB_STAFF_TOP + TAB_STAFF_HEIGHT - 10}
+                  y2={rowY + TAB_STAFF_TOP + stringCount * TAB_STAFF_HEIGHT_PX - 10}
                   className={isLast ? "bar-line-end" : "bar-line"}
                   stroke={!isValid ? "#ef4444" : undefined}
                   strokeWidth={!isValid ? (isLast ? 3 : 1.5) : undefined}
@@ -1475,7 +1393,7 @@ export const TabSheetEditor: React.FC = () => {
                     fontSize="10"
                     style={{ pointerEvents: 'none' }}
                   >
-                    {`${effectiveTimeSignature.numerator}/${effectiveTimeSignature.denominator} • ♩=${effectiveBpm}`}
+                    {`♩=${effectiveBpm}`}
                   </text>
                 )}
 
@@ -1507,7 +1425,7 @@ export const TabSheetEditor: React.FC = () => {
                 )}
 
                 {/* Clef, TAB (rendered on the first measure of every row) */}
-                {(mIdx % MEASURES_PER_ROW === 0) && (
+                {(measureLayouts[mIdx]?.x === 0) && (
                   <g transform={`translate(${measureX}, ${rowY})`}>
                     {/* Treble Clef Path */}
                     <path
@@ -1518,20 +1436,30 @@ export const TabSheetEditor: React.FC = () => {
 
                     {/* Stacked TAB text */}
                     {/* Center TAB text vertically in the tab staff */}
-                    <text x="18" y={TAB_STAFF_TOP + TAB_STAFF_HEIGHT / 2 - 14} className="music-text" fontSize="13" letterSpacing="0">T</text>
-                    <text x="18" y={TAB_STAFF_TOP + TAB_STAFF_HEIGHT / 2 + 2} className="music-text" fontSize="13" letterSpacing="0">A</text>
-                    <text x="18" y={TAB_STAFF_TOP + TAB_STAFF_HEIGHT / 2 + 18} className="music-text" fontSize="13" letterSpacing="0">B</text>
+                    <text x="18" y={TAB_STAFF_TOP + stringCount * TAB_STAFF_HEIGHT_PX / 2 - 14} className="music-text" fontSize="13" letterSpacing="0">T</text>
+                    <text x="18" y={TAB_STAFF_TOP + stringCount * TAB_STAFF_HEIGHT_PX / 2 + 2} className="music-text" fontSize="13" letterSpacing="0">A</text>
+                    <text x="18" y={TAB_STAFF_TOP + stringCount * TAB_STAFF_HEIGHT_PX / 2 + 18} className="music-text" fontSize="13" letterSpacing="0">B</text>
 
-                    {/* Time Signature (only in measure 0) */}
-                    {mIdx === 0 && (
+                    {/* Time Signature (first-of-row measures) */}
+                    {showTimingChange && (
                       <g>
                         <text x="50" y="25" className="music-text" fontSize="16" textAnchor="middle">{effectiveTimeSignature.numerator}</text>
                         <text x="50" y="45" className="music-text" fontSize="16" textAnchor="middle">{effectiveTimeSignature.denominator}</text>
                         
-                        <text x="50" y={TAB_STAFF_TOP + TAB_STAFF_HEIGHT / 2 - 8} className="music-text" fontSize="16" textAnchor="middle">{effectiveTimeSignature.numerator}</text>
-                        <text x="50" y={TAB_STAFF_TOP + TAB_STAFF_HEIGHT / 2 + 12} className="music-text" fontSize="16" textAnchor="middle">{effectiveTimeSignature.denominator}</text>
+                        <text x="50" y={TAB_STAFF_TOP + stringCount * TAB_STAFF_HEIGHT_PX / 2 - 8} className="music-text" fontSize="16" textAnchor="middle">{effectiveTimeSignature.numerator}</text>
+                        <text x="50" y={TAB_STAFF_TOP + stringCount * TAB_STAFF_HEIGHT_PX / 2 + 12} className="music-text" fontSize="16" textAnchor="middle">{effectiveTimeSignature.denominator}</text>
                       </g>
                     )}
+                  </g>
+                )}
+
+                {/* Big Time Signature for timing changes (non-first-of-row measures) */}
+                {showTimingChange && mIdx > 0 && measureLayouts[mIdx]?.x !== 0 && (
+                  <g>
+                    <text x={measureX + 12} y={rowY + 25} className="music-text" fontSize="16" textAnchor="middle">{effectiveTimeSignature.numerator}</text>
+                    <text x={measureX + 12} y={rowY + 45} className="music-text" fontSize="16" textAnchor="middle">{effectiveTimeSignature.denominator}</text>
+                    <text x={measureX + 12} y={rowY + TAB_STAFF_TOP + stringCount * TAB_STAFF_HEIGHT_PX / 2 - 8} className="music-text" fontSize="16" textAnchor="middle">{effectiveTimeSignature.numerator}</text>
+                    <text x={measureX + 12} y={rowY + TAB_STAFF_TOP + stringCount * TAB_STAFF_HEIGHT_PX / 2 + 12} className="music-text" fontSize="16" textAnchor="middle">{effectiveTimeSignature.denominator}</text>
                   </g>
                 )}
 
@@ -1543,9 +1471,9 @@ export const TabSheetEditor: React.FC = () => {
                     <g key={`clicks-${b.id}`}>
                       {/* Clicking standard staff region triggers layout coordinate mapper */}
                       <rect
-                        x={beatX - 12}
+                        x={beatX - 10}
                         y={rowY}
-                        width="24"
+                        width="20"
                         height="65"
                         fill="transparent"
                         style={{ cursor: 'pointer' }}
@@ -1563,9 +1491,9 @@ export const TabSheetEditor: React.FC = () => {
                         return (
                           <rect
                             key={`click-string-${stringIdx}`}
-                            x={beatX - 12}
+                            x={beatX - 10}
                             y={y - 5}
-                            width="24"
+                            width="20"
                             height="10"
                             fill="transparent"
                             style={{ cursor: 'pointer' }}
@@ -1600,10 +1528,10 @@ export const TabSheetEditor: React.FC = () => {
                   {isSelected && (
                     <g>
                       <rect
-                        x={beatX - 12}
+                        x={beatX - 10}
                         y={rowY + 5}
-                        width="24"
-                        height={TAB_STAFF_TOP + TAB_STAFF_HEIGHT - 5}
+                        width="20"
+                        height={TAB_STAFF_TOP + stringCount * TAB_STAFF_HEIGHT_PX - 5}
                         fill="rgba(99, 102, 241, 0.12)"
                         stroke="#6366f1"
                         strokeWidth="1.5"
@@ -1629,7 +1557,7 @@ export const TabSheetEditor: React.FC = () => {
                       x1={beatX}
                       y1={rowY + 2}
                       x2={beatX}
-                      y2={rowY + TAB_STAFF_TOP + TAB_STAFF_HEIGHT}
+                      y2={rowY + TAB_STAFF_TOP + stringCount * TAB_STAFF_HEIGHT_PX}
                       stroke="#10b981"
                       strokeWidth="2.5"
                       strokeDasharray="2"
@@ -1644,8 +1572,12 @@ export const TabSheetEditor: React.FC = () => {
           {/* Render Notes & Rests */}
           {song.measures.map((measure, mIdx) => {
             const rowY = getRowY(mIdx);
-            return measure.beats.map((b, bIdx) => {
+            const beamGroups = computeBeamGroups(measure.beats);
+            return (
+              <g key={`measure-${measure.id}`}>
+              {measure.beats.map((b, bIdx) => {
               const beatX = getBeatCoordinates(mIdx, bIdx);
+              const beamInfo = beamGroups.find(g => g.startIdx <= bIdx && bIdx <= g.endIdx);
 
               // 1. Rests
               if (b.isRest || b.notes.length === 0) {
@@ -1680,6 +1612,10 @@ export const TabSheetEditor: React.FC = () => {
                         )}
                       </g>
                     )}
+                    {/* Dotted rest dot */}
+                    {b.dot && (
+                      <circle cx={beatX + 10} cy={dur === '1' ? 23 : dur === '2' ? 27 : 25} r="2.2" fill="#f8fafc" pointerEvents="none" />
+                    )}
                   </g>
                 );
               }
@@ -1710,6 +1646,10 @@ export const TabSheetEditor: React.FC = () => {
               const isWhole = b.duration === '1';
               const hasStem = !isWhole;
 
+              // Stem position for beaming
+              const stemX = hasStem ? (stemUp ? beatX + 4 : beatX - 4) : 0;
+              const stemEndY = hasStem ? (stemUp ? highestY - 25 : lowestY + 25) : 0;
+
               return (
                 <g key={`notes-${b.id}`}>
                   {/* A. Standard Notation noteheads & stems */}
@@ -1737,9 +1677,9 @@ export const TabSheetEditor: React.FC = () => {
                             return (
                               <line
                                 key={`ledg-${lineStep}`}
-                                x1={beatX - 9}
+                                x1={beatX - 7}
                                 y1={lineY}
-                                x2={beatX + 9}
+                                x2={beatX + 7}
                                 y2={lineY}
                                 className="staff-ledger-line"
                               />
@@ -1749,12 +1689,11 @@ export const TabSheetEditor: React.FC = () => {
 
                         {/* Accidental (#) if sharp */}
                         {n.accidental === '#' && (
-                          <g stroke="#f8fafc" strokeWidth="1.5" opacity="0.9">
-                            {/* Slanted ticks and cross bars for sharp */}
-                            <line x1={beatX - 15} y1={n.y - 7} x2={beatX - 15} y2={n.y + 7} />
-                            <line x1={beatX - 11} y1={n.y - 9} x2={beatX - 11} y2={n.y + 5} />
-                            <line x1={beatX - 18} y1={n.y - 3} x2={beatX - 8} y2={n.y - 5} />
-                            <line x1={beatX - 18} y1={n.y + 3} x2={beatX - 8} y2={n.y + 1} />
+                          <g stroke="#f8fafc" strokeWidth="1.3" opacity="0.9">
+                            <line x1={beatX - 13} y1={n.y - 6} x2={beatX - 13} y2={n.y + 6} />
+                            <line x1={beatX - 10} y1={n.y - 8} x2={beatX - 10} y2={n.y + 4} />
+                            <line x1={beatX - 16} y1={n.y - 2.5} x2={beatX - 7} y2={n.y - 4} />
+                            <line x1={beatX - 16} y1={n.y + 2.5} x2={beatX - 7} y2={n.y + 1} />
                           </g>
                         )}
 
@@ -1762,75 +1701,81 @@ export const TabSheetEditor: React.FC = () => {
                         <ellipse
                           cx={beatX}
                           cy={n.y}
-                          rx="5.8"
-                          ry="3.9"
+                          rx="4.5"
+                          ry="3.0"
                           transform={`rotate(-20 ${beatX} ${n.y})`}
                           fill={isSelected ? "#818cf8" : (b.duration === '1' || b.duration === '2' ? "none" : "#f8fafc")}
                           stroke={isSelected ? "#818cf8" : "#f8fafc"}
-                          strokeWidth="1.6"
+                          strokeWidth="1.4"
                           className="notehead"
                           onClick={() => {
                             selectNote(mIdx, bIdx, n.stringIndex);
                           }}
                         />
+                        {/* Dotted note dot */}
+                        {b.dot && (
+                          <circle cx={beatX + 8} cy={n.y} r="2.2" fill="#f8fafc" pointerEvents="none" />
+                        )}
                       </g>
                     );
                   })}
 
                   {/* Shared stem for chord */}
                   {hasStem && (
-                    (() => {
-                      const stemX = stemUp ? beatX + 5.3 : beatX - 5.3;
-                      const stemStartY = stemUp ? lowestY : highestY;
-                      // Stem length: 32px
-                      const stemEndY = stemUp ? highestY - 30 : lowestY + 30;
+                    <g>
+                      <line
+                        x1={stemX}
+                        y1={stemUp ? lowestY : highestY}
+                        x2={stemX}
+                        y2={stemEndY}
+                        stroke="#f8fafc"
+                        strokeWidth="1.5"
+                      />
 
-                      return (
-                        <g>
-                          <line
-                            x1={stemX}
-                            y1={stemStartY}
-                            x2={stemX}
-                            y2={stemEndY}
-                            stroke="#f8fafc"
-                            strokeWidth="1.5"
+                      {/* Individual flag for ungrouped 8th/16th */}
+                      {!beamInfo && b.duration === '8' && (
+                        <path
+                          d={stemUp 
+                            ? `M ${stemX} ${stemEndY} c 4 3, 7 9, 5 17 c -1 -5, -3 -9, -5 -12` 
+                            : `M ${stemX} ${stemEndY} c 4 -3, 7 -9, 5 -17 c -1 5, -3 9, -5 12`
+                          }
+                          fill="#f8fafc"
+                        />
+                      )}
+                      {!beamInfo && b.duration === '16' && (
+                        <g fill="#f8fafc">
+                          <path
+                            d={stemUp 
+                              ? `M ${stemX} ${stemEndY} c 4 3, 7 9, 5 17 c -1 -5, -3 -9, -5 -12` 
+                              : `M ${stemX} ${stemEndY} c 4 -3, 7 -9, 5 -17 c -1 5, -3 9, -5 12`
+                            }
                           />
-
-                          {/* Flags for eighth & sixteenth notes */}
-                          {b.duration === '8' && (
-                            <path
-                              d={stemUp 
-                                ? `M ${stemX} ${stemEndY} c 4 3, 7 9, 5 17 c -1 -5, -3 -9, -5 -12` 
-                                : `M ${stemX} ${stemEndY} c 4 -3, 7 -9, 5 -17 c -1 5, -3 9, -5 12`
-                              }
-                              fill="#f8fafc"
-                            />
-                          )}
-                          {b.duration === '16' && (
-                            <g fill="#f8fafc">
-                              <path
-                                d={stemUp 
-                                  ? `M ${stemX} ${stemEndY} c 4 3, 7 9, 5 17 c -1 -5, -3 -9, -5 -12` 
-                                  : `M ${stemX} ${stemEndY} c 4 -3, 7 -9, 5 -17 c -1 5, -3 9, -5 12`
-                                }
-                              />
-                              <path
-                                d={stemUp 
-                                  ? `M ${stemX} ${stemEndY + 5} c 4 3, 7 9, 5 17 c -1 -5, -3 -9, -5 -12` 
-                                  : `M ${stemX} ${stemEndY - 5} c 4 -3, 7 -9, 5 -17 c -1 5, -3 9, -5 12`
-                                }
-                              />
-                            </g>
-                          )}
+                          <path
+                            d={stemUp 
+                              ? `M ${stemX} ${stemEndY + 5} c 4 3, 7 9, 5 17 c -1 -5, -3 -9, -5 -12` 
+                              : `M ${stemX} ${stemEndY - 5} c 4 -3, 7 -9, 5 -17 c -1 5, -3 9, -5 12`
+                            }
+                          />
                         </g>
-                      );
-                    })()
+                      )}
+                    </g>
                   )}
 
                   {/* B. TAB numbers (fret digits over strings) */}
                   {b.notes.map(n => {
                     const stringY = rowY + TAB_STAFF_TOP + n.stringIndex * 10;
                     const isSelected = activeMeasureIndex === mIdx && activeBeatIndex === bIdx && activeStringIndex === n.stringIndex;
+
+                    const fretDisplay = (note: TabNote): string => {
+                      if (note.ghostNote) return 'x';
+                      let text = note.harmonic ? `<${note.fret}>` : `${note.fret}`;
+                      if (note.bend) text += 'b';
+                      if (note.vibrato) text += '~';
+                      return text;
+                    };
+
+                    const displayText = fretDisplay(n);
+                    const bgWidth = Math.max(10, displayText.length * 6 + 4);
 
                     return (
                       <g 
@@ -1842,10 +1787,10 @@ export const TabSheetEditor: React.FC = () => {
                       >
                         {/* Background rectangle to block staff line behind fret number */}
                         <rect
-                          x={beatX - 5}
-                          y={stringY - 5.5}
-                          width="10"
-                          height="11"
+                          x={beatX - bgWidth / 2}
+                          y={stringY - 4.5}
+                          width={bgWidth}
+                          height="9"
                           rx="2"
                           className="tab-fret-bg"
                         />
@@ -1856,14 +1801,170 @@ export const TabSheetEditor: React.FC = () => {
                           dominantBaseline="central"
                           className="tab-fret-text"
                         >
-                          {n.fret}
+                          {displayText}
                         </text>
+                        {(n.slur || n.legatoSlide) && (() => {
+                          let prevPos: { x: number; y: number } | null = null;
+                          for (let i = bIdx - 1; i >= 0; i--) {
+                            const prevBeat = measure.beats[i];
+                            const prevNote = prevBeat?.notes.find(nn => nn.stringIndex === n.stringIndex);
+                            if (prevNote) {
+                              prevPos = {
+                                x: getBeatCoordinates(mIdx, i),
+                                y: getRowY(mIdx) + TAB_STAFF_TOP + n.stringIndex * 10,
+                              };
+                              break;
+                            }
+                          }
+                          if (!prevPos) return null;
+                          if (n.slur) {
+                            const dx = beatX - prevPos.x;
+                            const cy = Math.min(prevPos.y, stringY) - 6;
+                            return (
+                              <path
+                                d={`M ${prevPos.x} ${prevPos.y - 3} C ${prevPos.x + dx * 0.35} ${cy - 6}, ${beatX - dx * 0.35} ${cy - 6}, ${beatX} ${stringY - 3}`}
+                                fill="none"
+                                stroke="#94a3b8"
+                                strokeWidth="1.2"
+                                style={{ pointerEvents: 'none' }}
+                              />
+                            );
+                          }
+                          if (n.legatoSlide) {
+                            return (
+                              <line
+                                x1={prevPos.x + 7}
+                                y1={prevPos.y}
+                                x2={beatX - 7}
+                                y2={stringY}
+                                stroke="#94a3b8"
+                                strokeWidth="1"
+                                style={{ pointerEvents: 'none' }}
+                              />
+                            );
+                          }
+                          return null;
+                        })()}
                       </g>
                     );
                   })}
+
+                  {/* TAB rhythm stem (duration indicator below TAB staff) */}
+                  {hasStem && (
+                    <line
+                      x1={stemUp ? beatX + 4 : beatX - 4}
+                      y1={rowY + TAB_STAFF_TOP + stringCount * 10 + 2}
+                      x2={stemUp ? beatX + 4 : beatX - 4}
+                      y2={rowY + TAB_STAFF_TOP + stringCount * 10 + 2 + 10}
+                      stroke="#64748b"
+                      strokeWidth="1.2"
+                      style={{ pointerEvents: 'none' }}
+                    />
+                  )}
+
+                  {/* Palm mute / let ring indicators */}
+                  {b.notes.some(n => n.palmMute) && (
+                    <text x={beatX - 12} y={rowY + TAB_STAFF_TOP - 4} className="music-text" fontSize="8" fill="#f59e0b" style={{ pointerEvents: 'none' }}>
+                      P.M.
+                    </text>
+                  )}
+                  {b.notes.some(n => n.letRing) && (
+                    <text x={beatX - 12} y={rowY + TAB_STAFF_TOP - 14} className="music-text" fontSize="8" fill="#10b981" style={{ pointerEvents: 'none' }}>
+                      let ring
+                    </text>
+                  )}
                 </g>
               );
-            });
+              })}
+
+              {/* Beams for standard notation (8th/16th groups) */}
+              {beamGroups.map((g, gi) => {
+                const firstBeat = measure.beats[g.startIdx];
+                const lastBeat = measure.beats[g.endIdx];
+                const firstX = getBeatCoordinates(mIdx, g.startIdx);
+                const lastX = getBeatCoordinates(mIdx, g.endIdx);
+
+                const firstNotes = firstBeat?.notes.map(n => {
+                  const midi = guitarStringPitches[n.stringIndex] + n.fret;
+                  const { diatonicStep } = midiToDiatonicAndAccidental(midi);
+                  return { ...n, step: diatonicStep, y: rowY + Y_of_step(diatonicStep) };
+                }).sort((a, b) => a.y - b.y) || [];
+                const lastNotes = lastBeat?.notes.map(n => {
+                  const midi = guitarStringPitches[n.stringIndex] + n.fret;
+                  const { diatonicStep } = midiToDiatonicAndAccidental(midi);
+                  return { ...n, step: diatonicStep, y: rowY + Y_of_step(diatonicStep) };
+                }).sort((a, b) => a.y - b.y) || [];
+
+                const firstStemUp = (firstNotes.reduce((s, n) => s + n.step, 0) / Math.max(firstNotes.length, 1)) < 6;
+                const lastStemUp = (lastNotes.reduce((s, n) => s + n.step, 0) / Math.max(lastNotes.length, 1)) < 6;
+                const mainStemUp = firstStemUp;
+
+                const beamY = mainStemUp
+                  ? Math.min(
+                      firstStemUp ? (firstNotes[0]?.y || 0) - 30 : (firstNotes[firstNotes.length - 1]?.y || 0) + 30,
+                      lastStemUp ? (lastNotes[0]?.y || 0) - 30 : (lastNotes[lastNotes.length - 1]?.y || 0) + 30
+                    )
+                  : Math.max(
+                      firstStemUp ? (firstNotes[0]?.y || 0) - 30 : (firstNotes[firstNotes.length - 1]?.y || 0) + 30,
+                      lastStemUp ? (lastNotes[0]?.y || 0) - 30 : (lastNotes[lastNotes.length - 1]?.y || 0) + 30
+                    );
+
+                const firstSX = mainStemUp ? firstX + 5.3 : firstX - 5.3;
+                const lastSX = mainStemUp ? lastX + 5.3 : lastX - 5.3;
+
+                return (
+                  <g key={`beam-${gi}`} style={{ pointerEvents: 'none' }}>
+                    <rect
+                      x={firstSX}
+                      y={beamY - 2.5}
+                      width={Math.max(lastSX - firstSX, 2)}
+                      height="5"
+                      fill="#f8fafc"
+                    />
+                    {g.duration === '16' && (
+                      <rect
+                        x={firstSX}
+                        y={beamY - 2.5 + 6}
+                        width={Math.max(lastSX - firstSX, 2)}
+                        height="5"
+                        fill="#f8fafc"
+                      />
+                    )}
+                  </g>
+                );
+              })}
+
+              {/* TAB rhythm beams (connecting the stems below TAB staff) */}
+              {beamGroups.map((g, gi) => {
+                const firstX = getBeatCoordinates(mIdx, g.startIdx);
+                const lastX = getBeatCoordinates(mIdx, g.endIdx);
+                const rhythmY = rowY + TAB_STAFF_TOP + stringCount * 10 + 2 + 10;
+                const firstSX = firstX + 5.3;
+                const lastSX = lastX + 5.3;
+
+                return (
+                  <g key={`tab-beam-${gi}`} style={{ pointerEvents: 'none' }}>
+                    <rect
+                      x={firstSX}
+                      y={rhythmY - 1.5}
+                      width={Math.max(lastSX - firstSX, 2)}
+                      height="3"
+                      fill="#64748b"
+                    />
+                    {g.duration === '16' && (
+                      <rect
+                        x={firstSX}
+                        y={rhythmY - 1.5 + 4}
+                        width={Math.max(lastSX - firstSX, 2)}
+                        height="3"
+                        fill="#64748b"
+                      />
+                    )}
+                  </g>
+                );
+              })}
+              </g>
+            );
           })}
         </svg>
       </div>
@@ -2091,14 +2192,59 @@ export const TabSheetEditor: React.FC = () => {
       </div>
 
       {showNoteOptions && (
-        <div className="note-options-panel">
+        <div className="note-options-overlay" onClick={() => setShowNoteOptions(false)}>
+        <div className="note-options-panel" onClick={(e) => e.stopPropagation()}>
           <div className="note-options-summary">
             <strong>
               {activeNote ? `String ${activeStringIndex + 1}, fret ${activeNote.fret}` : `Beat ${activeBeatIndex + 1}`}
             </strong>
             <span>{activeBeat?.isRest ? 'Rest' : `${selectedNotes.length} note${selectedNotes.length === 1 ? '' : 's'}`}</span>
           </div>
-          <div className="duration-selector">{durationButtons}</div>
+          <div className="duration-selector">{durationButtons}{dotButton}</div>
+          {activeNote && (
+            <div className="technique-row">
+              <button
+                className={`technique-btn ${activeNote?.harmonic ? 'active' : ''}`}
+                onClick={() => toggleNoteTechnique('harmonic')}
+                title="Harmonic"
+              >&lt;/&gt;</button>
+              <button
+                className={`technique-btn ${activeNote?.palmMute ? 'active' : ''}`}
+                onClick={() => toggleNoteTechnique('palmMute')}
+                title="Palm mute"
+              >P.M.</button>
+              <button
+                className={`technique-btn ${activeNote?.letRing ? 'active' : ''}`}
+                onClick={() => toggleNoteTechnique('letRing')}
+                title="Let ring"
+              >Ring</button>
+              <button
+                className={`technique-btn ${activeNote?.vibrato ? 'active' : ''}`}
+                onClick={() => toggleNoteTechnique('vibrato')}
+                title="Vibrato"
+              >~~</button>
+              <button
+                className={`technique-btn ${activeNote?.ghostNote ? 'active' : ''}`}
+                onClick={() => toggleNoteTechnique('ghostNote')}
+                title="Ghost note"
+              >(x)</button>
+              <button
+                className={`technique-btn ${activeNote?.slur ? 'active' : ''}`}
+                onClick={() => toggleNoteTechnique('slur')}
+                title="Slur (hammer-on/pull-off)"
+              >⌢</button>
+              <button
+                className={`technique-btn ${activeNote?.legatoSlide ? 'active' : ''}`}
+                onClick={() => toggleNoteTechnique('legatoSlide')}
+                title="Legato slide"
+              >╱</button>
+              <button
+                className={`technique-btn ${activeNote?.bend ? 'active' : ''}`}
+                onClick={() => toggleNoteTechnique('bend')}
+                title="Bend"
+              >b</button>
+            </div>
+          )}
           <button className="btn" onClick={toggleActiveBeatRest}>
             {activeBeat?.isRest ? 'Make playable' : 'Make rest'}
           </button>
@@ -2109,6 +2255,7 @@ export const TabSheetEditor: React.FC = () => {
             Remove note
           </button>
           <button className="btn" onClick={() => setShowNoteOptions(false)}>Close</button>
+        </div>
         </div>
       )}
 
@@ -2283,6 +2430,15 @@ export const TabSheetEditor: React.FC = () => {
               <span><kbd>Space</kbd> Play</span>
               <span><kbd>R</kbd> Rest</span>
               <span><kbd>+</kbd><kbd>-</kbd> Duration</span>
+              <span className="shortcut-divider">Note techniques</span>
+              <span><kbd>H</kbd> Slur</span>
+              <span><kbd>S</kbd> Legato slide</span>
+              <span><kbd>V</kbd> Vibrato</span>
+              <span><kbd>B</kbd> Bend</span>
+              <span><kbd>M</kbd> Palm mute</span>
+              <span><kbd>L</kbd> Let ring</span>
+              <span><kbd>O</kbd> Harmonic</span>
+              <span><kbd>G</kbd> Ghost note</span>
             </div>
           </div>
         </div>
