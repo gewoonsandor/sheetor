@@ -122,10 +122,13 @@ curl -s localhost:4000/api/v1/health            # smoke
 
 - Function components only; arrow + named export (`export const AppHeader = () => …`). `React.FC` appears once; there is no established `type Props = …` convention (`AppLayout({ children }: PropsWithChildren)` is the only props-taking component).
 - Naming: components PascalCase (`TabSheetEditor.tsx`, matching `TabSheetEditor.css`), non-component modules camelCase (`songUtils.ts`), directories lowercase.
-- CSS: plain global stylesheets imported for side effect; kebab-case classes namespaced `sheetor-*`; inline `style={{}}` only for computed geometry. No CSS modules, no Tailwind. Dark theme baseline in `index.css`; the `Outfit` font is also hardcoded in SVG `fontFamily` attributes.
+- CSS: plain global stylesheets imported for side effect; kebab-case classes namespaced `sheetor-*`; inline `style={{}}` only for computed geometry. No CSS modules, no Tailwind.
+- **Design tokens live in `src/index.css` (`:root`) and are the only place a colour, radius, spacing step, control height or shadow is defined.** Reference them (`var(--surface-2)`, `var(--sp-3)`, `var(--ctl-h)`) — a new hex or a magic `12px` in a component stylesheet is a defect. The palette is a warm near-black surface ramp with a single amber accent plus `--danger`/`--warn`/`--ok`.
+- One control rhythm: every button, field and menu trigger is `var(--ctl-h)` tall with `var(--r-md)` corners. `.btn` and `.bottom-menu-trigger` are deliberately identical so the command bar has one silhouette; `.btn-primary` (amber fill) marks the single main action, `.btn-active` (amber tint) marks a toggle that is on.
+- Exception: SVG **presentation attributes cannot resolve `var()`**, so glyph `fill`/`stroke` in `TabSheetEditor.tsx` are literal hexes mirroring the tokens (`#f2ece4` = `--text`, `#6f6862` = `--text-faint`, `#d98a3f` = `--accent`). Change the token and the literals together. `--paper` must equal `.tab-fret-bg`'s fill or the fret-number knockouts show as boxes.
 - Icons are hand-inlined 24×24 `<svg>` with `stroke="currentColor"` — no icon package.
 - Pure logic belongs **outside** the component: geometry/constants → `layout.ts`, music theory/model → `songUtils.ts`. `audioEngine.ts` receives an `AudioContext`, never owns one.
-- Strict typing; the only `any` escapes today are `(window as any).webkitAudioContext` and one `catch (err: any)`. Do not add more.
+- Strict typing with **no `any` anywhere** — the former `(window as any).webkitAudioContext` and `catch (err: any)` are gone. Unvalidated input is `unknown` and passes through `parseSong`; the prefixed `AudioContext` is reached by `in` narrowing plus one named cast in `usePlayback.ts`. Do not reintroduce `any`.
 
 ### Domain invariants (`features/editor/components/types.ts`)
 
@@ -204,7 +207,7 @@ Verify a change by:
 
 - `npm run start:backend` without `NODE_ENV=production` proxies to a Vite server that isn't running. Prod also requires `build:frontend` first — `frontendDistDir` is `path.resolve(__dirname, '../../../frontend/dist')` relative to the **compiled** file, so moving `outDir` or that file silently breaks static serving at runtime.
 - `TabSheetEditor.tsx` is monolithic; prefer extracting pure helpers into `layout.ts`/`songUtils.ts` over growing it.
-- Two parallel control surfaces render the same commands — the top `.sheetor-toolbar` and the `.bottom-command-bar` popovers. Adding or renaming a command usually means editing both; duration-glyph SVGs are duplicated verbatim.
+- The command bar is the **only** control surface; earlier duplicates (`.sheetor-toolbar`, `.sheetor-controls`, `.sheetor-footer`) were deleted, so a command is added in exactly one place. Duration-glyph SVGs are still written out per duration in the note-options panel.
 - Playback settings are live via `settingsRef` in `usePlayback`; if you add a setting, thread it through `PlaybackSettings` or it will silently stay frozen at `start()` time.
 - `computeMeasureLayouts` mutates the `MLayout` objects it returns during the stretch pass — treat the array as freshly owned, never cache it.
 - No memoization anywhere (`useMemo`/`useCallback`/`React.memo` are absent): full layout + beam computation reruns every render.
