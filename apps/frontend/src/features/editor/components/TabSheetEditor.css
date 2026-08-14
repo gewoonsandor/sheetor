@@ -125,6 +125,7 @@
   align-items: center;
   justify-content: center;
   gap: var(--sp-2);
+  flex: none;
   height: var(--ctl-h);
   padding: 0 var(--sp-3);
   background: var(--surface-2);
@@ -571,7 +572,8 @@ input[type="range"] {
   display: flex;
   align-items: center;
   gap: var(--sp-2);
-  min-width: 0;
+  flex: none;
+  flex-wrap: wrap;
 }
 
 .cmd-spacer {
@@ -592,6 +594,7 @@ input[type="range"] {
   display: flex;
   align-items: center;
   gap: var(--sp-2);
+  flex: none;
   height: var(--ctl-h);
   padding: 0 var(--sp-2) 0 var(--sp-3);
   background: var(--surface-2);
@@ -614,6 +617,7 @@ input[type="range"] {
   align-items: center;
   justify-content: center;
   gap: var(--sp-2);
+  flex: none;
   height: var(--ctl-h);
   padding: 0 var(--sp-3);
   background: var(--surface-2);
@@ -966,9 +970,19 @@ kbd {
 
 /* ------------------------------------------------------------- Narrow screens */
 
+/* Let the bar wrap onto a second row rather than squeezing labels away */
 @media (max-width: 1120px) {
   .bottom-command-bar {
-    overflow-x: auto;
+    flex-wrap: wrap;
+    row-gap: var(--sp-2);
+  }
+
+  .cmd-spacer {
+    display: none;
+  }
+
+  .sheetor-container {
+    padding-bottom: 152px;
   }
 }
 

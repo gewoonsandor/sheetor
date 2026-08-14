@@ -2239,6 +2239,7 @@ export const TabSheetEditor: React.FC = () => {
             </button>
             {openBottomMenu === 'song' && (
               <div className="bottom-popover">
+              <span className="popover-title">Measure {activeMeasureIndex + 1}</span>
               <div className="control-group">
                 <span className="control-label">Sig</span>
                 <select
@@ -2267,9 +2268,12 @@ export const TabSheetEditor: React.FC = () => {
                   ))}
                 </select>
               </div>
-              <button className="btn" onClick={handleExport}>Share</button>
-              <button className="btn" onClick={handleImport}>Load</button>
-              <button className="btn btn-danger" onClick={clearSong}>Clear</button>
+              <div className="popover-divider" />
+              <span className="popover-title">Song file</span>
+              <button className="btn" onClick={handleExport}>Share JSON</button>
+              <button className="btn" onClick={handleImport}>Load JSON</button>
+              <div className="popover-divider" />
+              <button className="btn btn-danger" onClick={clearSong}>Clear song</button>
             </div>
             )}
           </div>
@@ -2286,8 +2290,11 @@ export const TabSheetEditor: React.FC = () => {
             </button>
             {openBottomMenu === 'edit' && (
               <div className="bottom-popover">
+              <span className="popover-title">Beat {activeBeatIndex + 1}</span>
               <button className="btn btn-primary" onClick={insertBeatAfterActive}>Insert beat</button>
               <button className="btn btn-danger" onClick={deleteActiveBeat}>Delete beat</button>
+              <div className="popover-divider" />
+              <span className="popover-title">Measure {activeMeasureIndex + 1}</span>
               <button className="btn" onClick={addMeasure}>Add measure</button>
               <button className="btn" onClick={insertMeasureAfterActive}>Insert measure</button>
               <button className="btn" onClick={duplicateActiveMeasure}>Duplicate measure</button>
@@ -2358,10 +2365,11 @@ export const TabSheetEditor: React.FC = () => {
                     ))}
                   </select>
                 </label>
-                <div style={{ fontSize: '0.7rem', color: '#a89f96', fontWeight: 600, marginTop: 2 }}>Per string</div>
+                <div className="popover-divider" />
+                <span className="popover-title">Per string</span>
                 {tuning.map((pitch, i) => (
-                  <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-                    <span style={{ fontSize: '0.7rem', color: '#6f6862', width: 12, textAlign: 'right' }}>{i + 1}</span>
+                  <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                    <span className="control-label" style={{ width: 12, textAlign: 'right' }}>{i + 1}</span>
                     <select
                       className="control-select"
                       style={{ flex: 1, fontSize: '0.75rem' }}
