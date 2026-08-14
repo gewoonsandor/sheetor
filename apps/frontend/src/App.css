@@ -9,43 +9,49 @@
   display: flex;
   flex-direction: column;
   min-height: 100vh;
-  padding: 0;
-  box-sizing: border-box;
-  gap: 0;
 }
 
+/* Slim app chrome: identity only. The song's own header carries the content. */
 .app-header {
   display: flex;
-  justify-content: space-between;
   align-items: center;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
-  padding: 10px 24px;
-  flex-wrap: wrap;
-  gap: 12px;
-  background: #0b0d0f;
+  gap: var(--sp-3);
+  height: 44px;
+  padding: 0 var(--sp-5);
+  background: var(--bg);
+  border-bottom: 1px solid var(--border);
+  flex: none;
 }
 
 .logo-area {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: var(--sp-2);
 }
 
-.logo-icon {
-  font-size: 1.35rem;
+.logo-mark {
+  display: grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  border-radius: var(--r-sm);
+  background: linear-gradient(150deg, var(--accent-hover), var(--accent));
+  color: var(--accent-ink);
 }
 
 .logo-text {
-  font-size: 1rem;
-  font-weight: 800;
-  color: #e5e7eb;
+  font-size: 0.95rem;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  color: var(--text);
 }
 
 .header-tagline {
-  font-size: 0.95rem;
-  color: #94a3b8;
   margin: 0;
-  font-weight: 500;
+  font-size: 0.75rem;
+  color: var(--text-faint);
+  padding-left: var(--sp-3);
+  border-left: 1px solid var(--border);
 }
 
 .app-main {
@@ -58,4 +64,63 @@
 
 .app-footer {
   display: none;
+}
+
+@media (max-width: 700px) {
+  .header-tagline {
+    display: none;
+  }
+}
+
+/* --- Error boundary fallback --- */
+
+.app-error {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--sp-3);
+  margin: var(--sp-6) auto;
+  padding: var(--sp-5);
+  max-width: 620px;
+  background: var(--surface-1);
+  border: 1px solid var(--border);
+  border-radius: var(--r-lg);
+  box-shadow: var(--shadow-2);
+}
+
+.app-error h2 {
+  margin: 0;
+  font-size: 1.1rem;
+  color: var(--danger);
+}
+
+.app-error p {
+  margin: 0;
+  font-size: 0.875rem;
+  color: var(--text-dim);
+  line-height: 1.55;
+}
+
+.app-error-message {
+  width: 100%;
+  padding: var(--sp-2) var(--sp-3);
+  font-family: var(--font-mono);
+  font-size: 0.8rem;
+  color: var(--text);
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: var(--r-sm);
+  word-break: break-word;
+}
+
+.app-error code {
+  font-family: var(--font-mono);
+  font-size: 0.8em;
+  color: var(--text);
+}
+
+.app-error-actions {
+  display: flex;
+  gap: var(--sp-2);
+  margin-top: var(--sp-1);
 }

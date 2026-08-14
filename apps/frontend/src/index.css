@@ -1,8 +1,89 @@
+/* Design tokens — the single source of truth for colour, spacing and shape.
+   Everything else in the app references these; never hardcode a hex again. */
+:root {
+  /* Surfaces: warm near-black, each step ~+6% lightness */
+  --bg: #12100e;
+  --surface-1: #1a1715;
+  --surface-2: #221e1b;
+  --surface-3: #2b2622;
+  --surface-4: #362f2a;
+
+  /* Score paper — the staff sits on its own slightly lifted surface */
+  --paper: #1c1917;
+
+  /* Hairlines */
+  --border: rgba(238, 230, 220, 0.08);
+  --border-strong: rgba(238, 230, 220, 0.16);
+  --border-focus: rgba(217, 138, 63, 0.55);
+
+  /* Text */
+  --text: #f2ece4;
+  --text-dim: #a89f96;
+  --text-faint: #6f6862;
+
+  /* Amber accent */
+  --accent: #d98a3f;
+  --accent-hover: #e79a4f;
+  --accent-ink: #1a1512;
+  --accent-soft: rgba(217, 138, 63, 0.14);
+  --accent-glow: rgba(217, 138, 63, 0.28);
+
+  /* Semantic */
+  --danger: #e2635c;
+  --danger-soft: rgba(226, 99, 92, 0.14);
+  --warn: #e0a83f;
+  --ok: #3fb98a;
+
+  /* Spacing scale */
+  --sp-1: 4px;
+  --sp-2: 8px;
+  --sp-3: 12px;
+  --sp-4: 16px;
+  --sp-5: 24px;
+  --sp-6: 32px;
+
+  /* Radii */
+  --r-sm: 6px;
+  --r-md: 9px;
+  --r-lg: 14px;
+  --r-pill: 999px;
+
+  /* Control heights — one row rhythm for every button and field */
+  --ctl-h: 36px;
+  --ctl-h-sm: 28px;
+
+  /* Elevation */
+  --shadow-1: 0 1px 2px rgba(0, 0, 0, 0.4);
+  --shadow-2: 0 8px 24px -6px rgba(0, 0, 0, 0.6);
+  --shadow-3: 0 18px 48px -12px rgba(0, 0, 0, 0.7);
+
+  --font: 'Outfit', 'Inter', system-ui, -apple-system, sans-serif;
+  --font-mono: ui-monospace, 'SF Mono', 'JetBrains Mono', monospace;
+
+  --ease: cubic-bezier(0.2, 0.8, 0.3, 1);
+}
+
+* {
+  box-sizing: border-box;
+}
+
 body {
   margin: 0;
   min-width: 320px;
   min-height: 100vh;
-  background-color: #0b0d0f;
-  color: #f8fafc;
-  font-family: 'Outfit', 'Inter', system-ui, -apple-system, sans-serif;
+  background-color: var(--bg);
+  color: var(--text);
+  font-family: var(--font);
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Shared focus treatment: amber ring, never the default blue halo */
+:where(button, input, select, textarea, [tabindex]):focus-visible {
+  outline: 2px solid var(--border-focus);
+  outline-offset: 1px;
+}
+
+::selection {
+  background: var(--accent-glow);
+  color: var(--text);
 }
