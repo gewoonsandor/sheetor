@@ -1037,255 +1037,29 @@ export const TabSheetEditor: React.FC = () => {
           />
         </div>
 
-        <div className="sheetor-controls">
-          {/* Playback Controls */}
-          {playback.isPlaying ? (
-            <button className="btn btn-danger" onClick={playback.stop}>
-              <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor">
-                <rect x="6" y="6" width="12" height="12" rx="1" />
-              </svg>
-              Stop
-            </button>
-          ) : (
-            <button className="btn btn-primary" onClick={startPlaybackFromCursor}>
-              <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor">
-                <path d="M8 5v14l11-7z" />
-              </svg>
-              Play
-            </button>
-          )}
-
-          {/* Tempo & Volume */}
-          <div className="control-group">
-            <span className="control-label">BPM</span>
-            <input
-              type="number"
-              className="control-input"
-              value={activeMeasureBpm}
-              onChange={(e) => setActiveMeasureBpm(Math.max(20, Math.min(300, parseInt(e.target.value) || 120)))}
-            />
+        <dl className="selection-readout">
+          <div className="readout-chip">
+            <dt>Measure</dt>
+            <dd>{activeMeasureIndex + 1} / {song.measures.length}</dd>
           </div>
-
-          <div className="control-group">
-            <span className="control-label">Sig</span>
-            <select
-              className="control-select"
-              style={{ padding: '2px 4px', width: '42px', textAlign: 'center' }}
-              value={activeMeasureTimeSignature.numerator}
-              onChange={(e) => {
-                const num = parseInt(e.target.value) || 4;
-                setActiveMeasureTimeSignature('numerator', num);
-              }}
-            >
-              {[2, 3, 4, 5, 6, 7, 8, 9, 12].map(n => (
-                <option key={n} value={n}>{n}</option>
-              ))}
-            </select>
-            <span style={{ color: '#64748b' }}>/</span>
-            <select
-              className="control-select"
-              style={{ padding: '2px 4px', width: '42px', textAlign: 'center' }}
-              value={activeMeasureTimeSignature.denominator}
-              onChange={(e) => {
-                const den = parseInt(e.target.value) || 4;
-                setActiveMeasureTimeSignature('denominator', den);
-              }}
-            >
-              {[2, 4, 8, 16].map(d => (
-                <option key={d} value={d}>{d}</option>
-              ))}
-            </select>
+          <div className="readout-chip">
+            <dt>Beat</dt>
+            <dd>{activeBeatIndex + 1} / {song.measures[activeMeasureIndex]?.beats.length ?? 0}</dd>
           </div>
-
-
-
-          <div className="control-group">
-            <span className="control-label">Sound</span>
-            <select
-              className="control-select"
-              value={synthType}
-              onChange={(e) => setSynthType(e.target.value)}
-            >
-              <option value="guitar">🎸 Plucked Guitar</option>
-              <option value="sine">🔔 Sine Wave</option>
-              <option value="triangle">📐 Triangle Wave</option>
-              <option value="square">⬜ Square Wave</option>
-              <option value="sawtooth">🪚 Saw Wave</option>
-            </select>
+          <div className="readout-chip">
+            <dt>String</dt>
+            <dd>{activeStringIndex + 1} · {midiToNoteName(tuning[activeStringIndex] ?? 0)}</dd>
           </div>
-
-          <div className="control-group">
-            <span className="control-label">Vol</span>
-            <input
-              type="range"
-              min="0"
-              max="1"
-              step="0.05"
-              style={{ width: '70px', accentColor: '#6366f1' }}
-              value={volume}
-              onChange={(e) => setVolume(parseFloat(e.target.value))}
-            />
+          <div className="readout-chip is-accent">
+            <dt>Cursor</dt>
+            <dd>{activeBeat?.isRest ? 'Rest' : activeNote ? `Fret ${activeNote.fret}` : 'Empty'}</dd>
           </div>
-
-          <button className="btn" onClick={handleExport}>📤 Share</button>
-          <button className="btn" onClick={handleImport}>📥 Load</button>
-        </div>
-
-        <div className="selection-readout">
-          <span>M{activeMeasureIndex + 1}</span>
-          <span>B{activeBeatIndex + 1}</span>
-          <span>S{activeStringIndex + 1}</span>
-          <span>{activeBeat?.isRest ? 'Rest' : activeNote ? `F${activeNote.fret}` : 'Empty'}</span>
-        </div>
+          <div className="readout-chip">
+            <dt>Time</dt>
+            <dd>{activeMeasureTimeSignature.numerator}/{activeMeasureTimeSignature.denominator}</dd>
+          </div>
+        </dl>
       </div>
-
-      {/* Toolbar / Song Actions */}
-      {!viewMode && (<div className="sheetor-toolbar">
-        <div className="toolbar-section">
-          <span className="control-label" style={{ marginRight: '6px' }}>Duration:</span>
-          <div className="duration-selector">
-            {(['1', '2', '4', '8', '16', '32'] as const).map((dur) => (
-              <button
-                key={dur}
-                className={`duration-btn ${durationSelect === dur ? 'active' : ''}`}
-                onClick={() => {
-                  setDurationSelect(dur);
-                  setDurationForActiveBeat(dur);
-                }}
-                title={`Set note length: ${dur === '1' ? 'Whole' : dur === '2' ? 'Half' : dur === '4' ? 'Quarter' : dur === '8' ? 'Eighth' : dur === '16' ? 'Sixteenth' : 'Thirty-Second'}`}
-              >
-                {/* Custom Notehead SVGs for duration */}
-                {dur === '1' && (
-                  <svg viewBox="0 0 24 24" stroke="currentColor" fill="none" strokeWidth="2">
-                    <ellipse cx="12" cy="12" rx="6" ry="4" transform="rotate(-20 12 12)" />
-                  </svg>
-                )}
-                {dur === '2' && (
-                  <svg viewBox="0 0 24 24" stroke="currentColor" fill="none" strokeWidth="2">
-                    <ellipse cx="10" cy="14" rx="5" ry="3.5" transform="rotate(-20 10 14)" />
-                    <line x1="15" y1="14" x2="15" y2="4" strokeWidth="2.2" />
-                  </svg>
-                )}
-                {dur === '4' && (
-                  <svg viewBox="0 0 24 24" fill="currentColor">
-                    <ellipse cx="10" cy="14" rx="5" ry="3.5" transform="rotate(-20 10 14)" />
-                    <line x1="15" y1="14" x2="15" y2="4" stroke="currentColor" strokeWidth="2.2" />
-                  </svg>
-                )}
-                {dur === '8' && (
-                  <svg viewBox="0 0 24 24" fill="currentColor">
-                    <ellipse cx="10" cy="14" rx="5" ry="3.5" transform="rotate(-20 10 14)" />
-                    <line x1="15" y1="14" x2="15" y2="4" stroke="currentColor" strokeWidth="2.2" />
-                    <path d="M 15 4 C 18 6, 20 10, 18 13 C 17.5 10, 16 7, 15 6" />
-                  </svg>
-                )}
-                {dur === '16' && (
-                  <svg viewBox="0 0 24 24" fill="currentColor">
-                    <ellipse cx="10" cy="14" rx="5" ry="3.5" transform="rotate(-20 10 14)" />
-                    <line x1="15" y1="14" x2="15" y2="4" stroke="currentColor" strokeWidth="2.2" />
-                    <path d="M 15 4 C 18 6, 20 10, 18 13 C 17.5 10, 16 7, 15 6" />
-                    <path d="M 15 7.5 C 18 9.5, 20 13.5, 18 16.5 C 17.5 13.5, 16 10.5, 15 9.5" />
-                  </svg>
-                )}
-                {dur === '32' && (
-                  <svg viewBox="0 0 24 24" fill="currentColor">
-                    <ellipse cx="10" cy="14" rx="5" ry="3.5" transform="rotate(-20 10 14)" />
-                    <line x1="15" y1="14" x2="15" y2="4" stroke="currentColor" strokeWidth="2.2" />
-                    <path d="M 15 4 C 18 6, 20 10, 18 13 C 17.5 10, 16 7, 15 6" />
-                    <path d="M 15 7.5 C 18 9.5, 20 13.5, 18 16.5 C 17.5 13.5, 16 10.5, 15 9.5" />
-                    <path d="M 15 11 C 18 13, 20 17, 18 20 C 17.5 17, 16 14, 15 13" />
-                  </svg>
-                )}
-                <span className="duration-label">
-                  {dur === '1' ? '1/1' : dur === '2' ? '1/2' : dur === '4' ? '1/4' : dur === '8' ? '1/8' : dur === '16' ? '1/16' : '1/32'}
-                </span>
-              </button>
-            ))}
-          </div>
-
-          <button
-            className={`btn ${(activeBeat?.dot ?? dotSelect) ? 'active' : ''}`}
-            onClick={() => {
-              toggleDotForActiveBeat();
-            }}
-            style={{ height: '44px', minWidth: '36px' }}
-            title="Dotted note"
-          >
-            <svg viewBox="0 0 24 24" fill="currentColor" width="18" height="18">
-              <circle cx="18" cy="18" r="3" />
-              <ellipse cx="10" cy="14" rx="5" ry="3.5" transform="rotate(-20 10 14)" />
-              <line x1="15" y1="14" x2="15" y2="4" stroke="currentColor" strokeWidth="2.2" />
-            </svg>
-          </button>
-
-          <button className="btn" onClick={toggleActiveBeatRest} style={{ height: '44px' }}>
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" width="16" height="16">
-              {activeBeat?.isRest ? (
-                <path d="M5 12h14" />
-              ) : (
-                <rect x="6" y="4" width="12" height="16" rx="1" />
-              )}
-            </svg>
-            {activeBeat?.isRest ? 'Set Playable' : 'Set Rest'}
-          </button>
-        </div>
-
-        <div className="toolbar-section">
-          {/* Add / Insert / Delete Beats & Measures */}
-          <button className="btn btn-primary" onClick={insertBeatAfterActive} title="Insert empty beat after current cursor">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" width="16" height="16">
-              <circle cx="12" cy="12" r="10" />
-              <line x1="12" y1="8" x2="12" y2="16" />
-              <line x1="8" y1="12" x2="16" y2="12" />
-            </svg>
-            Beat
-          </button>
-          <button className="btn btn-danger" onClick={deleteActiveBeat} title="Delete active beat">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" width="16" height="16">
-              <polyline points="3 6 5 6 21 6" />
-              <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
-            </svg>
-            Beat
-          </button>
-          
-          <div style={{ width: '1px', height: '24px', background: 'rgba(255,255,255,0.1)', margin: '0 8px' }} />
-
-          <button className="btn" onClick={addMeasure} title="Append measure to end">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" width="16" height="16">
-              <circle cx="12" cy="12" r="10" />
-              <line x1="12" y1="8" x2="12" y2="16" />
-              <line x1="8" y1="12" x2="16" y2="12" />
-            </svg>
-            Measure
-          </button>
-          <button className="btn" onClick={insertMeasureAfterActive} title="Insert empty measure after selected measure">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" width="16" height="16">
-              <circle cx="12" cy="12" r="10" />
-              <line x1="12" y1="8" x2="12" y2="16" />
-              <line x1="8" y1="12" x2="16" y2="12" />
-            </svg>
-            Insert M.
-          </button>
-          <button className="btn" onClick={duplicateActiveMeasure} title="Copy selected measure to next slot">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" width="16" height="16">
-              <rect x="9" y="9" width="13" height="13" rx="2" />
-              <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
-            </svg>
-            Duplicate M.
-          </button>
-          <button className="btn btn-danger" onClick={deleteActiveMeasure} title="Delete selected measure">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" width="16" height="16">
-              <polyline points="3 6 5 6 21 6" />
-              <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
-            </svg>
-            Measure
-          </button>
-        </div>
-
-        <div className="toolbar-section">
-          <button className="btn btn-danger" onClick={clearSong}>Clear</button>
-        </div>
-      </div>)}
 
       {/* Editor Canvas */}
       <div 
@@ -1326,16 +1100,15 @@ export const TabSheetEditor: React.FC = () => {
 
             return (
               <g key={measure.id}>
-                {/* Subtle warning highlight behind measure if invalid */}
+                {/* An over/under-filled bar is flagged in the margin, never on top
+                    of the notes: a hairline tint plus an amber rule and count. */}
                 {!isValid && (
                   <rect
                     x={measureX}
                     y={rowY + 2}
                     width={measureW}
                     height={TAB_STAFF_TOP + ts + stringCount * TAB_STAFF_HEIGHT_PX - 2 + 8}
-                    fill="rgba(239, 68, 68, 0.03)"
-                    stroke="rgba(239, 68, 68, 0.15)"
-                    strokeWidth="1"
+                    fill="rgba(224, 168, 63, 0.035)"
                     style={{ pointerEvents: 'none' }}
                   />
                 )}
@@ -1377,8 +1150,6 @@ export const TabSheetEditor: React.FC = () => {
                   x2={measureX}
                   y2={rowY + TAB_STAFF_TOP + ts + stringCount * TAB_STAFF_HEIGHT_PX - 10}
                   className="bar-line"
-                  stroke={!isValid ? "#ef4444" : undefined}
-                  strokeWidth={!isValid ? 1.5 : undefined}
                 />
 
                 {/* Bar line end */}
@@ -1388,8 +1159,6 @@ export const TabSheetEditor: React.FC = () => {
                   x2={measureEnd}
                   y2={rowY + TAB_STAFF_TOP + ts + stringCount * TAB_STAFF_HEIGHT_PX - 10}
                   className={isLast ? "bar-line-end" : "bar-line"}
-                  stroke={!isValid ? "#ef4444" : undefined}
-                  strokeWidth={!isValid ? (isLast ? 3 : 1.5) : undefined}
                 />
 
                 {showTimingChange && (
@@ -1408,38 +1177,27 @@ export const TabSheetEditor: React.FC = () => {
                 <text
                   x={measureX + 4}
                   y={rowY + 9}
-                  fill="#64748b"
-                  fontSize="7.5"
-                  fontFamily="'Outfit', 'Inter', sans-serif"
-                  fontWeight="600"
+                  className="measure-number"
+                  fontSize="8"
                   style={{ pointerEvents: 'none' }}
                 >
                   {mIdx + 1}
                 </text>
 
-                {/* Warning Badge if time signature mismatch */}
                 {!isValid && (
                   <g>
-                    <circle
-                      cx={measureEnd - 16}
-                      cy={rowY + 18}
-                      r="6"
-                      fill="#ef4444"
-                    />
                     <text
-                      x={measureEnd - 16}
-                      y={rowY + 18}
-                      textAnchor="middle"
-                      dominantBaseline="central"
-                      fill="#ffffff"
-                      fontSize="9"
-                      fontWeight="bold"
+                      className="measure-warning-text"
+                      x={measureEnd - 12}
+                      y={rowY + 9}
+                      fontSize="7.5"
+                      textAnchor="end"
                       style={{ pointerEvents: 'none' }}
                     >
-                      !
+                      {actual > expected ? 'over' : 'short'} {Math.round(Math.abs(actual - expected) * 100) / 100}
                     </text>
                     <title>
-                      {`Measure duration mismatch! Got ${actual} beats (quarter notes), expected ${expected}.`}
+                      {`Bar length mismatch: ${actual} quarter notes, expected ${expected}.`}
                     </title>
                   </g>
                 )}
@@ -1451,7 +1209,7 @@ export const TabSheetEditor: React.FC = () => {
                     <path
                       d="M 17.5 45 C 19 45, 21 42, 21 38 C 21 32, 17 28, 17 21 C 17 12, 21 3, 23.5 0 L 24 0 L 22.5 10 C 21.5 16, 18.5 22, 18.5 28 C 18.5 35, 23.5 38, 23.5 44 C 23.5 48.5, 20 52, 16 52 C 12.5 52, 9.5 49, 9.5 45.5 C 9.5 41, 13.5 37, 18 37 C 20.5 37, 22.5 39, 22.5 41.5 C 22.5 44, 21 45.5, 18.5 45.5 C 17 45.5, 16 44, 16 42.5 C 16 41.5, 17 40.5, 18 40.5 C 16.5 40.5, 14.5 42, 14.5 45 C 14.5 48, 17.5 50.5, 20.5 50.5 C 23.5 50.5, 25.5 48, 25.5 43 C 25.5 37.5, 20.5 33.5, 20.5 27 C 20.5 21, 23.5 15, 24.5 10 L 25 1 L 25 45 C 25 49.5, 23.5 53, 21 55 C 19.5 56, 18 56.5, 16.5 56.5 C 15 56.5, 13.5 55, 13.5 53 C 13.5 51, 15 49.5, 16.5 49.5 C 18 49.5, 19.5 51, 19.5 53 C 19.5 53.5, 19 54, 18.5 54.5 C 20 54, 21.5 51.5, 21.5 48 L 21.5 16 C 20.5 20, 19 25, 19 30 C 19 36.5, 22 41, 22 45 C 22 48.5, 20 51, 17.5 51 C 15 51, 13 49, 13 46.5 C 13 44, 15 42, 17.5 42 C 18.5 42, 19.5 42.5, 19.5 43.5 C 19.5 44.5, 18.5 45, 17.5 45 Z"
                       transform="translate(15, 5) scale(0.9)"
-                      fill="#ece6df"
+                      fill="#f2ece4"
                     />
 
                     {/* Stacked TAB text */}
@@ -1577,7 +1335,7 @@ export const TabSheetEditor: React.FC = () => {
                         width="20"
                         height={TAB_STAFF_TOP + ts + stringCount * TAB_STAFF_HEIGHT_PX - 5}
                         fill="rgba(201, 119, 46, 0.12)"
-                        stroke="#c9772e"
+                        stroke="#d98a3f"
                         strokeWidth="1.5"
                         rx="4"
                         pointerEvents="none"
@@ -1588,7 +1346,7 @@ export const TabSheetEditor: React.FC = () => {
                         cy={rowY + TAB_STAFF_TOP + ts + activeStringIndex * 10}
                         r="5.5"
                         fill="transparent"
-                        stroke="#f59e0b"
+                        stroke="#e0a83f"
                         strokeWidth="1.5"
                         pointerEvents="none"
                       />
@@ -1602,7 +1360,7 @@ export const TabSheetEditor: React.FC = () => {
                       y1={rowY + 2}
                       x2={beatX}
                       y2={rowY + TAB_STAFF_TOP + ts + stringCount * TAB_STAFF_HEIGHT_PX}
-                      stroke="#10b981"
+                      stroke="#3fb98a"
                       strokeWidth="2.5"
                       strokeDasharray="2"
                       pointerEvents="none"
@@ -1632,40 +1390,40 @@ export const TabSheetEditor: React.FC = () => {
                     {/* Render Rest on Standard Staff */}
                     {dur === '1' && (
                       // Whole rest: hanging rectangle on line 4 (y=20)
-                      <rect x={beatX - 6} y="20" width="12" height="6" fill="#ece6df" />
+                      <rect x={beatX - 6} y="20" width="12" height="6" fill="#f2ece4" />
                     )}
                     {dur === '2' && (
                       // Half rest: sitting rectangle on line 3 (y=30)
-                      <rect x={beatX - 6} y="24" width="12" height="6" fill="#ece6df" />
+                      <rect x={beatX - 6} y="24" width="12" height="6" fill="#f2ece4" />
                     )}
                     {dur === '4' && (
                       // Quarter rest: classic squiggle (rendered as path)
                       <path
                         d={`M ${beatX - 1.5} ${30 - 10} l 3 3 c -1.5 1.5, -3 3, -0.75 4.5 c 1.5 1.5, 0.75 3, -2.25 4.5 c -1.5 -0.75, -2.25 -1.5, -0.75 -2.25 c 1.5 -0.75, 0.75 -1.5, 0 -2.25 c -1.5 -0.75, -1.1 -2.25, 0.75 -3.3 Z`}
-                        fill="#ece6df"
-                        stroke="#ece6df"
+                        fill="#f2ece4"
+                        stroke="#f2ece4"
                         strokeWidth="1.5"
                       />
                     )}
                     {(dur === '8' || dur === '16' || dur === '32') && (
                       // Eighth / Sixteenth / Thirty-Second rest: slash with hooks
                       <g>
-                        <line x1={beatX + 2} y1={22} x2={beatX - 3} y2={35} stroke="#ece6df" strokeWidth="1.5" />
-                        <circle cx={beatX - 3} cy={24} r="2.2" fill="#ece6df" />
+                        <line x1={beatX + 2} y1={22} x2={beatX - 3} y2={35} stroke="#f2ece4" strokeWidth="1.5" />
+                        <circle cx={beatX - 3} cy={24} r="2.2" fill="#f2ece4" />
                         {dur === '16' && (
-                          <circle cx={beatX - 5} cy={29} r="2.2" fill="#ece6df" />
+                          <circle cx={beatX - 5} cy={29} r="2.2" fill="#f2ece4" />
                         )}
                         {dur === '32' && (
                           <>
-                            <circle cx={beatX - 5} cy={29} r="2.2" fill="#ece6df" />
-                            <circle cx={beatX - 7} cy={34} r="2.2" fill="#ece6df" />
+                            <circle cx={beatX - 5} cy={29} r="2.2" fill="#f2ece4" />
+                            <circle cx={beatX - 7} cy={34} r="2.2" fill="#f2ece4" />
                           </>
                         )}
                       </g>
                     )}
                     {/* Dotted rest dot */}
                     {b.dot && (
-                      <circle cx={beatX + 10} cy={dur === '1' ? 23 : dur === '2' ? 27 : 25} r="2.2" fill="#ece6df" pointerEvents="none" />
+                      <circle cx={beatX + 10} cy={dur === '1' ? 23 : dur === '2' ? 27 : 25} r="2.2" fill="#f2ece4" pointerEvents="none" />
                     )}
                   </g>
                 );
@@ -1750,13 +1508,13 @@ export const TabSheetEditor: React.FC = () => {
 
                         {/* Accidental (#) if sharp */}
                         {n.accidental === '#' && (
-                          <g stroke="#ece6df" strokeWidth="1.3" opacity="0.9">
+                          <g stroke="#f2ece4" strokeWidth="1.3" opacity="0.9">
                             <line x1={beatX - 13} y1={n.y - 6} x2={beatX - 13} y2={n.y + 6} />
                             <line x1={beatX - 10} y1={n.y - 8} x2={beatX - 10} y2={n.y + 4} />
                             <line x1={beatX - 16} y1={n.y - 2.5} x2={beatX - 7} y2={n.y - 4} />
                             <line x1={beatX - 16} y1={n.y + 2.5} x2={beatX - 7} y2={n.y + 1} />
                       {!beamInfo && b.duration === '32' && (
-                        <g fill="#ece6df">
+                        <g fill="#f2ece4">
                           <path
                             d={stemUp 
                               ? `M ${stemX} ${stemEndY} c 4 3, 7 9, 5 17 c -1 -5, -3 -9, -5 -12` 
@@ -1787,8 +1545,8 @@ export const TabSheetEditor: React.FC = () => {
                           rx="4.5"
                           ry="3.0"
                           transform={`rotate(-20 ${beatX} ${n.y})`}
-                          fill={isSelected ? "#d98a3f" : (b.duration === '1' || b.duration === '2' ? "none" : "#ece6df")}
-                          stroke={isSelected ? "#d98a3f" : "#ece6df"}
+                          fill={isSelected ? "#d98a3f" : (b.duration === '1' || b.duration === '2' ? "none" : "#f2ece4")}
+                          stroke={isSelected ? "#d98a3f" : "#f2ece4"}
                           strokeWidth="1.4"
                           className="notehead"
                           onClick={() => {
@@ -1797,7 +1555,7 @@ export const TabSheetEditor: React.FC = () => {
                         />
                         {/* Dotted note dot */}
                         {b.dot && (
-                          <circle cx={beatX + 8} cy={n.y} r="2.2" fill="#ece6df" pointerEvents="none" />
+                          <circle cx={beatX + 8} cy={n.y} r="2.2" fill="#f2ece4" pointerEvents="none" />
                         )}
                       </g>
                     );
@@ -1811,7 +1569,7 @@ export const TabSheetEditor: React.FC = () => {
                         y1={stemUp ? lowestY : highestY}
                         x2={stemX}
                         y2={stemEndY}
-                        stroke="#ece6df"
+                        stroke="#f2ece4"
                         strokeWidth="1.5"
                       />
 
@@ -1822,11 +1580,11 @@ export const TabSheetEditor: React.FC = () => {
                             ? `M ${stemX} ${stemEndY} c 4 3, 7 9, 5 17 c -1 -5, -3 -9, -5 -12` 
                             : `M ${stemX} ${stemEndY} c 4 -3, 7 -9, 5 -17 c -1 5, -3 9, -5 12`
                           }
-                          fill="#ece6df"
+                          fill="#f2ece4"
                         />
                       )}
                       {!beamInfo && b.duration === '16' && (
-                        <g fill="#ece6df">
+                        <g fill="#f2ece4">
                           <path
                             d={stemUp 
                               ? `M ${stemX} ${stemEndY} c 4 3, 7 9, 5 17 c -1 -5, -3 -9, -5 -12` 
@@ -1907,7 +1665,7 @@ export const TabSheetEditor: React.FC = () => {
                               <path
                                 d={`M ${prevPos.x} ${prevPos.y - 3} C ${prevPos.x + dx * 0.35} ${cy - 6}, ${beatX - dx * 0.35} ${cy - 6}, ${beatX} ${stringY - 3}`}
                                 fill="none"
-                                stroke="#94a3b8"
+                                stroke="#a89f96"
                                 strokeWidth="1.2"
                                 style={{ pointerEvents: 'none' }}
                               />
@@ -1920,7 +1678,7 @@ export const TabSheetEditor: React.FC = () => {
                                 y1={prevPos.y}
                                 x2={beatX - 7}
                                 y2={stringY}
-                                stroke="#94a3b8"
+                                stroke="#a89f96"
                                 strokeWidth="1"
                                 style={{ pointerEvents: 'none' }}
                               />
@@ -1939,7 +1697,7 @@ export const TabSheetEditor: React.FC = () => {
                       y1={rowY + TAB_STAFF_TOP + ts + stringCount * 10 + 2}
                       x2={stemUp ? beatX + 4 : beatX - 4}
                       y2={rowY + TAB_STAFF_TOP + ts + stringCount * 10 + 2 + (beamInfo ? 11.5 : 10)}
-                      stroke="#64748b"
+                      stroke="#6f6862"
                       strokeWidth="1.2"
                       style={{ pointerEvents: 'none' }}
                     />
@@ -1947,12 +1705,12 @@ export const TabSheetEditor: React.FC = () => {
 
                   {/* Palm mute / let ring indicators */}
                   {b.notes.some(n => n.palmMute) && (
-                    <text x={beatX - 12} y={rowY + TAB_STAFF_TOP + ts - 4} className="music-text" fontSize="8" fill="#f59e0b" style={{ pointerEvents: 'none' }}>
+                    <text x={beatX - 12} y={rowY + TAB_STAFF_TOP + ts - 4} className="music-text" fontSize="8" fill="#e0a83f" style={{ pointerEvents: 'none' }}>
                       P.M.
                     </text>
                   )}
                   {b.notes.some(n => n.letRing) && (
-                    <text x={beatX - 12} y={rowY + TAB_STAFF_TOP + ts - 14} className="music-text" fontSize="8" fill="#10b981" style={{ pointerEvents: 'none' }}>
+                    <text x={beatX - 12} y={rowY + TAB_STAFF_TOP + ts - 14} className="music-text" fontSize="8" fill="#3fb98a" style={{ pointerEvents: 'none' }}>
                       let ring
                     </text>
                   )}
@@ -1999,7 +1757,7 @@ export const TabSheetEditor: React.FC = () => {
                 return (
                   <g key={`beam-${gi}`} style={{ pointerEvents: 'none' }}>
                     {/* Primary beam: spans the full group */}
-                    <rect x={firstSX} y={beamY - 2} width={Math.max(lastSX - firstSX, 2)} height="4" fill="#ece6df" />
+                    <rect x={firstSX} y={beamY - 2} width={Math.max(lastSX - firstSX, 2)} height="4" fill="#f2ece4" />
                     {/* Secondary beam: over 16th+32nd runs, extended 1/4 way to adjacent 8ths */}
                     {secondarySegments.map((seg, si) => {
                       const segFirstX = getBeatCoordinates(mIdx, seg.start);
@@ -2023,7 +1781,7 @@ export const TabSheetEditor: React.FC = () => {
                       const leftSX = mainStemUp ? leftX + 4 - 0.75 : leftX - 4 - 0.75;
                       const rightSX = mainStemUp ? rightX + 4 + 0.75 : rightX - 4 + 0.75;
                       return (
-                        <rect key={`beam16-${gi}-${si}`} x={leftSX} y={beamY - 2 + beamDir * 5} width={Math.max(rightSX - leftSX, 2)} height="4" fill="#ece6df" />
+                        <rect key={`beam16-${gi}-${si}`} x={leftSX} y={beamY - 2 + beamDir * 5} width={Math.max(rightSX - leftSX, 2)} height="4" fill="#f2ece4" />
                       );
                     })}
                     {/* Tertiary beam: over 32nd runs, extended 1/4 way to adjacent 16ths/8ths */}
@@ -2049,7 +1807,7 @@ export const TabSheetEditor: React.FC = () => {
                       const leftSX = mainStemUp ? leftX + 4 - 0.75 : leftX - 4 - 0.75;
                       const rightSX = mainStemUp ? rightX + 4 + 0.75 : rightX - 4 + 0.75;
                       return (
-                        <rect key={`beam32-${gi}-${si}`} x={leftSX} y={beamY - 2 + beamDir * 10} width={Math.max(rightSX - leftSX, 2)} height="4" fill="#ece6df" />
+                        <rect key={`beam32-${gi}-${si}`} x={leftSX} y={beamY - 2 + beamDir * 10} width={Math.max(rightSX - leftSX, 2)} height="4" fill="#f2ece4" />
                       );
                     })}
                   </g>
@@ -2098,7 +1856,7 @@ export const TabSheetEditor: React.FC = () => {
                       y={rhythmY - 1.5}
                       width={Math.max(lastSX - firstSX, 2)}
                       height="3"
-                      fill="#64748b"
+                      fill="#6f6862"
                     />
                     {secondarySegments.map((seg, si) => {
                       const segFirstX = getBeatCoordinates(mIdx, seg.start);
@@ -2128,7 +1886,7 @@ export const TabSheetEditor: React.FC = () => {
                           y={rhythmY - 1.5 - 4}
                           width={Math.max(rightSX - leftSX, 2)}
                           height="3"
-                          fill="#64748b"
+                          fill="#6f6862"
                         />
                       );
                     })}
@@ -2160,7 +1918,7 @@ export const TabSheetEditor: React.FC = () => {
                           y={rhythmY - 1.5 - 8}
                           width={Math.max(rightSX - leftSX, 2)}
                           height="3"
-                          fill="#64748b"
+                          fill="#6f6862"
                         />
                       );
                     })}
@@ -2178,13 +1936,15 @@ export const TabSheetEditor: React.FC = () => {
         <div className="sheetor-fretboard">
           <div className="fretboard-header">
             <div className="fretboard-title">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" width="20" height="20">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" width="15" height="15">
                 <path d="M12 2a3 3 0 0 0-3 3v2.5c0 .5-.2 1-.6 1.4L5 12.5V16l1.5.5L5 21h14l-1.5-4.5L19 16v-3.5l-3.4-3.6c-.4-.4-.6-.9-.6-1.4V5a3 3 0 0 0-3-3Z" />
                 <circle cx="8" cy="18" r="1" />
               </svg>
-              Interactive Fretboard
+              Fretboard
             </div>
-            <button className="btn" onClick={() => setShowFretboard(false)}>Hide Neck</button>
+            <span className="fretboard-title" style={{ letterSpacing: 0, textTransform: 'none', color: 'var(--text-faint)', fontWeight: 500 }}>
+              Click a fret to place a note on the selected beat
+            </span>
           </div>
 
           <div className="fretboard-neck-container" style={{ height: `${fretboardNeckHeight}px` }}>
@@ -2323,89 +2083,6 @@ export const TabSheetEditor: React.FC = () => {
         </div>
       )}
 
-      {/* Footer info panels */}
-      <div className="sheetor-footer">
-        {/* Keyboard Cheatsheet */}
-        <div className="footer-panel">
-          <div className="footer-panel-title">🎹 Keyboard Shortcuts</div>
-          <div className="keyboard-grid">
-            <div className="keyboard-shortcut">
-              <span>Change Beat</span>
-              <span className="key-tag">← / →</span>
-            </div>
-            <div className="keyboard-shortcut">
-              <span>Change String</span>
-              <span className="key-tag">↑ / ↓</span>
-            </div>
-            <div className="keyboard-shortcut">
-              <span>Input Fret</span>
-              <span className="key-tag">0 - 9</span>
-            </div>
-            <div className="keyboard-shortcut">
-              <span>Remove Note</span>
-              <span className="key-tag">Delete</span>
-            </div>
-            <div className="keyboard-shortcut">
-              <span>Play / Pause</span>
-              <span className="key-tag">Spacebar</span>
-            </div>
-            <div className="keyboard-shortcut">
-              <span>Toggle Rest</span>
-              <span className="key-tag">R</span>
-            </div>
-            <div className="keyboard-shortcut">
-              <span>Change Duration</span>
-              <span className="key-tag">+ / -</span>
-            </div>
-          </div>
-        </div>
-
-        {/* Selected Beat Inspector */}
-        <div className="footer-panel">
-          <div className="footer-panel-title">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" width="16" height="16" style={{ marginRight: 6 }}>
-              <circle cx="11" cy="11" r="8" />
-              <line x1="21" y1="21" x2="16.65" y2="16.65" />
-            </svg>
-            Selected Note Inspector
-          </div>
-          <div className="inspector-stats">
-            <div className="stat-box">
-              <span className="stat-val">{activeMeasureIndex + 1}</span>
-              <span className="stat-lbl">Measure</span>
-            </div>
-            <div className="stat-box">
-              <span className="stat-val">{activeBeatIndex + 1}</span>
-              <span className="stat-lbl">Beat</span>
-            </div>
-            <div className="stat-box">
-              <span className="stat-val">
-                {activeBeat?.isRest ? 'Rest' : (activeBeat?.notes.length ? `${activeBeat.notes.length} Note(s)` : 'Empty')}
-              </span>
-              <span className="stat-lbl">Status</span>
-            </div>
-          </div>
-
-          <div style={{ marginTop: '14px', fontSize: '0.85rem', color: '#94a3b8' }}>
-            {activeBeat && activeBeat.notes.length > 0 ? (
-              <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
-                <strong>Active Notes:</strong>
-                {activeBeat.notes.map((n, i) => {
-                  const midi = tuning[n.stringIndex] + n.fret;
-                  return (
-                    <span key={i} style={{ background: '#1e293b', padding: '2px 8px', borderRadius: '4px', border: '1px solid rgba(255,255,255,0.1)' }}>
-                      String {n.stringIndex + 1} (Fret {n.fret}) &rarr; <strong>{midiToNoteName(midi)} ({midi})</strong>
-                    </span>
-                  );
-                })}
-              </div>
-            ) : (
-              <div>No notes on active beat. Click on the Treble clef or TAB strings to add notes.</div>
-            )}
-          </div>
-        </div>
-      </div>
-
       {showNoteOptions && (
         <div className="note-options-overlay" onClick={() => setShowNoteOptions(false)}>
         <div className="note-options-panel" onClick={(e) => e.stopPropagation()}>
@@ -2475,23 +2152,24 @@ export const TabSheetEditor: React.FC = () => {
       )}
 
       <div className="bottom-command-bar">
-        <div className="bottom-cluster transport-cluster">
+        {/* Transport: everything that affects playback */}
+        <div className="bottom-cluster">
           {playback.isPlaying ? (
-            <button className="btn btn-danger btn-stacked" onClick={playback.stop}>
+            <button className="btn btn-danger" onClick={playback.stop}>
               <svg viewBox="0 0 24 24" fill="currentColor">
                 <rect x="6" y="6" width="12" height="12" rx="1" />
               </svg>
               Stop
             </button>
           ) : (
-            <button className="btn btn-primary btn-stacked" onClick={startPlaybackFromCursor}>
+            <button className="btn btn-primary" onClick={startPlaybackFromCursor}>
               <svg viewBox="0 0 24 24" fill="currentColor">
                 <path d="M8 5v14l11-7z" />
               </svg>
               Play
             </button>
           )}
-          <label className="compact-field">
+          <label className="transport-field">
             <span>BPM</span>
             <input
               type="number"
@@ -2500,7 +2178,50 @@ export const TabSheetEditor: React.FC = () => {
               onChange={(e) => setActiveMeasureBpm(Math.max(20, Math.min(300, parseInt(e.target.value) || 120)))}
             />
           </label>
+          <div className="bottom-menu">
+            <button
+              className={`bottom-menu-trigger ${openBottomMenu === 'speed' ? 'active' : ''}`}
+              onClick={() => setOpenBottomMenu(prev => prev === 'speed' ? null : 'speed')}
+              title="Playback speed"
+            >
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <circle cx="12" cy="12" r="10" />
+                <polyline points="12 6 12 12 16 14" />
+              </svg>
+              {playbackSpeed}x
+            </button>
+            {openBottomMenu === 'speed' && (
+              <div className="bottom-popover" style={{ left: 0, right: 'auto', minWidth: 176 }}>
+                <span className="popover-title">Speed</span>
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+                  {[0.5, 0.75, 1, 1.25, 1.5, 2].map(speed => (
+                    <button
+                      key={speed}
+                      className={`btn ${playbackSpeed === speed ? 'btn-active' : ''}`}
+                      onClick={() => setPlaybackSpeed(speed)}
+                      style={{ flex: 1, minWidth: 48 }}
+                    >{speed}x</button>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+          <button
+            className={`btn ${loopPlayback ? 'btn-active' : ''}`}
+            onClick={() => setLoopPlayback(prev => !prev)}
+            title="Loop playback"
+          >
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <polyline points="17 1 21 5 17 9" />
+              <path d="M3 11V9a4 4 0 0 1 4-4h14" />
+              <polyline points="7 23 3 19 7 15" />
+              <path d="M21 13v2a4 4 0 0 1-4 4H3" />
+            </svg>
+            Loop
+          </button>
         </div>
+
+        <div className="cmd-spacer" />
 
         <div className="bottom-cluster">
           <div className="bottom-menu">
@@ -2637,10 +2358,10 @@ export const TabSheetEditor: React.FC = () => {
                     ))}
                   </select>
                 </label>
-                <div style={{ fontSize: '0.7rem', color: '#94a3b8', fontWeight: 600, marginTop: 2 }}>Per string</div>
+                <div style={{ fontSize: '0.7rem', color: '#a89f96', fontWeight: 600, marginTop: 2 }}>Per string</div>
                 {tuning.map((pitch, i) => (
                   <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-                    <span style={{ fontSize: '0.7rem', color: '#64748b', width: 12, textAlign: 'right' }}>{i + 1}</span>
+                    <span style={{ fontSize: '0.7rem', color: '#6f6862', width: 12, textAlign: 'right' }}>{i + 1}</span>
                     <select
                       className="control-select"
                       style={{ flex: 1, fontSize: '0.75rem' }}
@@ -2709,7 +2430,9 @@ export const TabSheetEditor: React.FC = () => {
             )}
           </div>
 
-          <button className="btn btn-stacked" onClick={() => {
+          <div className="cmd-divider" />
+
+          <button className="btn" onClick={() => {
             setViewMode(prev => {
               if (!prev) {
                 setShowNoteOptions(false);
@@ -2717,7 +2440,7 @@ export const TabSheetEditor: React.FC = () => {
               }
               return !prev;
             });
-          }}>
+          }} title={viewMode ? 'Back to editing' : 'Read-only view'}>
             {viewMode ? (
               <>
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -2736,64 +2459,28 @@ export const TabSheetEditor: React.FC = () => {
               </>
             )}
           </button>
-          <button className="btn btn-stacked" onClick={() => setShowFretboard(prev => !prev)}>
+          <button
+            className={`btn ${showFretboard ? 'btn-active' : ''}`}
+            onClick={() => setShowFretboard(prev => !prev)}
+            title={showFretboard ? 'Hide the fretboard' : 'Show the fretboard'}
+          >
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
               <rect x="2" y="3" width="20" height="14" rx="2" />
               <line x1="8" y1="21" x2="16" y2="21" />
               <line x1="12" y1="17" x2="12" y2="21" />
             </svg>
-            {showFretboard ? 'Hide neck' : 'Show neck'}
+            Neck
           </button>
-          <button className="btn btn-stacked" onClick={() => {
+          <button className="btn" onClick={() => {
             setOpenBottomMenu(null);
             setShowShortcuts(true);
-          }}>
+          }} title="Keyboard shortcuts">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
               <rect x="3" y="11" width="18" height="11" rx="2" />
               <path d="M7 11V7a5 5 0 0 1 10 0v4" />
             </svg>
             Keys
           </button>
-
-          <div className="bottom-cluster">
-            <div className="bottom-menu">
-              <button
-                className={`bottom-menu-trigger ${openBottomMenu === 'speed' ? 'active' : ''}`}
-                onClick={() => setOpenBottomMenu(prev => prev === 'speed' ? null : 'speed')}
-              >
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                  <circle cx="12" cy="12" r="10" />
-                  <polyline points="12 6 12 12 16 14" />
-                </svg>
-                {playbackSpeed}x
-              </button>
-              {openBottomMenu === 'speed' && (
-                <div className="bottom-popover" style={{ display: 'flex', gap: 6, flexWrap: 'wrap', minWidth: 140 }}>
-                  {[0.5, 0.75, 1, 1.25, 1.5, 2].map(speed => (
-                    <button
-                      key={speed}
-                      className={`btn ${playbackSpeed === speed ? 'btn-active' : ''}`}
-                      onClick={() => setPlaybackSpeed(speed)}
-                      style={{ flex: 1, minWidth: 50 }}
-                    >{speed}x</button>
-                  ))}
-                </div>
-              )}
-            </div>
-            <button
-              className={`btn btn-stacked ${loopPlayback ? 'btn-active' : ''}`}
-              onClick={() => setLoopPlayback(prev => !prev)}
-              title="Loop playback"
-            >
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <polyline points="17 1 21 5 17 9" />
-                <path d="M3 11V9a4 4 0 0 1 4-4h14" />
-                <polyline points="7 23 3 19 7 15" />
-                <path d="M21 13v2a4 4 0 0 1-4 4H3" />
-              </svg>
-              Loop
-            </button>
-          </div>
         </div>
       </div>
 
