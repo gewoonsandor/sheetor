@@ -13,7 +13,9 @@
     "build:frontend": "npm --workspace @sheetor/frontend run build",
     "build:backend": "npm --workspace @sheetor/backend run build",
     "lint": "npm run lint --workspaces --if-present",
-    "start:backend": "npm --workspace @sheetor/backend run start"
+    "start:backend": "npm --workspace @sheetor/backend run start",
+    "test": "npm run test --workspaces --if-present",
+    "typecheck": "npm run typecheck --workspaces --if-present"
   },
   "devDependencies": {
     "concurrently": "^10.0.3"

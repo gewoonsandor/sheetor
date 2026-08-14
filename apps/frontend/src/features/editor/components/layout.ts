@@ -1,21 +1,35 @@
-import type { TabMeasure, MLayout } from './types';
+import type { Duration, TabMeasure, MLayout } from './types';
 import { getDurationVal } from './songUtils';
+export const SLOT_WIDTH = 22;
 
-export const SLOT_WIDTH = 18;
-export const MIN_BEAT_WIDTH = 22;
+export const MIN_BEAT_WIDTH = 30;
+export const MIN_16TH_WIDTH = 38;
+export const MIN_32ND_WIDTH = 46;
 export const MIN_MEASURE_WIDTH = 100;
 export const MAX_ROW_WIDTH = 980;
 
 export const TAB_STAFF_TOP = 90;
 export const TAB_STAFF_HEIGHT_PX = 10; // pixels per string line
 
+export const getBeatMinContribution = (duration: Duration): number => {
+  if (duration === '16') return MIN_16TH_WIDTH;
+  if (duration === '32') return MIN_32ND_WIDTH;
+  return MIN_BEAT_WIDTH;
+};
+
+export const computeMeasureContentWidth = (beats: { duration: Duration }[]): number => {
+  return beats.reduce((acc, b) => acc + getBeatMinContribution(b.duration), 0);
+};
+
 export const FRETBOARD_STRING_TOP = 20;
 export const FRETBOARD_STRING_BOTTOM = 20;
 export const FRETBOARD_STRING_GAP = 24;
 
+export const STEM_TOP_PAD = 25;
+
 export const computeRowHeight = (stringCount: number): number => {
   const tabStaffHeight = stringCount * 10;
-  return TAB_STAFF_TOP + tabStaffHeight + 30;
+  return STEM_TOP_PAD + TAB_STAFF_TOP + tabStaffHeight + 30;
 };
 
 export const computeFretboardStringSpan = (stringCount: number): number =>
@@ -33,10 +47,9 @@ export const getFretboardStringY = (stringIdx: number, stringCount: number): num
 
 export const computeMeasureLayouts = (measures: TabMeasure[]): MLayout[] => {
   const infos = measures.map((measure) => {
-    const totalDur = measure.beats.reduce((acc, b) => acc + getDurationVal(b.duration, b.dot), 0);
-    const numBeats = measure.beats.length;
+    const contentWidth = computeMeasureContentWidth(measure.beats);
     return {
-      contentWidth: Math.max(totalDur * SLOT_WIDTH, numBeats * MIN_BEAT_WIDTH),
+      contentWidth,
       hasTimingChange: !!(measure?.bpm || measure?.timeSignature),
     };
   });
@@ -72,14 +85,20 @@ export const computeMeasureLayouts = (measures: TabMeasure[]): MLayout[] => {
 
   rowTotals.forEach((totalRowWidth, row) => {
     if (totalRowWidth >= MAX_ROW_WIDTH) return;
-    const factor = MAX_ROW_WIDTH / totalRowWidth;
+    const factor = Math.min(MAX_ROW_WIDTH / totalRowWidth, 1.5);
+    const rowLayouts = layouts.filter(l => l.row === row);
     let newX = 0;
-    layouts.filter(l => l.row === row).forEach(l => {
+    rowLayouts.forEach(l => {
       const stretched = l.width * factor;
       l.x = newX;
       l.width = stretched;
       newX += stretched;
     });
+    // Give remaining space to the last measure on the row so the line fills
+    if (newX < MAX_ROW_WIDTH) {
+      const last = rowLayouts[rowLayouts.length - 1];
+      last.width += MAX_ROW_WIDTH - newX;
+    }
   });
 
   return layouts;

@@ -1,3 +1,15 @@
+export type Duration = '1' | '2' | '4' | '8' | '16' | '32';
+
+export interface TimeSignature {
+  numerator: number;
+  denominator: number;
+}
+
+export interface BeatPosition {
+  measureIndex: number;
+  beatIndex: number;
+}
+
 export interface TabNote {
   stringIndex: number; // 0 = high E, 5 = low E
   fret: number;        // 0 to 24
@@ -13,7 +25,7 @@ export interface TabNote {
 
 export interface TabBeat {
   id: string;
-  duration: '1' | '2' | '4' | '8' | '16'; // 1=whole, 2=half, 4=quarter, 8=eighth, 16=sixteenth
+  duration: Duration;
   dot?: boolean;
   notes: TabNote[];
   isRest?: boolean;
@@ -23,27 +35,21 @@ export interface TabMeasure {
   id: string;
   beats: TabBeat[];
   bpm?: number;
-  timeSignature?: {
-    numerator: number;
-    denominator: number;
-  };
+  timeSignature?: TimeSignature;
 }
 
 export interface TabSong {
   title: string;
   artist: string;
   bpm: number;
-  timeSignature: {
-    numerator: number;
-    denominator: number;
-  };
+  timeSignature: TimeSignature;
   measures: TabMeasure[];
 }
 
 export interface BeamGroup {
   startIdx: number;
   endIdx: number;
-  duration: '8' | '16';
+  duration: '8' | '16' | '32';
 }
 
 export interface MLayout {

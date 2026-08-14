@@ -1,7 +1,14 @@
 // Karplus-Strong string synthesis for authentic guitar sound
 export const createGuitarBuffer = (audioCtx: AudioContext, frequency: number, duration: number): AudioBuffer => {
   const sampleRate = audioCtx.sampleRate;
-  const bufferSize = sampleRate * duration;
+  // A stranded note yields an undefined open pitch and therefore a NaN
+  // frequency; createBuffer would throw on a NaN frame count, so fall back to
+  // one frame of silence.
+  if (!Number.isFinite(frequency) || frequency <= 0 || !Number.isFinite(duration) || duration <= 0) {
+    return audioCtx.createBuffer(1, 1, sampleRate);
+  }
+
+  const bufferSize = Math.max(1, Math.floor(sampleRate * duration));
   const buffer = audioCtx.createBuffer(1, bufferSize, sampleRate);
   const data = buffer.getChannelData(0);
 
