@@ -1,6 +1,7 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 
 import type { TabSong } from './types';
+import { createTrack } from './songUtils';
 import { clearSavedSong, loadSong, saveSong } from './persistence';
 
 interface MemoryStorage {
@@ -31,7 +32,7 @@ const song = (title: string): TabSong => ({
   artist: 'Band',
   bpm: 120,
   timeSignature: { numerator: 4, denominator: 4 },
-  measures: [{ id: 'm1', beats: [{ id: 'b1', duration: '4', notes: [{ stringIndex: 0, fret: 3 }] }] }],
+  tracks: [{ ...createTrack('fretted', 'guitar'), measures: [{ id: 'm1', beats: [{ id: 'b1', duration: '4', notes: [{ stringIndex: 0, fret: 3 }] }] }] }],
 });
 
 let storage: MemoryStorage;

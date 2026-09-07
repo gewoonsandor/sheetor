@@ -1,19 +1,30 @@
 import { useEffect, useRef, useState } from 'react';
 
-import type { BeatPosition, TabBeat, TabSong } from './types';
-import { createGuitarBuffer } from './audioEngine';
-import { firstBeatPosition, getBeatDurationInSeconds, getEffectiveBpm, nextBeatPosition } from './songUtils';
+import type { BeatPosition, TabBeat, TabSong, TabTrack } from './types';
+import { getVoice } from './audioEngine';
+import {
+  firstBeatPosition, getBeatDurationInSeconds, getEffectiveBpm, isAudible,
+  nextBeatPosition, resolveNoteMidi,
+} from './songUtils';
 
 const LOOKAHEAD_SECONDS = 0.1;
 const START_DELAY_SECONDS = 0.05;
 
 export interface PlaybackSettings {
   song: TabSong;
-  tuning: number[];
   volume: number;
-  synthType: string;
   loop: boolean;
   speed: number;
+  /** Only this track's beats drive the visual cursor. */
+  activeTrackIndex: number;
+}
+
+// Each track walks its own beat list at its own rate; they stay locked because
+// they share the conductor's tempo map and one AudioContext clock.
+interface TrackCursor {
+  position: BeatPosition;
+  nextTime: number;
+  done: boolean;
 }
 
 export interface PlaybackController {
@@ -43,8 +54,7 @@ export const usePlayback = (
 
   const audioCtxRef = useRef<AudioContext | null>(null);
   const isPlayingRef = useRef<boolean>(false);
-  const positionRef = useRef<BeatPosition>({ measureIndex: 0, beatIndex: 0 });
-  const nextBeatTimeRef = useRef<number>(0);
+  const cursorsRef = useRef<TrackCursor[]>([]);
   const rafIdRef = useRef<number | null>(null);
   const cursorTimersRef = useRef<number[]>([]);
 
@@ -68,50 +78,23 @@ export const usePlayback = (
 
   const midiToFrequency = (midi: number): number => 440 * Math.pow(2, (midi - 69) / 12);
 
-  const scheduleVoice = (ctx: AudioContext, freq: number, time: number, duration: number, gain: GainNode): void => {
-    const { synthType } = settingsRef.current;
-    if (synthType === 'guitar') {
-      const source = ctx.createBufferSource();
-      source.buffer = createGuitarBuffer(ctx, freq, duration + 0.5); // sustain window
-      source.connect(gain);
-      source.start(time);
-      return;
-    }
-
-    const osc = ctx.createOscillator();
-    const gainNode = ctx.createGain();
-    osc.type = synthType as OscillatorType;
-    osc.frequency.setValueAtTime(freq, time);
-
-    // ADSR envelope
-    gainNode.gain.setValueAtTime(0, time);
-    gainNode.gain.linearRampToValueAtTime(0.2, time + 0.01);
-    gainNode.gain.exponentialRampToValueAtTime(0.001, time + duration - 0.01);
-
-    osc.connect(gainNode);
-    gainNode.connect(gain);
-    osc.start(time);
-    osc.stop(time + duration);
-  };
-
-  const playBeat = (beat: TabBeat, time: number, bpm: number): void => {
+  const playBeat = (beat: TabBeat, track: TabTrack, time: number, bpm: number): void => {
     if (beat.isRest || beat.notes.length === 0) return;
     const ctx = audioCtxRef.current;
     if (!ctx) return;
 
-    const { tuning, volume, speed } = settingsRef.current;
-    const masterGain = ctx.createGain();
-    masterGain.gain.setValueAtTime(volume, time);
-    masterGain.connect(ctx.destination);
+    const { volume, speed } = settingsRef.current;
+    const trackGain = ctx.createGain();
+    trackGain.gain.setValueAtTime(volume * track.volume, time);
+    trackGain.connect(ctx.destination);
 
+    const build = getVoice(track.instrument);
     const duration = getBeatDurationInSeconds(beat.duration, beat.dot, bpm) / speed;
     beat.notes.forEach(note => {
-      // A note stranded above the current string count has no open pitch.
-      const openPitch = tuning[note.stringIndex];
-      if (openPitch === undefined) return;
-      const midi = openPitch + note.fret;
-      if (!Number.isFinite(midi)) return;
-      scheduleVoice(ctx, midiToFrequency(midi), time, duration, masterGain);
+      // A fretted note stranded above the track's string count has no pitch.
+      const midi = resolveNoteMidi(note, track);
+      if (midi === undefined) return;
+      build({ ctx, frequency: midiToFrequency(midi), time, duration, destination: trackGain });
     });
   };
 
@@ -134,56 +117,90 @@ export const usePlayback = (
   const start = (from: BeatPosition): void => {
     if (isPlayingRef.current) return;
 
-    const { song } = settingsRef.current;
-    const requested = song.measures[from.measureIndex]?.beats[from.beatIndex]
+    const { song, activeTrackIndex } = settingsRef.current;
+    const activeMeasures = song.tracks[activeTrackIndex]?.measures ?? song.tracks[0]?.measures;
+    if (!activeMeasures) return;
+
+    const requested = activeMeasures[from.measureIndex]?.beats[from.beatIndex]
       ? from
-      : firstBeatPosition(song);
+      : firstBeatPosition(activeMeasures);
     if (!requested) return;
 
     const ctx = ensureContext();
+    const startTime = ctx.currentTime + START_DELAY_SECONDS;
+
+    // Every track starts at the same bar so they stay in step, even when the
+    // cursor sat mid-bar on a track with a different rhythm.
+    cursorsRef.current = song.tracks.map(track => {
+      const position = track.measures[requested.measureIndex]?.beats[requested.beatIndex]
+        ? requested
+        : firstBeatPosition(track.measures);
+      return position
+        ? { position, nextTime: startTime, done: false }
+        : { position: { measureIndex: 0, beatIndex: 0 }, nextTime: startTime, done: true };
+    });
+
     setIsPlaying(true);
     isPlayingRef.current = true;
-    positionRef.current = requested;
-    nextBeatTimeRef.current = ctx.currentTime + START_DELAY_SECONDS;
     setPlaybackBeat(requested);
 
     const scheduleAhead = (): void => {
       if (!isPlayingRef.current) return;
 
-      while (nextBeatTimeRef.current < ctx.currentTime + LOOKAHEAD_SECONDS) {
-        const current = settingsRef.current;
-        const position = positionRef.current;
-        const beat = current.song.measures[position.measureIndex]?.beats[position.beatIndex];
-        if (!beat) {
-          // The song shrank underneath us; resync or give up.
-          const resync = firstBeatPosition(current.song);
-          if (!resync || !current.loop) {
-            stop();
-            return;
+      const current = settingsRef.current;
+      const horizon = ctx.currentTime + LOOKAHEAD_SECONDS;
+      let anyRunning = false;
+
+      cursorsRef.current.forEach((cursor, trackIndex) => {
+        const track = current.song.tracks[trackIndex];
+        if (!track || cursor.done) return;
+
+        while (!cursor.done && cursor.nextTime < horizon) {
+          const beat = track.measures[cursor.position.measureIndex]?.beats[cursor.position.beatIndex];
+          if (!beat) {
+            // This track shrank underneath us; resync or retire it.
+            const resync = firstBeatPosition(track.measures);
+            if (!resync || !current.loop) {
+              cursor.done = true;
+              break;
+            }
+            cursor.position = resync;
+            continue;
           }
-          positionRef.current = resync;
-          continue;
+
+          const bpm = getEffectiveBpm(current.song, cursor.position.measureIndex);
+          const schedTime = cursor.nextTime;
+          if (isAudible(track, current.song.tracks)) {
+            playBeat(beat, track, schedTime, bpm);
+          }
+
+          // Only the active track moves the on-screen cursor.
+          if (trackIndex === current.activeTrackIndex) {
+            const position = cursor.position;
+            const timerId = window.setTimeout(() => {
+              if (!isPlayingRef.current) return;
+              setPlaybackBeat(position);
+              onCursorMoveRef.current(position);
+            }, Math.max(0, (schedTime - ctx.currentTime) * 1000));
+            cursorTimersRef.current.push(timerId);
+          }
+
+          cursor.nextTime += getBeatDurationInSeconds(beat.duration, beat.dot, bpm) / current.speed;
+
+          const next = nextBeatPosition(track.measures, cursor.position, current.loop);
+          if (!next) {
+            cursor.done = true;
+            break;
+          }
+          cursor.position = next;
         }
 
-        const bpm = getEffectiveBpm(current.song, position.measureIndex);
-        const schedTime = nextBeatTimeRef.current;
-        playBeat(beat, schedTime, bpm);
+        if (!cursor.done) anyRunning = true;
+      });
 
-        const timerId = window.setTimeout(() => {
-          if (!isPlayingRef.current) return;
-          setPlaybackBeat(position);
-          onCursorMoveRef.current(position);
-        }, Math.max(0, (schedTime - ctx.currentTime) * 1000));
-        cursorTimersRef.current.push(timerId);
-
-        nextBeatTimeRef.current += getBeatDurationInSeconds(beat.duration, beat.dot, bpm) / current.speed;
-
-        const next = nextBeatPosition(current.song, position, current.loop);
-        if (!next) {
-          stop();
-          return;
-        }
-        positionRef.current = next;
+      if (!anyRunning) {
+        stop();
+        return;
       }
 
       rafIdRef.current = requestAnimationFrame(scheduleAhead);
@@ -192,19 +209,23 @@ export const usePlayback = (
     rafIdRef.current = requestAnimationFrame(scheduleAhead);
   };
 
-  // Single pitch preview for the virtual fretboard and note clicks.
+  // Single pitch preview for the virtual fretboard, keyboard and note clicks.
+  // Uses the active track's voice so the preview matches what will play back.
   const playTone = (midi: number): void => {
     if (!Number.isFinite(midi)) return;
     const ctx = ensureContext();
-    const { volume } = settingsRef.current;
+    const { volume, song, activeTrackIndex } = settingsRef.current;
+    const track = song.tracks[activeTrackIndex] ?? song.tracks[0];
     const time = ctx.currentTime;
     const duration = 0.8;
 
-    const masterGain = ctx.createGain();
-    masterGain.gain.setValueAtTime(volume * 0.7, time);
-    masterGain.connect(ctx.destination);
+    const previewGain = ctx.createGain();
+    previewGain.gain.setValueAtTime(volume * (track?.volume ?? 1) * 0.7, time);
+    previewGain.connect(ctx.destination);
 
-    scheduleVoice(ctx, midiToFrequency(midi), time, duration, masterGain);
+    getVoice(track?.instrument ?? 'sine')({
+      ctx, frequency: midiToFrequency(midi), time, duration, destination: previewGain,
+    });
   };
 
   // Refs only, so the teardown needs no dependencies and never touches state

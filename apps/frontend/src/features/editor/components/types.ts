@@ -10,9 +10,33 @@ export interface BeatPosition {
   beatIndex: number;
 }
 
-export interface TabNote {
-  stringIndex: number; // 0 = high E, 5 = low E
-  fret: number;        // 0 to 24
+/** A beat position qualified by the track it belongs to. */
+export interface TrackPosition extends BeatPosition {
+  trackIndex: number;
+}
+
+export type InstrumentId =
+  | 'guitar'
+  | 'bass'
+  | 'piano'
+  | 'trumpet'
+  | 'strings'
+  | 'organ'
+  | 'sine'
+  | 'triangle'
+  | 'square'
+  | 'sawtooth';
+
+/** Which staves a track draws: standard notation, guitar TAB, or both stacked. */
+export type StaffDisplay = 'notation' | 'tab' | 'both';
+
+/**
+ * Fretted tracks address pitch as string + fret against a tuning; pitched
+ * tracks (piano, trumpet, ...) carry the absolute MIDI number instead.
+ */
+export type TrackKind = 'fretted' | 'pitched';
+
+export interface NoteTechniques {
   harmonic?: boolean;
   palmMute?: boolean;
   letRing?: boolean;
@@ -22,6 +46,17 @@ export interface TabNote {
   legatoSlide?: boolean; // slide (diagonal line to previous note on same string)
   bend?: boolean;
 }
+
+export interface FrettedNote extends NoteTechniques {
+  stringIndex: number; // 0 = highest string
+  fret: number;        // 0 to 24
+}
+
+export interface PitchedNote extends NoteTechniques {
+  midi: number;        // absolute sounding pitch
+}
+
+export type TabNote = FrettedNote | PitchedNote;
 
 export interface TabBeat {
   id: string;
@@ -38,12 +73,33 @@ export interface TabMeasure {
   timeSignature?: TimeSignature;
 }
 
+export interface TabTrack {
+  id: string;
+  name: string;
+  kind: TrackKind;
+  display: StaffDisplay;
+  instrument: InstrumentId;
+  /** Fretted tracks only: MIDI pitch of each open string, highest first. */
+  tuning?: number[];
+  /**
+   * Semitones the staff is written above what it sounds. Guitar and bass are
+   * notated an octave high (12); concert-pitch instruments use 0.
+   */
+  transpose: number;
+  /** Per-track trim, 0..1, multiplied into the master volume. */
+  volume: number;
+  muted?: boolean;
+  soloed?: boolean;
+  measures: TabMeasure[];
+}
+
 export interface TabSong {
   title: string;
   artist: string;
   bpm: number;
   timeSignature: TimeSignature;
-  measures: TabMeasure[];
+  /** Track 0 is the conductor: its measure bpm/time-signature overrides win. */
+  tracks: TabTrack[];
 }
 
 export interface BeamGroup {

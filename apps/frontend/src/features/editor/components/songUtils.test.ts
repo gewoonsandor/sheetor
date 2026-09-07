@@ -10,11 +10,18 @@ import {
   getEffectiveBpm,
   getEffectiveTimeSignature,
   getStringPitches,
+  isAudible,
+  isFrettedNote,
+  createTrack,
+  midiToDiatonicAndAccidental,
   midiToNoteOctave,
   nextBeatPosition,
+  normalizeTrackLengths,
   requiredStringCount,
+  resolveNoteMidi,
   noteOctaveToMidi,
   pruneNotesToStringCount,
+  staffStepToSoundingMidi,
 } from './songUtils';
 
 const beat = (duration: TabBeat['duration'], notes: TabBeat['notes'] = [{ stringIndex: 0, fret: 3 }]): TabBeat => ({
@@ -34,7 +41,7 @@ const song = (measures: TabMeasure[], extra: Partial<TabSong> = {}): TabSong => 
   artist: 'A',
   bpm: 120,
   timeSignature: { numerator: 4, denominator: 4 },
-  measures,
+  tracks: [{ ...createTrack('fretted', 'guitar'), measures }],
   ...extra,
 });
 
@@ -70,6 +77,31 @@ describe('midi naming', () => {
 
   it('names negative midi values without producing undefined', () => {
     expect(midiToNoteOctave(-1)).toBe('B-2');
+  });
+});
+
+describe('staffStepToSoundingMidi', () => {
+  // Guitar notation sounds an octave below where it is written, so the bottom
+  // line of the treble staff (written E4) has to come back as E3, not E4.
+  it('returns the sounding pitch, an octave below the written one', () => {
+    expect(staffStepToSoundingMidi(2)).toBe(52); // bottom line: written E4 -> E3
+    expect(staffStepToSoundingMidi(6)).toBe(59); // middle line: written B4 -> B3
+    expect(staffStepToSoundingMidi(10)).toBe(65); // top line: written F5 -> F4
+  });
+
+  it('handles ledger positions above and below the staff', () => {
+    expect(staffStepToSoundingMidi(0)).toBe(48); // middle C written -> C3
+    expect(staffStepToSoundingMidi(-3)).toBe(43); // written G3 -> G2
+    expect(staffStepToSoundingMidi(12)).toBe(69); // written A5 -> A4
+  });
+
+  it('round-trips every step back through the renderer', () => {
+    for (let step = -12; step <= 16; step++) {
+      const midi = staffStepToSoundingMidi(step);
+      expect(midiToDiatonicAndAccidental(midi).diatonicStep).toBe(step);
+      // Natural degrees only — the staff has no position for an accidental.
+      expect(midiToDiatonicAndAccidental(midi).accidental).toBe('');
+    }
   });
 });
 
@@ -122,76 +154,180 @@ describe('effective bpm and time signature', () => {
 
 describe('pruneNotesToStringCount', () => {
   it('drops notes stranded above the string count and re-rests the beat', () => {
-    const s = song([measure([beat('4', [{ stringIndex: 7, fret: 5 }])])]);
-    const pruned = pruneNotesToStringCount(s, 6);
-    expect(pruned.measures[0].beats[0].notes).toEqual([]);
-    expect(pruned.measures[0].beats[0].isRest).toBe(true);
+    const bars = [measure([beat('4', [{ stringIndex: 7, fret: 5 }])])];
+    const pruned = pruneNotesToStringCount(bars, 6);
+    expect(pruned[0].beats[0].notes).toEqual([]);
+    expect(pruned[0].beats[0].isRest).toBe(true);
   });
 
   it('keeps notes that still have a string', () => {
-    const s = song([measure([beat('4', [{ stringIndex: 5, fret: 5 }, { stringIndex: 7, fret: 5 }])])]);
-    expect(pruneNotesToStringCount(s, 6).measures[0].beats[0].notes).toEqual([{ stringIndex: 5, fret: 5 }]);
+    const bars = [measure([beat('4', [{ stringIndex: 5, fret: 5 }, { stringIndex: 7, fret: 5 }])])];
+    expect(pruneNotesToStringCount(bars, 6)[0].beats[0].notes).toEqual([{ stringIndex: 5, fret: 5 }]);
+  });
+
+  it('leaves pitched notes alone', () => {
+    const bars = [measure([beat('4', [{ midi: 60 }])])];
+    expect(pruneNotesToStringCount(bars, 6)[0].beats[0].notes).toEqual([{ midi: 60 }]);
   });
 
   it('returns the same reference when nothing needs pruning', () => {
-    const s = song([measure([beat('4', [{ stringIndex: 0, fret: 1 }])])]);
-    expect(pruneNotesToStringCount(s, 6)).toBe(s);
+    const bars = [measure([beat('4', [{ stringIndex: 0, fret: 1 }])])];
+    expect(pruneNotesToStringCount(bars, 6)).toBe(bars);
   });
 });
 
 describe('requiredStringCount', () => {
   it('keeps the minimum when every note fits', () => {
-    const s = song([measure([beat('4', [{ stringIndex: 5, fret: 5 }])])]);
-    expect(requiredStringCount(s, 6)).toBe(6);
+    expect(requiredStringCount([measure([beat('4', [{ stringIndex: 5, fret: 5 }])])], 6)).toBe(6);
   });
 
   it('widens to cover the highest string a note uses', () => {
-    const s = song([measure([beat('4', [{ stringIndex: 0, fret: 1 }, { stringIndex: 7, fret: 5 }])])]);
-    expect(requiredStringCount(s, 6)).toBe(8);
+    const bars = [measure([beat('4', [{ stringIndex: 0, fret: 1 }, { stringIndex: 7, fret: 5 }])])];
+    expect(requiredStringCount(bars, 6)).toBe(8);
   });
 
   it('never exceeds the twelve-string pool', () => {
-    const s = song([measure([beat('4', [{ stringIndex: 11, fret: 0 }])])]);
-    expect(requiredStringCount(s, 6)).toBe(12);
+    expect(requiredStringCount([measure([beat('4', [{ stringIndex: 11, fret: 0 }])])], 6)).toBe(12);
   });
 
   it('never narrows below the requested minimum', () => {
-    const s = song([measure([beat('4', [])])]);
-    expect(requiredStringCount(s, 7)).toBe(7);
+    expect(requiredStringCount([measure([beat('4', [])])], 7)).toBe(7);
+  });
+
+  it('ignores pitched notes, which have no string', () => {
+    expect(requiredStringCount([measure([beat('4', [{ midi: 60 }])])], 6)).toBe(6);
   });
 });
 
 describe('beat positions', () => {
   it('finds the first playable beat', () => {
-    const s = song([measure([]), measure([beat('4')])]);
-    expect(firstBeatPosition(s)).toEqual({ measureIndex: 1, beatIndex: 0 });
+    expect(firstBeatPosition([measure([]), measure([beat('4')])])).toEqual({ measureIndex: 1, beatIndex: 0 });
   });
 
   it('walks beats then measures in order', () => {
-    const s = song([measure([beat('4'), beat('4')]), measure([beat('4')])]);
-    expect(nextBeatPosition(s, { measureIndex: 0, beatIndex: 0 }, false)).toEqual({ measureIndex: 0, beatIndex: 1 });
-    expect(nextBeatPosition(s, { measureIndex: 0, beatIndex: 1 }, false)).toEqual({ measureIndex: 1, beatIndex: 0 });
+    const bars = [measure([beat('4'), beat('4')]), measure([beat('4')])];
+    expect(nextBeatPosition(bars, { measureIndex: 0, beatIndex: 0 }, false)).toEqual({ measureIndex: 0, beatIndex: 1 });
+    expect(nextBeatPosition(bars, { measureIndex: 0, beatIndex: 1 }, false)).toEqual({ measureIndex: 1, beatIndex: 0 });
   });
 
   it('skips a measure with no beats', () => {
-    const s = song([measure([beat('4')]), measure([]), measure([beat('4')])]);
-    expect(nextBeatPosition(s, { measureIndex: 0, beatIndex: 0 }, false)).toEqual({ measureIndex: 2, beatIndex: 0 });
+    const bars = [measure([beat('4')]), measure([]), measure([beat('4')])];
+    expect(nextBeatPosition(bars, { measureIndex: 0, beatIndex: 0 }, false)).toEqual({ measureIndex: 2, beatIndex: 0 });
   });
 
   it('ends at the last beat when not looping', () => {
-    const s = song([measure([beat('4')])]);
-    expect(nextBeatPosition(s, { measureIndex: 0, beatIndex: 0 }, false)).toBeNull();
+    expect(nextBeatPosition([measure([beat('4')])], { measureIndex: 0, beatIndex: 0 }, false)).toBeNull();
   });
 
   it('wraps to the first beat when looping', () => {
-    const s = song([measure([beat('4')]), measure([beat('4')])]);
-    expect(nextBeatPosition(s, { measureIndex: 1, beatIndex: 0 }, true)).toEqual({ measureIndex: 0, beatIndex: 0 });
+    const bars = [measure([beat('4')]), measure([beat('4')])];
+    expect(nextBeatPosition(bars, { measureIndex: 1, beatIndex: 0 }, true)).toEqual({ measureIndex: 0, beatIndex: 0 });
   });
 
-  it('yields null for a song with no playable beat even when looping', () => {
-    const s = song([measure([]), measure([])]);
-    expect(firstBeatPosition(s)).toBeNull();
-    expect(nextBeatPosition(s, { measureIndex: 0, beatIndex: 0 }, true)).toBeNull();
+  it('yields null for a track with no playable beat even when looping', () => {
+    const bars = [measure([]), measure([])];
+    expect(firstBeatPosition(bars)).toBeNull();
+    expect(nextBeatPosition(bars, { measureIndex: 0, beatIndex: 0 }, true)).toBeNull();
+  });
+});
+
+
+describe('note pitch resolution', () => {
+  const guitar = createTrack('fretted', 'guitar');
+  const piano = createTrack('pitched', 'piano');
+
+  it('distinguishes the two note shapes', () => {
+    expect(isFrettedNote({ stringIndex: 0, fret: 3 })).toBe(true);
+    expect(isFrettedNote({ midi: 60 })).toBe(false);
+  });
+
+  it('resolves a fretted note through the track tuning', () => {
+    expect(resolveNoteMidi({ stringIndex: 0, fret: 3 }, guitar)).toBe(67); // E4 + 3
+    expect(resolveNoteMidi({ stringIndex: 5, fret: 0 }, guitar)).toBe(40); // low E
+  });
+
+  it('takes a pitched note at face value', () => {
+    expect(resolveNoteMidi({ midi: 60 }, piano)).toBe(60);
+  });
+
+  it('yields undefined for a note stranded above the string count', () => {
+    expect(resolveNoteMidi({ stringIndex: 9, fret: 0 }, guitar)).toBeUndefined();
+  });
+});
+
+describe('track defaults', () => {
+  it('notates guitar an octave above concert pitch and piano at it', () => {
+    expect(createTrack('fretted', 'guitar').transpose).toBe(12);
+    expect(createTrack('pitched', 'piano').transpose).toBe(0);
+  });
+
+  it('gives fretted tracks a tuning and pitched tracks none', () => {
+    expect(createTrack('fretted', 'guitar').tuning).toEqual([64, 59, 55, 50, 45, 40]);
+    expect(createTrack('pitched', 'trumpet').tuning).toBeUndefined();
+  });
+
+  it('never shows a TAB staff for a pitched track', () => {
+    expect(createTrack('pitched', 'piano').display).toBe('notation');
+    expect(createTrack('fretted', 'guitar').display).toBe('both');
+  });
+});
+
+describe('transposition', () => {
+  it('shifts the staff position by a whole octave', () => {
+    const concert = midiToDiatonicAndAccidental(60, 0).diatonicStep;
+    const guitar = midiToDiatonicAndAccidental(60, 12).diatonicStep;
+    expect(guitar - concert).toBe(7); // one octave = seven diatonic steps
+  });
+
+  it('round-trips at concert pitch as well as guitar pitch', () => {
+    for (const transpose of [0, 12]) {
+      for (let step = -12; step <= 16; step++) {
+        const midi = staffStepToSoundingMidi(step, transpose);
+        expect(midiToDiatonicAndAccidental(midi, transpose).diatonicStep).toBe(step);
+      }
+    }
+  });
+
+  it('places middle C on the first ledger below for a concert-pitch track', () => {
+    expect(staffStepToSoundingMidi(0, 0)).toBe(60);
+  });
+});
+
+describe('isAudible', () => {
+  const plain = createTrack('fretted', 'guitar');
+  const muted = { ...createTrack('fretted', 'bass'), muted: true };
+  const soloed = { ...createTrack('pitched', 'piano'), soloed: true };
+
+  it('hears every unmuted track when nothing is soloed', () => {
+    const tracks = [plain, muted];
+    expect(isAudible(plain, tracks)).toBe(true);
+    expect(isAudible(muted, tracks)).toBe(false);
+  });
+
+  it('silences unsoloed tracks once any track is soloed', () => {
+    const tracks = [plain, soloed];
+    expect(isAudible(soloed, tracks)).toBe(true);
+    expect(isAudible(plain, tracks)).toBe(false);
+  });
+
+  it('keeps a muted track silent even when it is also soloed', () => {
+    const both = { ...plain, muted: true, soloed: true };
+    expect(isAudible(both, [both])).toBe(false);
+  });
+});
+
+describe('normalizeTrackLengths', () => {
+  it('pads short tracks so every track shares one bar count', () => {
+    const long = { ...createTrack('fretted', 'guitar'), measures: [createEmptyMeasure(), createEmptyMeasure(), createEmptyMeasure()] };
+    const short = { ...createTrack('pitched', 'piano'), measures: [createEmptyMeasure()] };
+    const [a, b] = normalizeTrackLengths([long, short]);
+    expect(a.measures).toHaveLength(3);
+    expect(b.measures).toHaveLength(3);
+  });
+
+  it('returns untouched tracks when they already match', () => {
+    const track = createTrack('fretted', 'guitar');
+    expect(normalizeTrackLengths([track])[0]).toBe(track);
   });
 });
 

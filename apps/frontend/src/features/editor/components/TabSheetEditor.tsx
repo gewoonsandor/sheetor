@@ -1,17 +1,27 @@
 import React, { useState, useEffect, useRef } from 'react';
 import './TabSheetEditor.css';
 
-import type { Duration, TabNote, TabBeat, TabMeasure, TabSong, BeamGroup, MLayout } from './types';
+import type {
+  Duration, FrettedNote, InstrumentId, NoteTechniques, PitchedNote, StaffDisplay,
+  TabNote, TabBeat, TabMeasure, TabSong, TabTrack, TrackKind, BeamGroup, MLayout,
+} from './types';
 import {
-  getStringPitches,
+
   allStringPitches,
   getDurationVal,
   computeBeamGroups,
+  createTrack,
+
+  isFrettedNote,
   midiToNoteName,
   midiToNoteOctave,
   noteOctaveToMidi,
+  normalizeTrackLengths,
+  DEFAULT_TRANSPOSE,
+  resolveNoteMidi,
   GUITAR_NOTE_OPTIONS,
   midiToDiatonicAndAccidental,
+  staffStepToSoundingMidi,
   Y_of_step,
   createEmptyMeasure,
   createEmptySong,
@@ -19,8 +29,10 @@ import {
   getEffectiveBpm,
   getEffectiveTimeSignature,
   pruneNotesToStringCount,
-  requiredStringCount,
+
 } from './songUtils';
+import { INSTRUMENTS } from './audioEngine';
+import { TrackStrip } from './TrackStrip';
 import { parseSong } from './songSchema';
 import { loadSong, saveSong } from './persistence';
 import { usePlayback } from './usePlayback';
@@ -33,6 +45,8 @@ import {
   getFretCellLeft,
   getFretCellWidth,
   getFretLeftPercentage,
+  isWhiteKey,
+  computeKeyboardRange,
   FRET_COUNT as fretCount,
   MAX_ROW_WIDTH,
   STEM_TOP_PAD,
@@ -56,30 +70,43 @@ const STANDARD_TUNINGS: Record<string, number[]> = {
 
 const TUNING_PRESETS = Object.entries(STANDARD_TUNINGS);
 
+// Keyboard span for pitched tracks, which have no tuning to derive one from.
+const PITCHED_KEYBOARD_LOW = 36;  // C2
+const PITCHED_KEYBOARD_HIGH = 84; // C6
+
+const INSTRUMENT_OPTIONS = Object.entries(INSTRUMENTS).map(([id, voice]) => ({
+  id: id as InstrumentId,
+  label: voice.label,
+}));
+
 export const TabSheetEditor: React.FC = () => {
   // --- STATE ---
 
   const [song, setSong] = useState<TabSong>(() => loadSong(createEmptySong()));
+  const [activeTrackIndex, setActiveTrackIndex] = useState<number>(0);
   const [activeMeasureIndex, setActiveMeasureIndex] = useState<number>(0);
   const [activeBeatIndex, setActiveBeatIndex] = useState<number>(0);
   const [activeStringIndex, setActiveStringIndex] = useState<number>(0);
 
-  // Tuning is not persisted, so widen it to cover every note the loaded song
-  // has; otherwise those notes render and play with an undefined pitch.
-  const [tuning, setTuning] = useState<number[]>(() => getStringPitches(requiredStringCount(song, 6)));
+  // Everything the score and the input panels read comes from the active
+  // track, so the rest of the component works one track at a time.
+  const activeTrack = song.tracks[activeTrackIndex] ?? song.tracks[0];
+  const measures = activeTrack.measures;
+  const tuning = activeTrack.tuning ?? [];
   const stringCount = tuning.length;
-  
+  const transpose = activeTrack.transpose;
+  const isFrettedTrack = activeTrack.kind === 'fretted';
+  const showTab = isFrettedTrack && activeTrack.display !== 'notation';
+  const showNotation = activeTrack.display !== 'tab';
 
-  
   const [durationSelect, setDurationSelect] = useState<Duration>('4');
   const [dotSelect, setDotSelect] = useState<boolean>(false);
-  const [synthType, setSynthType] = useState<string>('guitar');
   const [volume, setVolume] = useState<number>(0.8);
   const [viewMode, setViewMode] = useState<boolean>(false);
   const [showFretboard, setShowFretboard] = useState<boolean>(true);
   const [showShortcuts, setShowShortcuts] = useState<boolean>(false);
   const [showNoteOptions, setShowNoteOptions] = useState<boolean>(false);
-  const [openBottomMenu, setOpenBottomMenu] = useState<'song' | 'edit' | 'sound' | 'speed' | 'tuning' | null>(null);
+  const [openBottomMenu, setOpenBottomMenu] = useState<'song' | 'edit' | 'output' | 'view' | 'track' | null>(null);
 
   const [playbackSpeed, setPlaybackSpeed] = useState<number>(1);
   const [loopPlayback, setLoopPlayback] = useState<boolean>(false);
@@ -96,12 +123,95 @@ export const TabSheetEditor: React.FC = () => {
   const containerRef = useRef<HTMLDivElement>(null);
 
   const playback = usePlayback(
-    { song, tuning, volume, synthType, loop: loopPlayback, speed: playbackSpeed },
+    { song, volume, loop: loopPlayback, speed: playbackSpeed, activeTrackIndex },
     (position) => {
       setActiveMeasureIndex(position.measureIndex);
       setActiveBeatIndex(position.beatIndex);
     },
   );
+
+  // --- TRACK EDITORS ---
+
+  const updateTrack = (trackIndex: number, patch: Partial<TabTrack>) => {
+    setSong(prev => ({
+      ...prev,
+      tracks: prev.tracks.map((t, i) => (i === trackIndex ? { ...t, ...patch } : t)),
+    }));
+  };
+
+  const updateActiveTrack = (patch: Partial<TabTrack>) => updateTrack(activeTrackIndex, patch);
+
+  const selectTrack = (index: number) => {
+    setActiveTrackIndex(index);
+    setShowNoteOptions(false);
+    // Bar counts are shared, but beat counts are not, so re-clamp the cursor.
+    const target = song.tracks[index];
+    if (!target) return;
+    const beats = target.measures[activeMeasureIndex]?.beats.length ?? 0;
+    if (activeBeatIndex >= beats) setActiveBeatIndex(Math.max(0, beats - 1));
+    const slots = target.kind === 'fretted' ? (target.tuning?.length ?? 6) : 1;
+    setActiveStringIndex(prev => Math.min(prev, slots - 1));
+  };
+
+  const addTrack = () => {
+    const kind: TrackKind = 'pitched';
+    const track = createTrack(kind, 'piano', measures.length);
+    setSong(prev => ({ ...prev, tracks: normalizeTrackLengths([...prev.tracks, track]) }));
+    setActiveTrackIndex(song.tracks.length);
+    setActiveBeatIndex(0);
+    setActiveStringIndex(0);
+    setOpenBottomMenu('track');
+  };
+
+  const duplicateActiveTrack = () => {
+    setSong(prev => {
+      const source = prev.tracks[activeTrackIndex];
+      if (!source) return prev;
+      const copy: TabTrack = {
+        ...source,
+        id: createId(),
+        name: `${source.name} copy`,
+        soloed: false,
+        measures: source.measures.map(m => ({
+          ...m,
+          id: createId(),
+          beats: m.beats.map(b => ({ ...b, id: createId(), notes: b.notes.map(n => ({ ...n })) })),
+        })),
+      };
+      const tracks = [...prev.tracks];
+      tracks.splice(activeTrackIndex + 1, 0, copy);
+      return { ...prev, tracks };
+    });
+    setActiveTrackIndex(prev => prev + 1);
+  };
+
+  const deleteActiveTrack = () => {
+    if (song.tracks.length <= 1) return; // A song always has one track
+    setSong(prev => ({ ...prev, tracks: prev.tracks.filter((_, i) => i !== activeTrackIndex) }));
+    setActiveTrackIndex(prev => Math.max(0, prev - 1));
+    setActiveBeatIndex(0);
+    setActiveStringIndex(0);
+    setOpenBottomMenu(null);
+  };
+
+  /** Rewrites only the active track's bars. */
+  const setMeasures = (updater: (measures: TabMeasure[]) => TabMeasure[]) => {
+    setSong(prev => ({
+      ...prev,
+      tracks: prev.tracks.map((t, i) => (i === activeTrackIndex ? { ...t, measures: updater(t.measures) } : t)),
+    }));
+  };
+
+  /**
+   * Bar-count changes must hit every track or the score falls out of
+   * alignment, so they all go through here.
+   */
+  const setAllTrackMeasures = (updater: (measures: TabMeasure[], track: TabTrack) => TabMeasure[]) => {
+    setSong(prev => ({
+      ...prev,
+      tracks: prev.tracks.map(t => ({ ...t, measures: updater(t.measures, t) })),
+    }));
+  };
 
   const startPlaybackFromCursor = () =>
     playback.start({ measureIndex: activeMeasureIndex, beatIndex: activeBeatIndex });
@@ -114,81 +224,68 @@ export const TabSheetEditor: React.FC = () => {
   // --- STATE EDITORS ---
 
   const getActiveBeat = (): TabBeat | undefined => {
-    return song.measures[activeMeasureIndex]?.beats[activeBeatIndex];
+    return measures[activeMeasureIndex]?.beats[activeBeatIndex];
   };
 
-  const setActiveMeasureBpm = (bpm: number) => {
+  /** Tempo and metre are song-wide, so the overrides live on track 0. */
+  const setConductorMeasure = (patch: (measure: TabMeasure) => TabMeasure) => {
     setSong(prev => ({
       ...prev,
-      bpm: activeMeasureIndex === 0 ? bpm : prev.bpm,
-      measures: prev.measures.map((measure, index) => {
-        if (index !== activeMeasureIndex) return measure;
-        if (activeMeasureIndex === 0) {
-          const normalized = { ...measure };
-          delete normalized.bpm;
-          return normalized;
-        }
-        return { ...measure, bpm };
-      })
+      tracks: prev.tracks.map((t, i) => (i === 0
+        ? { ...t, measures: t.measures.map((m, idx) => (idx === activeMeasureIndex ? patch(m) : m)) }
+        : t)),
     }));
   };
 
+  const setActiveMeasureBpm = (bpm: number) => {
+    if (activeMeasureIndex === 0) {
+      setSong(prev => ({ ...prev, bpm }));
+      setConductorMeasure(measure => {
+        const normalized = { ...measure };
+        delete normalized.bpm;
+        return normalized;
+      });
+      return;
+    }
+    setConductorMeasure(measure => ({ ...measure, bpm }));
+  };
+
   const setActiveMeasureTimeSignature = (field: 'numerator' | 'denominator', value: number) => {
-    setSong(prev => {
-      const effective = (() => {
-        for (let i = activeMeasureIndex; i >= 0; i--) {
-          const ts = prev.measures[i]?.timeSignature;
-          if (ts) return ts;
-        }
-        return prev.timeSignature;
-      })();
-      const nextTimeSignature = { ...effective, [field]: value };
-      return {
-        ...prev,
-        timeSignature: activeMeasureIndex === 0 ? nextTimeSignature : prev.timeSignature,
-        measures: prev.measures.map((measure, index) => {
-          if (index !== activeMeasureIndex) return measure;
-          if (activeMeasureIndex === 0) {
-            const normalized = { ...measure };
-            delete normalized.timeSignature;
-            return normalized;
-          }
-          return {
-            ...measure,
-            timeSignature: nextTimeSignature
-          };
-        })
-      };
-    });
+    const effective = getEffectiveTimeSignature(song, activeMeasureIndex);
+    const nextTimeSignature = { ...effective, [field]: value };
+    if (activeMeasureIndex === 0) {
+      setSong(prev => ({ ...prev, timeSignature: nextTimeSignature }));
+      setConductorMeasure(measure => {
+        const normalized = { ...measure };
+        delete normalized.timeSignature;
+        return normalized;
+      });
+      return;
+    }
+    setConductorMeasure(measure => ({ ...measure, timeSignature: nextTimeSignature }));
   };
 
   const updateActiveBeatNotes = (updateFn: (notes: TabNote[]) => TabNote[]) => {
-    setSong(prevSong => {
-      const nextMeasures = prevSong.measures.map((m, mIdx) => {
-        if (mIdx !== activeMeasureIndex) return m;
-        return {
-          ...m,
-          beats: m.beats.map((b, bIdx) => {
-            if (bIdx !== activeBeatIndex) return b;
-            const newNotes = updateFn(b.notes);
-            return {
-              ...b,
-              notes: newNotes,
-              isRest: newNotes.length === 0
-            };
-          })
-        };
-      });
-      return { ...prevSong, measures: nextMeasures };
-    });
+    setMeasures(prev => prev.map((m, mIdx) => {
+      if (mIdx !== activeMeasureIndex) return m;
+      return {
+        ...m,
+        beats: m.beats.map((b, bIdx) => {
+          if (bIdx !== activeBeatIndex) return b;
+          const newNotes = updateFn(b.notes);
+          return { ...b, notes: newNotes, isRest: newNotes.length === 0 };
+        })
+      };
+    }));
   };
 
   const setFretForActiveNote = (stringIndex: number, fret: number) => {
     updateActiveBeatNotes(currentNotes => {
-      const existing = currentNotes.find(n => n.stringIndex === stringIndex);
-      const filtered = currentNotes.filter(n => n.stringIndex !== stringIndex);
+      const onString = (n: TabNote) => isFrettedNote(n) && n.stringIndex === stringIndex;
+      const existing = currentNotes.find(onString);
+      const filtered = currentNotes.filter(n => !onString(n));
       if (fret >= 0) {
-        filtered.push({ ...(existing || {}), stringIndex, fret });
+        filtered.push({ ...(existing ?? {}), stringIndex, fret });
         // Play instant auditory preview
         const midi = tuning[stringIndex] + fret;
         playback.playTone(midi);
@@ -199,180 +296,229 @@ export const TabSheetEditor: React.FC = () => {
     setActiveStringIndex(stringIndex);
   };
 
-  const toggleNoteTechnique = (technique: keyof Pick<TabNote, 'harmonic' | 'palmMute' | 'letRing' | 'vibrato' | 'ghostNote' | 'slur' | 'legatoSlide' | 'bend'>) => {
+  /** Adds or replaces an absolute pitch on the active beat (pitched tracks). */
+  const setPitchForActiveNote = (midi: number) => {
     updateActiveBeatNotes(currentNotes => {
-      const existing = currentNotes.find(n => n.stringIndex === activeStringIndex);
-      if (!existing) return currentNotes;
-      return currentNotes.map(n =>
-        n.stringIndex === activeStringIndex
-          ? { ...n, [technique]: !n[technique] }
-          : n
-      );
+      const existing = currentNotes.find(n => !isFrettedNote(n) && n.midi === midi);
+      if (existing) return currentNotes;
+      playback.playTone(midi);
+      return [...currentNotes, { midi }];
+    });
+  };
+
+  // Pick the most comfortable string/fret for a pitch: prefer frets near the
+  // 3rd position and strings near the one already under the cursor.
+  const findBestStringFret = (
+    targetMidi: number,
+    excludeStrings?: Set<number>,
+  ): { stringIndex: number; fret: number } | null => {
+    let bestString = activeStringIndex;
+    let bestFret = -1;
+    let minCost = Infinity;
+
+    for (let s = 0; s < stringCount; s++) {
+      if (excludeStrings?.has(s)) continue;
+      const fret = targetMidi - tuning[s];
+      if (fret >= 0 && fret <= 22) {
+        const cost = Math.abs(fret - 3) * 0.4 + Math.abs(s - activeStringIndex) * 1.0;
+        if (cost < minCost) {
+          minCost = cost;
+          bestString = s;
+          bestFret = fret;
+        }
+      }
+    }
+
+    return bestFret === -1 ? null : { stringIndex: bestString, fret: bestFret };
+  };
+
+  /**
+   * Which note the cursor is on. Fretted tracks address it by string; pitched
+   * tracks have no strings, so the cursor walks the chord from the top down.
+   */
+  const cursorNoteIndex = (notes: TabNote[]): number => {
+    if (isFrettedTrack) {
+      return notes.findIndex(n => isFrettedNote(n) && n.stringIndex === activeStringIndex);
+    }
+    const byPitch = [...notes].sort((a, b) => (b as PitchedNote).midi - (a as PitchedNote).midi);
+    const target = byPitch[Math.min(activeStringIndex, byPitch.length - 1)];
+    return target ? notes.indexOf(target) : -1;
+  };
+
+  const getCursorNote = (): TabNote | undefined => {
+    const notes = getActiveBeat()?.notes ?? [];
+    const idx = cursorNoteIndex(notes);
+    return idx === -1 ? undefined : notes[idx];
+  };
+
+  // Shift the selected note by a number of semitones. A fretted note stays on
+  // its string while the fret fits and is re-voiced onto another string when it
+  // doesn't; a pitched note simply moves. Techniques ride along either way.
+  const transposeActiveNote = (semitones: number) => {
+    const beat = getActiveBeat();
+    if (!beat) return;
+    const idx = cursorNoteIndex(beat.notes);
+    if (idx === -1) return;
+    const note = beat.notes[idx];
+
+    if (!isFrettedNote(note)) {
+      const targetMidi = note.midi + semitones;
+      if (targetMidi < 0 || targetMidi > 127) return;
+      updateActiveBeatNotes(notes => notes.map((n, i) => (i === idx ? { ...n, midi: targetMidi } : n)));
+      playback.playTone(targetMidi);
+      return;
+    }
+
+    const targetMidi = (resolveNoteMidi(note, activeTrack) ?? NaN) + semitones;
+    const sameStringFret = targetMidi - tuning[note.stringIndex];
+
+    if (sameStringFret >= 0 && sameStringFret <= 22) {
+      updateActiveBeatNotes(notes => notes.map((n, i) => (i === idx ? { ...n, fret: sameStringFret } : n)));
+      playback.playTone(targetMidi);
+      return;
+    }
+
+    const occupied = new Set(
+      beat.notes.filter((n, i) => i !== idx && isFrettedNote(n)).map(n => (n as FrettedNote).stringIndex),
+    );
+    const placement = findBestStringFret(targetMidi, occupied);
+    if (!placement) return;
+
+    updateActiveBeatNotes(notes => [
+      ...notes.filter((n, i) => i !== idx && !(isFrettedNote(n) && n.stringIndex === placement.stringIndex)),
+      { ...note, stringIndex: placement.stringIndex, fret: placement.fret },
+    ]);
+    setActiveStringIndex(placement.stringIndex);
+    playback.playTone(targetMidi);
+  };
+
+  const toggleNoteTechnique = (technique: keyof NoteTechniques) => {
+    updateActiveBeatNotes(currentNotes => {
+      const idx = cursorNoteIndex(currentNotes);
+      if (idx === -1) return currentNotes;
+      return currentNotes.map((n, i) => (i === idx ? { ...n, [technique]: !n[technique] } : n));
+    });
+  };
+
+  /** Removes the note under the cursor, whichever kind of track this is. */
+  const removeCursorNote = () => {
+    updateActiveBeatNotes(currentNotes => {
+      const idx = cursorNoteIndex(currentNotes);
+      return idx === -1 ? currentNotes : currentNotes.filter((_, i) => i !== idx);
     });
   };
 
   const removeActiveNoteOnString = (stringIndex: number) => {
-    updateActiveBeatNotes(currentNotes => {
-      return currentNotes.filter(n => n.stringIndex !== stringIndex);
-    });
+    updateActiveBeatNotes(currentNotes =>
+      currentNotes.filter(n => !(isFrettedNote(n) && n.stringIndex === stringIndex)),
+    );
+  };
+
+  const updateActiveBeat = (patch: (beat: TabBeat) => TabBeat) => {
+    setMeasures(prev => prev.map((m, mIdx) => {
+      if (mIdx !== activeMeasureIndex) return m;
+      return { ...m, beats: m.beats.map((b, bIdx) => (bIdx === activeBeatIndex ? patch(b) : b)) };
+    }));
   };
 
   const toggleActiveBeatRest = () => {
-    setSong(prevSong => {
-      const nextMeasures = prevSong.measures.map((m, mIdx) => {
-        if (mIdx !== activeMeasureIndex) return m;
-        return {
-          ...m,
-          beats: m.beats.map((b, bIdx) => {
-            if (bIdx !== activeBeatIndex) return b;
-            const newRest = !b.isRest;
-            return {
-              ...b,
-              isRest: newRest,
-              // Keep notes but make them inactive when it's a rest
-              notes: newRest ? [] : b.notes
-            };
-          })
-        };
-      });
-      return { ...prevSong, measures: nextMeasures };
+    updateActiveBeat(b => {
+      const newRest = !b.isRest;
+      // Keep notes but make them inactive when it's a rest
+      return { ...b, isRest: newRest, notes: newRest ? [] : b.notes };
     });
   };
 
   const setDurationForActiveBeat = (dur: Duration) => {
-    setSong(prevSong => {
-      const nextMeasures = prevSong.measures.map((m, mIdx) => {
-        if (mIdx !== activeMeasureIndex) return m;
-        return {
-          ...m,
-          beats: m.beats.map((b, bIdx) => {
-            if (bIdx !== activeBeatIndex) return b;
-            return { ...b, duration: dur };
-          })
-        };
-      });
-      return { ...prevSong, measures: nextMeasures };
-    });
+    updateActiveBeat(b => ({ ...b, duration: dur }));
   };
 
   const toggleDotForActiveBeat = () => {
-    setSong(prevSong => {
-      const nextMeasures = prevSong.measures.map((m, mIdx) => {
-        if (mIdx !== activeMeasureIndex) return m;
-        return {
-          ...m,
-          beats: m.beats.map((b, bIdx) => {
-            if (bIdx !== activeBeatIndex) return b;
-            return { ...b, dot: !b.dot };
-          })
-        };
-      });
-      return { ...prevSong, measures: nextMeasures };
-    });
+    updateActiveBeat(b => ({ ...b, dot: !b.dot }));
     setDotSelect(prev => !prev);
   };
 
-  // Grid/beat manipulation
+  // Grid/beat manipulation. Beats belong to one track; bars belong to all of
+  // them, so bar operations go through setAllTrackMeasures to keep the score
+  // aligned.
   const insertBeatAfterActive = () => {
-    setSong(prevSong => {
-      const nextMeasures = prevSong.measures.map((m, mIdx) => {
-        if (mIdx !== activeMeasureIndex) return m;
-        const newBeat: TabBeat = {
-          id: createId(),
-          duration: durationSelect,
-          dot: dotSelect,
-          notes: [],
-          isRest: true
-        };
-        const nextBeats = [...m.beats];
-        nextBeats.splice(activeBeatIndex + 1, 0, newBeat);
-        return { ...m, beats: nextBeats };
-      });
-      return { ...prevSong, measures: nextMeasures };
-    });
+    setMeasures(prev => prev.map((m, mIdx) => {
+      if (mIdx !== activeMeasureIndex) return m;
+      const newBeat: TabBeat = {
+        id: createId(),
+        duration: durationSelect,
+        dot: dotSelect,
+        notes: [],
+        isRest: true
+      };
+      const nextBeats = [...m.beats];
+      nextBeats.splice(activeBeatIndex + 1, 0, newBeat);
+      return { ...m, beats: nextBeats };
+    }));
     // Move cursor to new beat
     setActiveBeatIndex(prev => prev + 1);
   };
 
   const deleteActiveBeat = () => {
-    const measure = song.measures[activeMeasureIndex];
+    const measure = measures[activeMeasureIndex];
     if (!measure) return;
-    
-    // Don't delete if it's the last beat of the last measure
-    if (measure.beats.length <= 1 && song.measures.length <= 1) {
-      // Just clear it
+
+    // Never leave a bar with no beats: clear the last one instead of removing
+    // it, which would desynchronise this track's bar count from the others.
+    if (measure.beats.length <= 1) {
       updateActiveBeatNotes(() => []);
       return;
     }
 
-    setSong(prevSong => {
-      const nextMeasures = prevSong.measures.map((m, mIdx) => {
-        if (mIdx !== activeMeasureIndex) return m;
-        const filteredBeats = m.beats.filter((_, idx) => idx !== activeBeatIndex);
-        return { ...m, beats: filteredBeats };
-      }).filter(m => m.beats.length > 0);
-
-      return { ...prevSong, measures: nextMeasures };
-    });
-
-    // Reset indices
-    if (measure.beats.length <= 1) {
-      // The current measure was deleted
-      setActiveMeasureIndex(prev => Math.max(0, prev - 1));
-      setActiveBeatIndex(0);
-    } else {
-      setActiveBeatIndex(prev => Math.max(0, prev - 1));
-    }
+    setMeasures(prev => prev.map((m, mIdx) => {
+      if (mIdx !== activeMeasureIndex) return m;
+      return { ...m, beats: m.beats.filter((_, idx) => idx !== activeBeatIndex) };
+    }));
+    setActiveBeatIndex(prev => Math.max(0, prev - 1));
   };
 
   const addMeasure = () => {
-    setSong(prev => ({
-      ...prev,
-      measures: [...prev.measures, createEmptyMeasure()]
-    }));
-    setActiveMeasureIndex(song.measures.length);
+    setAllTrackMeasures(list => [...list, createEmptyMeasure()]);
+    setActiveMeasureIndex(measures.length);
     setActiveBeatIndex(0);
   };
 
   const insertMeasureAfterActive = () => {
-    setSong(prev => {
-      const list = [...prev.measures];
-      list.splice(activeMeasureIndex + 1, 0, createEmptyMeasure());
-      return { ...prev, measures: list };
+    setAllTrackMeasures(list => {
+      const next = [...list];
+      next.splice(activeMeasureIndex + 1, 0, createEmptyMeasure());
+      return next;
     });
     setActiveMeasureIndex(prev => prev + 1);
     setActiveBeatIndex(0);
   };
 
   const deleteActiveMeasure = () => {
-    if (song.measures.length <= 1) return; // Keep at least one
-    setSong(prev => ({
-      ...prev,
-      measures: prev.measures.filter((_, idx) => idx !== activeMeasureIndex)
-    }));
+    if (measures.length <= 1) return; // Keep at least one
+    setAllTrackMeasures(list => list.filter((_, idx) => idx !== activeMeasureIndex));
     setActiveMeasureIndex(prev => Math.max(0, prev - 1));
     setActiveBeatIndex(0);
   };
 
   const duplicateActiveMeasure = () => {
-    const currentM = song.measures[activeMeasureIndex];
-    if (!currentM) return;
-    
-    // Spread the source so measure-level bpm / time signature overrides survive.
-    const copy: TabMeasure = {
-      ...currentM,
-      id: createId(),
-      beats: currentM.beats.map(b => ({
-        ...b,
-        id: createId(),
-        notes: b.notes.map(n => ({ ...n }))
-      }))
-    };
+    if (!measures[activeMeasureIndex]) return;
 
-    setSong(prev => {
-      const list = [...prev.measures];
-      list.splice(activeMeasureIndex + 1, 0, copy);
-      return { ...prev, measures: list };
+    setAllTrackMeasures(list => {
+      const source = list[activeMeasureIndex];
+      if (!source) return list;
+      // Spread the source so measure-level bpm / time signature overrides survive.
+      const copy: TabMeasure = {
+        ...source,
+        id: createId(),
+        beats: source.beats.map(b => ({
+          ...b,
+          id: createId(),
+          notes: b.notes.map(n => ({ ...n }))
+        }))
+      };
+      const next = [...list];
+      next.splice(activeMeasureIndex + 1, 0, copy);
+      return next;
     });
     setActiveMeasureIndex(prev => prev + 1);
     setActiveBeatIndex(0);
@@ -397,19 +543,28 @@ export const TabSheetEditor: React.FC = () => {
 
     if (viewMode) return;
 
-    const measure = song.measures[activeMeasureIndex];
+    const measure = measures[activeMeasureIndex];
     if (!measure) return;
     const beat = measure.beats[activeBeatIndex];
 
     switch (e.key) {
-      // Arrow navigation
+      // Arrow navigation — with Shift held, the arrows retune the selected note
+      // instead of moving the cursor (Shift+Ctrl/Cmd for whole octaves).
       case 'ArrowUp':
         e.preventDefault();
-        setActiveStringIndex(prev => Math.max(0, prev - 1));
+        if (e.shiftKey) {
+          transposeActiveNote(e.ctrlKey || e.metaKey ? 12 : 1);
+        } else {
+          setActiveStringIndex(prev => Math.max(0, prev - 1));
+        }
         break;
       case 'ArrowDown':
         e.preventDefault();
-        setActiveStringIndex(prev => Math.min(stringCount - 1, prev + 1));
+        if (e.shiftKey) {
+          transposeActiveNote(e.ctrlKey || e.metaKey ? -12 : -1);
+        } else {
+          setActiveStringIndex(prev => Math.min(stringCount - 1, prev + 1));
+        }
         break;
       case 'ArrowLeft':
         e.preventDefault();
@@ -418,7 +573,7 @@ export const TabSheetEditor: React.FC = () => {
         } else if (activeMeasureIndex > 0) {
           const prevMIdx = activeMeasureIndex - 1;
           setActiveMeasureIndex(prevMIdx);
-          setActiveBeatIndex(song.measures[prevMIdx].beats.length - 1);
+          setActiveBeatIndex(measures[prevMIdx].beats.length - 1);
         }
         break;
       case 'ArrowRight': {
@@ -440,18 +595,11 @@ export const TabSheetEditor: React.FC = () => {
               notes: [],
               isRest: true
             };
-            setSong(prev => {
-              const list = prev.measures.map((m, mIdx) => {
-                if (mIdx !== activeMeasureIndex) return m;
-                return {
-                  ...m,
-                  beats: [...m.beats, newBeat]
-                };
-              });
-              return { ...prev, measures: list };
-            });
+            setMeasures(list => list.map((m, mIdx) => (
+              mIdx === activeMeasureIndex ? { ...m, beats: [...m.beats, newBeat] } : m
+            )));
             setActiveBeatIndex(prev => prev + 1);
-          } else if (activeMeasureIndex < song.measures.length - 1) {
+          } else if (activeMeasureIndex < measures.length - 1) {
             // Bar is filled, go to next measure
             setActiveMeasureIndex(prev => prev + 1);
             setActiveBeatIndex(0);
@@ -467,10 +615,11 @@ export const TabSheetEditor: React.FC = () => {
                 isRest: true
               }]
             };
-            setSong(prev => ({
-              ...prev,
-              measures: [...prev.measures, newMeasure]
-            }));
+            // A new bar has to appear on every track, not just this one.
+            setAllTrackMeasures((list, track) => [
+              ...list,
+              track === activeTrack ? newMeasure : createEmptyMeasure(),
+            ]);
             setActiveMeasureIndex(prev => prev + 1);
             setActiveBeatIndex(0);
           }
@@ -537,10 +686,10 @@ export const TabSheetEditor: React.FC = () => {
         if (beat?.isRest) {
           deleteActiveBeat();
         } else if (showNoteOptions) {
-          removeActiveNoteOnString(activeStringIndex);
+          removeCursorNote();
           setShowNoteOptions(false);
         } else {
-          removeActiveNoteOnString(activeStringIndex);
+          removeCursorNote();
         }
         break;
 
@@ -645,17 +794,19 @@ export const TabSheetEditor: React.FC = () => {
 
   // --- SVG MEASUREMENT & LAYOUT CALCULATION ---
 
-  const ROW_HEIGHT = computeRowHeight(stringCount);
+  const ROW_HEIGHT = computeRowHeight(stringCount, showTab);
 
-  const measureLayouts: MLayout[] = computeMeasureLayouts(song.measures);
+  const measureLayouts: MLayout[] = computeMeasureLayouts(measures);
 
-  // Compute TAB shift per measure: extra gap to avoid stems overlapping TAB
-  const measureTabOffsets: number[] = song.measures.map((measure) => {
+  // Compute TAB shift per measure: extra gap to avoid stems overlapping TAB.
+  // Irrelevant when the TAB staff isn't rendered at all.
+  const measureTabOffsets: number[] = measures.map((measure) => {
+    if (!showTab) return 0;
     let minStep = 4;
     for (const beat of measure.beats) {
       if (beat.isRest) continue;
       for (const note of beat.notes) {
-        const midi = tuning[note.stringIndex] + note.fret;
+        const midi = (resolveNoteMidi(note, activeTrack) ?? NaN);
         const { diatonicStep } = midiToDiatonicAndAccidental(midi);
         if (diatonicStep < minStep) minStep = diatonicStep;
       }
@@ -673,13 +824,13 @@ export const TabSheetEditor: React.FC = () => {
 
   // Per-row extra top padding for very high notes (stems/beams above the staff)
   const rowHighExtra: number[] = [];
-  song.measures.forEach((measure, mIdx) => {
+  measures.forEach((measure, mIdx) => {
     const r = measureLayouts[mIdx]?.row ?? 0;
     let minNoteY = 0;
     for (const beat of measure.beats) {
       if (beat.isRest || beat.notes.length === 0) continue;
       for (const note of beat.notes) {
-        const midi = tuning[note.stringIndex] + note.fret;
+        const midi = (resolveNoteMidi(note, activeTrack) ?? NaN);
         const { diatonicStep } = midiToDiatonicAndAccidental(midi);
         const y = Y_of_step(diatonicStep);
         if (y < minNoteY) minNoteY = y;
@@ -717,6 +868,15 @@ export const TabSheetEditor: React.FC = () => {
     return rowExtra[r] || 0;
   };
 
+  // Bottom boundary (offset from rowY) used for bar lines, selection highlight,
+  // and the playback cursor. With the TAB staff hidden this is just below the
+  // standard staff instead of the bottom TAB line.
+  const getStaffBottom = (ts: number): number =>
+    showTab ? TAB_STAFF_TOP + ts + stringCount * TAB_STAFF_HEIGHT_PX - 10 : 50;
+
+  /** Top boundary of the drawn staff block, for bar lines and the cursor. */
+  const getStaffTop = (ts: number): number => (showNotation ? 10 : TAB_STAFF_TOP + ts);
+
   const fretboardNeckHeight = computeFretboardNeckHeight(stringCount);
 
   const getFretboardStringY = (stringIdx: number): number =>
@@ -724,7 +884,7 @@ export const TabSheetEditor: React.FC = () => {
 
   // Calculate coordinates for beats inside a measure
   const getBeatCoordinates = (mIdx: number, bIdx: number): number => {
-    const measure = song.measures[mIdx];
+    const measure = measures[mIdx];
     const measureX = getMeasureX(mIdx);
     const padding = getMeasurePadding(mIdx);
     const width = getMeasureWidth(mIdx);
@@ -756,7 +916,7 @@ export const TabSheetEditor: React.FC = () => {
       const beat = measure.beats[i];
       if (!beat) continue;
       for (const note of beat.notes) {
-        const midi = tuning[note.stringIndex] + note.fret;
+        const midi = (resolveNoteMidi(note, activeTrack) ?? NaN);
         const { diatonicStep } = midiToDiatonicAndAccidental(midi);
         if (diatonicStep < 0) anyBelow = true;
         if (diatonicStep > 12) anyAbove = true;
@@ -779,9 +939,9 @@ export const TabSheetEditor: React.FC = () => {
     for (let i = beamGroup.startIdx; i <= beamGroup.endIdx; i++) {
       const b = measure.beats[i];
       if (!b || b.isRest || b.notes.length === 0) continue;
-      const rowY = getRowY(song.measures.indexOf(measure));
+      const rowY = getRowY(measures.indexOf(measure));
       for (const n of b.notes) {
-        const midi = tuning[n.stringIndex] + n.fret;
+        const midi = (resolveNoteMidi(n, activeTrack) ?? NaN);
         const { diatonicStep } = midiToDiatonicAndAccidental(midi);
         const y = rowY + Y_of_step(diatonicStep);
         if (y < minY) minY = y;
@@ -816,42 +976,40 @@ export const TabSheetEditor: React.FC = () => {
   const handleStandardStaffClick = (mIdx: number, beatId: string, clickY: number) => {
     const step = Math.round((60 - clickY) / 5);
 
-    const midiTable: Record<number, number> = {
-      [-12]: 40, [-11]: 41, [-10]: 43, [-9]: 45, [-8]: 47, [-7]: 48,
-      [-6]: 50, [-5]: 52, [-4]: 53, [-3]: 55, [-2]: 57, [-1]: 59,
-      [0]: 60, [1]: 62, [2]: 64, [3]: 65, [4]: 67, [5]: 69,
-      [6]: 71, [7]: 72, [8]: 74, [9]: 76, [10]: 77, [11]: 79,
-      [12]: 81, [13]: 83, [14]: 84, [15]: 86, [16]: 88,
-    };
+    // Clamp to what the current tuning can actually voice, so a click above or
+    // below the reachable range still lands on the nearest playable pitch.
+    const lowestMidi = Math.min(...tuning);
+    const highestMidi = Math.max(...tuning) + 22;
+    const targetMidi = Math.max(lowestMidi, Math.min(highestMidi, staffStepToSoundingMidi(step)));
 
-    let targetMidi = midiTable[step];
-    if (targetMidi === undefined) {
-      targetMidi = step < -12 ? 40 : 88;
-    }
-
-    let bestString = activeStringIndex;
-    let bestFret = -1;
-    let minCost = Infinity;
-
-    for (let s = 0; s < stringCount; s++) {
-      const baseMidi = tuning[s];
-      const fret = targetMidi - baseMidi;
-      if (fret >= 0 && fret <= 22) {
-        const cost = Math.abs(fret - 3) * 0.4 + Math.abs(s - activeStringIndex) * 1.0;
-        if (cost < minCost) {
-          minCost = cost;
-          bestString = s;
-          bestFret = fret;
-        }
-      }
-    }
-
-    if (bestFret !== -1) {
+    const placement = findBestStringFret(targetMidi);
+    if (placement) {
       setActiveMeasureIndex(mIdx);
-      const bIdx = song.measures[mIdx].beats.findIndex(b => b.id === beatId);
+      const bIdx = measures[mIdx].beats.findIndex(b => b.id === beatId);
       setActiveBeatIndex(bIdx);
-      setFretForActiveNote(bestString, bestFret);
+      setFretForActiveNote(placement.stringIndex, placement.fret);
     }
+  };
+
+  // Clicking a piano key places (or removes) that pitch on the active beat.
+  // On a fretted track, strings already voicing another note are off-limits, so
+  // stacking keys builds a chord instead of overwriting what was there.
+  const toggleNoteAtMidi = (targetMidi: number) => {
+    const beatNotes = getActiveBeat()?.notes ?? [];
+    const existingIdx = beatNotes.findIndex(n => resolveNoteMidi(n, activeTrack) === targetMidi);
+    if (existingIdx !== -1) {
+      updateActiveBeatNotes(notes => notes.filter((_, i) => i !== existingIdx));
+      return;
+    }
+    if (!isFrettedTrack) {
+      setPitchForActiveNote(targetMidi);
+      return;
+    }
+    const occupied = new Set(
+      beatNotes.filter(isFrettedNote).map(n => n.stringIndex),
+    );
+    const placement = findBestStringFret(targetMidi, occupied);
+    if (placement) setFretForActiveNote(placement.stringIndex, placement.fret);
   };
 
   // --- EXPORT / IMPORT LOGIC ---
@@ -914,10 +1072,10 @@ export const TabSheetEditor: React.FC = () => {
     }
 
     setSong(result.song);
-    // An imported song may reach strings the current tuning does not have.
-    setTuning(prev => getStringPitches(requiredStringCount(result.song, prev.length)));
+    setActiveTrackIndex(0);
     setActiveMeasureIndex(0);
     setActiveBeatIndex(0);
+    setActiveStringIndex(0);
     setModalOpen(null);
   };
 
@@ -927,15 +1085,55 @@ export const TabSheetEditor: React.FC = () => {
 
   const activeBeat = getActiveBeat();
   const selectedNotes = activeBeat?.notes ?? [];
-  const activeNote = selectedNotes.find(n => n.stringIndex === activeStringIndex);
+  const activeNote = getCursorNote();
   const activeMeasureBpm = getEffectiveBpm(song, activeMeasureIndex);
   const activeMeasureTimeSignature = getEffectiveTimeSignature(song, activeMeasureIndex);
 
-  const selectNote = (mIdx: number, bIdx: number, stringIdx: number) => {
-    const wasSelected = activeMeasureIndex === mIdx && activeBeatIndex === bIdx && activeStringIndex === stringIdx;
+  // Piano keyboard geometry & highlighting. A fretted track's keyboard spans
+  // what its tuning can reach; a pitched track gets a fixed practical range.
+  const keyboardMidis = isFrettedTrack
+    ? computeKeyboardRange(tuning, fretCount)
+    : computeKeyboardRange([PITCHED_KEYBOARD_LOW], PITCHED_KEYBOARD_HIGH - PITCHED_KEYBOARD_LOW);
+  const whiteKeyMidis = keyboardMidis.filter(isWhiteKey);
+  const blackKeys = keyboardMidis
+    .filter(midi => !isWhiteKey(midi))
+    .map(midi => {
+      // Sit each black key on the seam between its two neighbouring white keys.
+      const whitesBefore = whiteKeyMidis.filter(w => w < midi).length;
+      return { midi, leftPct: (whitesBefore / whiteKeyMidis.length) * 100 };
+    });
+
+  const blackKeyWidthPct = (100 / whiteKeyMidis.length) * 0.62;
+
+  const activeMidis = new Set(selectedNotes.map(n => (resolveNoteMidi(n, activeTrack) ?? NaN)));
+  const playbackBeatObj = playback.playbackBeat
+    ? measures[playback.playbackBeat.measureIndex]?.beats[playback.playbackBeat.beatIndex]
+    : undefined;
+  const playbackMidis = new Set(
+    playbackBeatObj && !playbackBeatObj.isRest
+      ? playbackBeatObj.notes.map(n => (resolveNoteMidi(n, activeTrack) ?? NaN))
+      : [],
+  );
+
+  /**
+   * The cursor slot a note occupies: its string on a fretted track, its rank
+   * from the top of the chord on a pitched one.
+   */
+  const cursorSlotOf = (note: TabNote, notes: TabNote[]): number => {
+    if (isFrettedNote(note)) return note.stringIndex;
+    const byPitch = [...notes].sort((a, b) => (b as PitchedNote).midi - (a as PitchedNote).midi);
+    return Math.max(0, byPitch.indexOf(note));
+  };
+
+  const isCursorNote = (mIdx: number, bIdx: number, noteIndex: number, notes: TabNote[]): boolean =>
+    activeMeasureIndex === mIdx && activeBeatIndex === bIdx && cursorNoteIndex(notes) === noteIndex;
+
+  const selectNote = (mIdx: number, bIdx: number, noteIndex: number, notes: TabNote[]) => {
+    const wasSelected = isCursorNote(mIdx, bIdx, noteIndex, notes);
+    const note = notes[noteIndex];
     setActiveMeasureIndex(mIdx);
     setActiveBeatIndex(bIdx);
-    setActiveStringIndex(stringIdx);
+    if (note) setActiveStringIndex(cursorSlotOf(note, notes));
     setShowNoteOptions(wasSelected);
   };
 
@@ -1040,19 +1238,42 @@ export const TabSheetEditor: React.FC = () => {
         <dl className="selection-readout">
           <div className="readout-chip">
             <dt>Measure</dt>
-            <dd>{activeMeasureIndex + 1} / {song.measures.length}</dd>
+            <dd>{activeMeasureIndex + 1} / {measures.length}</dd>
           </div>
           <div className="readout-chip">
             <dt>Beat</dt>
-            <dd>{activeBeatIndex + 1} / {song.measures[activeMeasureIndex]?.beats.length ?? 0}</dd>
+            <dd>{activeBeatIndex + 1} / {measures[activeMeasureIndex]?.beats.length ?? 0}</dd>
           </div>
-          <div className="readout-chip">
-            <dt>String</dt>
-            <dd>{activeStringIndex + 1} · {midiToNoteName(tuning[activeStringIndex] ?? 0)}</dd>
-          </div>
+          {showTab ? (
+            <div className="readout-chip">
+              <dt>String</dt>
+              <dd>{activeStringIndex + 1} · {midiToNoteName(tuning[activeStringIndex] ?? 0)}</dd>
+            </div>
+          ) : (
+            <div className="readout-chip">
+              <dt>Notes</dt>
+              <dd>
+                {activeBeat?.isRest || selectedNotes.length === 0
+                  ? '—'
+                  : selectedNotes
+                      .map(n => (resolveNoteMidi(n, activeTrack) ?? NaN))
+                      .sort((a, b) => a - b)
+                      .map(midiToNoteOctave)
+                      .join(' ')}
+              </dd>
+            </div>
+          )}
           <div className="readout-chip is-accent">
             <dt>Cursor</dt>
-            <dd>{activeBeat?.isRest ? 'Rest' : activeNote ? `Fret ${activeNote.fret}` : 'Empty'}</dd>
+            <dd>
+              {activeBeat?.isRest
+                ? 'Rest'
+                : !activeNote
+                  ? 'Empty'
+                  : showTab && isFrettedNote(activeNote)
+                    ? `Fret ${activeNote.fret}`
+                    : midiToNoteOctave(resolveNoteMidi(activeNote, activeTrack) ?? 0)}
+            </dd>
           </div>
           <div className="readout-chip">
             <dt>Time</dt>
@@ -1061,8 +1282,142 @@ export const TabSheetEditor: React.FC = () => {
         </dl>
       </div>
 
+      {/* Track strip — picks which track the score and input panel edit */}
+      <TrackStrip
+        tracks={song.tracks}
+        activeTrackIndex={activeTrackIndex}
+        onSelect={selectTrack}
+        onToggleMute={(i) => updateTrack(i, { muted: !song.tracks[i].muted })}
+        onToggleSolo={(i) => updateTrack(i, { soloed: !song.tracks[i].soloed })}
+        onAddTrack={addTrack}
+        onOpenSettings={() => setOpenBottomMenu(prev => (prev === 'track' ? null : 'track'))}
+        settingsOpen={openBottomMenu === 'track'}
+      >
+        {openBottomMenu === 'track' && (
+          <div className="bottom-popover track-popover">
+            <span className="popover-title">Track {activeTrackIndex + 1}</span>
+            <label className="compact-field wide-field">
+              <span>Name</span>
+              <input
+                className="control-input"
+                style={{ width: 130 }}
+                value={activeTrack.name}
+                onChange={(e) => updateActiveTrack({ name: e.target.value })}
+              />
+            </label>
+            <label className="compact-field wide-field">
+              <span>Sound</span>
+              <select
+                className="control-select"
+                value={activeTrack.instrument}
+                onChange={(e) => {
+                  const instrument = e.target.value as InstrumentId;
+                  // Retuning the staff to the new instrument keeps written
+                  // pitch matching what is heard.
+                  updateActiveTrack({ instrument, transpose: DEFAULT_TRANSPOSE[instrument] });
+                }}
+              >
+                {INSTRUMENT_OPTIONS.map(opt => (
+                  <option key={opt.id} value={opt.id}>{opt.label}</option>
+                ))}
+              </select>
+            </label>
+            <label className="compact-field wide-field">
+              <span>Volume</span>
+              <input
+                type="range"
+                min="0"
+                max="1"
+                step="0.05"
+                value={activeTrack.volume}
+                onChange={(e) => updateActiveTrack({ volume: parseFloat(e.target.value) })}
+              />
+            </label>
+
+            {isFrettedTrack && (
+              <>
+                <div className="popover-divider" />
+                <span className="popover-title">Tuning</span>
+                <label className="compact-field wide-field">
+                  <span>Preset</span>
+                  <select
+                    className="control-select"
+                    value=""
+                    onChange={(e) => {
+                      const pitches = STANDARD_TUNINGS[e.target.value];
+                      if (!pitches) return;
+                      updateActiveTrack({ tuning: pitches });
+                      setActiveStringIndex(prev => Math.min(prev, pitches.length - 1));
+                      setMeasures(prev => pruneNotesToStringCount(prev, pitches.length));
+                    }}
+                  >
+                    <option value="">-- Select --</option>
+                    {TUNING_PRESETS.map(([name]) => (
+                      <option key={name} value={name}>{name}</option>
+                    ))}
+                  </select>
+                </label>
+                <label className="compact-field wide-field">
+                  <span>Strings</span>
+                  <select
+                    className="control-select"
+                    value={stringCount}
+                    onChange={(e) => {
+                      const count = parseInt(e.target.value) || 6;
+                      const next = tuning.length < count
+                        ? [...tuning, ...allStringPitches.slice(tuning.length, count)]
+                        : tuning.slice(0, count);
+                      updateActiveTrack({ tuning: next });
+                      setActiveStringIndex(prev => Math.min(prev, count - 1));
+                      setMeasures(prev => pruneNotesToStringCount(prev, count));
+                    }}
+                  >
+                    {[4, 5, 6, 7, 8, 9, 10, 11, 12].map(n => (
+                      <option key={n} value={n}>{n}</option>
+                    ))}
+                  </select>
+                </label>
+                <div className="popover-scroll">
+                  {tuning.map((pitch, i) => (
+                    <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                      <span className="control-label" style={{ width: 12, textAlign: 'right' }}>{i + 1}</span>
+                      <select
+                        className="control-select"
+                        style={{ flex: 1, fontSize: '0.75rem' }}
+                        value={midiToNoteOctave(pitch)}
+                        onChange={(e) => {
+                          const newMidi = noteOctaveToMidi(e.target.value);
+                          if (newMidi <= 0) return;
+                          const next = [...tuning];
+                          next[i] = newMidi;
+                          updateActiveTrack({ tuning: next });
+                        }}
+                      >
+                        {GUITAR_NOTE_OPTIONS.map(opt => (
+                          <option key={opt} value={opt}>{opt}</option>
+                        ))}
+                      </select>
+                    </div>
+                  ))}
+                </div>
+              </>
+            )}
+
+            <div className="popover-divider" />
+            <button className="btn" onClick={duplicateActiveTrack}>Duplicate track</button>
+            <button
+              className="btn btn-danger"
+              onClick={deleteActiveTrack}
+              disabled={song.tracks.length <= 1}
+            >
+              Delete track
+            </button>
+          </div>
+        )}
+      </TrackStrip>
+
       {/* Editor Canvas */}
-      <div 
+      <div
         className="sheetor-canvas-container"
         onClick={() => {
           // Refocus the editor on click
@@ -1085,11 +1440,11 @@ export const TabSheetEditor: React.FC = () => {
           />
 
           {/* Render Staff & Measure Lines */}
-          {song.measures.map((measure, mIdx) => {
+          {measures.map((measure, mIdx) => {
             const measureX = getMeasureX(mIdx);
             const measureW = getMeasureWidth(mIdx);
             const measureEnd = measureX + measureW;
-            const isLast = mIdx === song.measures.length - 1;
+            const isLast = mIdx === measures.length - 1;
             const rowY = getRowY(mIdx);
             const ts = getRowShift(mIdx);
             const effectiveTimeSignature = getEffectiveTimeSignature(song, mIdx);
@@ -1107,14 +1462,14 @@ export const TabSheetEditor: React.FC = () => {
                     x={measureX}
                     y={rowY + 2}
                     width={measureW}
-                    height={TAB_STAFF_TOP + ts + stringCount * TAB_STAFF_HEIGHT_PX - 2 + 8}
+                    height={getStaffBottom(ts) - 2 + 8}
                     fill="rgba(224, 168, 63, 0.035)"
                     style={{ pointerEvents: 'none' }}
                   />
                 )}
 
                 {/* Standard Notation 5 lines (Treble staff) */}
-                {Array.from({ length: 5 }).map((_, lineIdx) => {
+                {showNotation && Array.from({ length: 5 }).map((_, lineIdx) => {
                   const y = rowY + 10 + lineIdx * 10;
                   return (
                     <line
@@ -1129,7 +1484,7 @@ export const TabSheetEditor: React.FC = () => {
                 })}
 
                 {/* TAB lines (TAB staff) */}
-                {Array.from({ length: stringCount }).map((_, lineIdx) => {
+                {showTab && Array.from({ length: stringCount }).map((_, lineIdx) => {
                   const y = rowY + TAB_STAFF_TOP + ts + lineIdx * 10;
                   return (
                     <line
@@ -1146,18 +1501,18 @@ export const TabSheetEditor: React.FC = () => {
                 {/* Bar line start / divider */}
                 <line
                   x1={measureX}
-                  y1={rowY + 10}
+                  y1={rowY + getStaffTop(ts)}
                   x2={measureX}
-                  y2={rowY + TAB_STAFF_TOP + ts + stringCount * TAB_STAFF_HEIGHT_PX - 10}
+                  y2={rowY + getStaffBottom(ts)}
                   className="bar-line"
                 />
 
                 {/* Bar line end */}
                 <line
                   x1={measureEnd}
-                  y1={rowY + 10}
+                  y1={rowY + getStaffTop(ts)}
                   x2={measureEnd}
-                  y2={rowY + TAB_STAFF_TOP + ts + stringCount * TAB_STAFF_HEIGHT_PX - 10}
+                  y2={rowY + getStaffBottom(ts)}
                   className={isLast ? "bar-line-end" : "bar-line"}
                 />
 
@@ -1206,19 +1561,23 @@ export const TabSheetEditor: React.FC = () => {
                 {(measureLayouts[mIdx]?.x === 0) && (
                   <g transform={`translate(${measureX}, ${rowY})`}>
                     {/* Treble Clef Path */}
-                    <path
+                    {showNotation && <path
                       d="M 17.5 45 C 19 45, 21 42, 21 38 C 21 32, 17 28, 17 21 C 17 12, 21 3, 23.5 0 L 24 0 L 22.5 10 C 21.5 16, 18.5 22, 18.5 28 C 18.5 35, 23.5 38, 23.5 44 C 23.5 48.5, 20 52, 16 52 C 12.5 52, 9.5 49, 9.5 45.5 C 9.5 41, 13.5 37, 18 37 C 20.5 37, 22.5 39, 22.5 41.5 C 22.5 44, 21 45.5, 18.5 45.5 C 17 45.5, 16 44, 16 42.5 C 16 41.5, 17 40.5, 18 40.5 C 16.5 40.5, 14.5 42, 14.5 45 C 14.5 48, 17.5 50.5, 20.5 50.5 C 23.5 50.5, 25.5 48, 25.5 43 C 25.5 37.5, 20.5 33.5, 20.5 27 C 20.5 21, 23.5 15, 24.5 10 L 25 1 L 25 45 C 25 49.5, 23.5 53, 21 55 C 19.5 56, 18 56.5, 16.5 56.5 C 15 56.5, 13.5 55, 13.5 53 C 13.5 51, 15 49.5, 16.5 49.5 C 18 49.5, 19.5 51, 19.5 53 C 19.5 53.5, 19 54, 18.5 54.5 C 20 54, 21.5 51.5, 21.5 48 L 21.5 16 C 20.5 20, 19 25, 19 30 C 19 36.5, 22 41, 22 45 C 22 48.5, 20 51, 17.5 51 C 15 51, 13 49, 13 46.5 C 13 44, 15 42, 17.5 42 C 18.5 42, 19.5 42.5, 19.5 43.5 C 19.5 44.5, 18.5 45, 17.5 45 Z"
                       transform="translate(15, 5) scale(0.9)"
                       fill="#f2ece4"
-                    />
+                    />}
 
                     {/* Stacked TAB text */}
-                    <text x="18" y={TAB_STAFF_TOP + ts + stringCount * TAB_STAFF_HEIGHT_PX / 2 - 14} className="music-text" fontSize="13" letterSpacing="0">T</text>
-                    <text x="18" y={TAB_STAFF_TOP + ts + stringCount * TAB_STAFF_HEIGHT_PX / 2 + 2} className="music-text" fontSize="13" letterSpacing="0">A</text>
-                    <text x="18" y={TAB_STAFF_TOP + ts + stringCount * TAB_STAFF_HEIGHT_PX / 2 + 18} className="music-text" fontSize="13" letterSpacing="0">B</text>
+                    {showTab && (
+                      <>
+                        <text x="18" y={TAB_STAFF_TOP + ts + stringCount * TAB_STAFF_HEIGHT_PX / 2 - 14} className="music-text" fontSize="13" letterSpacing="0">T</text>
+                        <text x="18" y={TAB_STAFF_TOP + ts + stringCount * TAB_STAFF_HEIGHT_PX / 2 + 2} className="music-text" fontSize="13" letterSpacing="0">A</text>
+                        <text x="18" y={TAB_STAFF_TOP + ts + stringCount * TAB_STAFF_HEIGHT_PX / 2 + 18} className="music-text" fontSize="13" letterSpacing="0">B</text>
+                      </>
+                    )}
 
                     {/* Tuning labels to the left of the TAB text */}
-                    {Array.from({ length: stringCount }).map((_, i) => {
+                    {showTab && Array.from({ length: stringCount }).map((_, i) => {
                       const pitch = tuning[i];
                       const name = midiToNoteName(pitch);
                       return (
@@ -1242,11 +1601,19 @@ export const TabSheetEditor: React.FC = () => {
                     {/* Time Signature (first-of-row measures) */}
                     {showTimingChange && (
                       <g>
-                        <text x="50" y="25" className="music-text" fontSize="16" textAnchor="middle">{effectiveTimeSignature.numerator}</text>
-                        <text x="50" y="45" className="music-text" fontSize="16" textAnchor="middle">{effectiveTimeSignature.denominator}</text>
-                        
-                        <text x="50" y={TAB_STAFF_TOP + ts + stringCount * TAB_STAFF_HEIGHT_PX / 2 - 8} className="music-text" fontSize="16" textAnchor="middle">{effectiveTimeSignature.numerator}</text>
-                        <text x="50" y={TAB_STAFF_TOP + ts + stringCount * TAB_STAFF_HEIGHT_PX / 2 + 12} className="music-text" fontSize="16" textAnchor="middle">{effectiveTimeSignature.denominator}</text>
+                        {showNotation && (
+                          <>
+                            <text x="50" y="25" className="music-text" fontSize="16" textAnchor="middle">{effectiveTimeSignature.numerator}</text>
+                            <text x="50" y="45" className="music-text" fontSize="16" textAnchor="middle">{effectiveTimeSignature.denominator}</text>
+                          </>
+                        )}
+
+                        {showTab && (
+                          <>
+                            <text x="50" y={TAB_STAFF_TOP + ts + stringCount * TAB_STAFF_HEIGHT_PX / 2 - 8} className="music-text" fontSize="16" textAnchor="middle">{effectiveTimeSignature.numerator}</text>
+                            <text x="50" y={TAB_STAFF_TOP + ts + stringCount * TAB_STAFF_HEIGHT_PX / 2 + 12} className="music-text" fontSize="16" textAnchor="middle">{effectiveTimeSignature.denominator}</text>
+                          </>
+                        )}
                       </g>
                     )}
                   </g>
@@ -1255,21 +1622,30 @@ export const TabSheetEditor: React.FC = () => {
                 {/* Big Time Signature for timing changes (non-first-of-row measures) */}
                 {showTimingChange && mIdx > 0 && measureLayouts[mIdx]?.x !== 0 && (
                   <g>
-                    <text x={measureX + 12} y={rowY + 25} className="music-text" fontSize="16" textAnchor="middle">{effectiveTimeSignature.numerator}</text>
-                    <text x={measureX + 12} y={rowY + 45} className="music-text" fontSize="16" textAnchor="middle">{effectiveTimeSignature.denominator}</text>
-                    <text x={measureX + 12} y={rowY + TAB_STAFF_TOP + ts + stringCount * TAB_STAFF_HEIGHT_PX / 2 - 8} className="music-text" fontSize="16" textAnchor="middle">{effectiveTimeSignature.numerator}</text>
-                    <text x={measureX + 12} y={rowY + TAB_STAFF_TOP + ts + stringCount * TAB_STAFF_HEIGHT_PX / 2 + 12} className="music-text" fontSize="16" textAnchor="middle">{effectiveTimeSignature.denominator}</text>
+                    {showNotation && (
+                      <>
+                        <text x={measureX + 12} y={rowY + 25} className="music-text" fontSize="16" textAnchor="middle">{effectiveTimeSignature.numerator}</text>
+                        <text x={measureX + 12} y={rowY + 45} className="music-text" fontSize="16" textAnchor="middle">{effectiveTimeSignature.denominator}</text>
+                      </>
+                    )}
+                    {showTab && (
+                      <>
+                        <text x={measureX + 12} y={rowY + TAB_STAFF_TOP + ts + stringCount * TAB_STAFF_HEIGHT_PX / 2 - 8} className="music-text" fontSize="16" textAnchor="middle">{effectiveTimeSignature.numerator}</text>
+                        <text x={measureX + 12} y={rowY + TAB_STAFF_TOP + ts + stringCount * TAB_STAFF_HEIGHT_PX / 2 + 12} className="music-text" fontSize="16" textAnchor="middle">{effectiveTimeSignature.denominator}</text>
+                      </>
+                    )}
                   </g>
                 )}
 
                 {/* Interactive transparent rectangles over the standard staff of this measure to place notes on click */}
                 {measure.beats.map((b) => {
                   const beatX = getBeatCoordinates(mIdx, measure.beats.indexOf(b));
-                  
+
                   if (viewMode) return null;
                   return (
                     <g key={`clicks-${b.id}`}>
                       {/* Clicking standard staff region triggers layout coordinate mapper */}
+                      {showNotation && (
                       <rect
                         x={beatX - 10}
                         y={rowY}
@@ -1283,10 +1659,10 @@ export const TabSheetEditor: React.FC = () => {
                           const designY = relativeY * (65 / rect.height);
                           handleStandardStaffClick(mIdx, b.id, designY);
                         }}
-                      />
-                      
+                      />)}
+
                       {/* Clicking TAB staff region changes active beat/string */}
-                      {Array.from({ length: stringCount }).map((_, stringIdx) => {
+                      {showTab && Array.from({ length: stringCount }).map((_, stringIdx) => {
                         const y = rowY + TAB_STAFF_TOP + ts + stringIdx * 10;
                         return (
                           <rect
@@ -1314,7 +1690,7 @@ export const TabSheetEditor: React.FC = () => {
           })}
 
           {/* Render Active Beat Highlight & Playback Cursor */}
-          {song.measures.map((measure, mIdx) => {
+          {measures.map((measure, mIdx) => {
             const rowY = getRowY(mIdx);
             const ts = getRowShift(mIdx);
             return measure.beats.map((b, bIdx) => {
@@ -1331,9 +1707,9 @@ export const TabSheetEditor: React.FC = () => {
                     <g>
                       <rect
                         x={beatX - 10}
-                        y={rowY + 5}
+                        y={rowY + getStaffTop(ts) - 5}
                         width="20"
-                        height={TAB_STAFF_TOP + ts + stringCount * TAB_STAFF_HEIGHT_PX - 5}
+                        height={getStaffBottom(ts) - getStaffTop(ts) + 10}
                         fill="rgba(201, 119, 46, 0.12)"
                         stroke="#d98a3f"
                         strokeWidth="1.5"
@@ -1341,15 +1717,17 @@ export const TabSheetEditor: React.FC = () => {
                         pointerEvents="none"
                       />
                       {/* Fret/string tiny dot cursor in TAB */}
-                      <circle
-                        cx={beatX}
-                        cy={rowY + TAB_STAFF_TOP + ts + activeStringIndex * 10}
-                        r="5.5"
-                        fill="transparent"
-                        stroke="#e0a83f"
-                        strokeWidth="1.5"
-                        pointerEvents="none"
-                      />
+                      {showTab && (
+                        <circle
+                          cx={beatX}
+                          cy={rowY + TAB_STAFF_TOP + ts + activeStringIndex * 10}
+                          r="5.5"
+                          fill="transparent"
+                          stroke="#e0a83f"
+                          strokeWidth="1.5"
+                          pointerEvents="none"
+                        />
+                      )}
                     </g>
                   )}
 
@@ -1357,9 +1735,9 @@ export const TabSheetEditor: React.FC = () => {
                   {isPlayback && (
                     <line
                       x1={beatX}
-                      y1={rowY + 2}
+                      y1={rowY + getStaffTop(ts) - 8}
                       x2={beatX}
-                      y2={rowY + TAB_STAFF_TOP + ts + stringCount * TAB_STAFF_HEIGHT_PX}
+                      y2={rowY + getStaffBottom(ts) + 10}
                       stroke="#3fb98a"
                       strokeWidth="2.5"
                       strokeDasharray="2"
@@ -1372,7 +1750,7 @@ export const TabSheetEditor: React.FC = () => {
           })}
 
           {/* Render Notes & Rests */}
-          {song.measures.map((measure, mIdx) => {
+          {measures.map((measure, mIdx) => {
             const rowY = getRowY(mIdx);
             const ts = getRowShift(mIdx);
             const beamGroups = computeBeamGroups(measure.beats, getEffectiveTimeSignature(song, mIdx));
@@ -1382,11 +1760,13 @@ export const TabSheetEditor: React.FC = () => {
               const beatX = getBeatCoordinates(mIdx, bIdx);
               const beamInfo = beamGroups.find(g => g.startIdx <= bIdx && bIdx <= g.endIdx);
 
-              // 1. Rests
+              // 1. Rests. They are decoration painted over the staff's click
+              // targets, so they must not swallow clicks meant to place a note.
               if (b.isRest || b.notes.length === 0) {
                 const dur = b.duration;
                 return (
-                  <g key={`rest-${b.id}`} transform={`translate(0, ${rowY})`}>
+                  <g key={`rest-${b.id}`} transform={`translate(0, ${rowY})`} style={{ pointerEvents: 'none' }}>
+                    {showNotation && (<>
                     {/* Render Rest on Standard Staff */}
                     {dur === '1' && (
                       // Whole rest: hanging rectangle on line 4 (y=20)
@@ -1425,18 +1805,23 @@ export const TabSheetEditor: React.FC = () => {
                     {b.dot && (
                       <circle cx={beatX + 10} cy={dur === '1' ? 23 : dur === '2' ? 27 : 25} r="2.2" fill="#f2ece4" pointerEvents="none" />
                     )}
+                    </>)}
                   </g>
                 );
               }
 
               // 2. Chords & Melodic Notes
-              // Precalculate diatonic positions for standard staff rendering
-              const calculatedNotes = b.notes.map(n => {
-                const midi = tuning[n.stringIndex] + n.fret;
-                const { diatonicStep, accidental } = midiToDiatonicAndAccidental(midi);
+              // Precalculate diatonic positions for standard staff rendering.
+              // noteIndex is the note's slot in the beat, which is what the
+              // cursor addresses on a pitched track (there is no string there).
+              const calculatedNotes = b.notes.map((n, noteIndex) => {
+                const midi = (resolveNoteMidi(n, activeTrack) ?? NaN);
+                const { diatonicStep, accidental } = midiToDiatonicAndAccidental(midi, transpose);
                 return {
-                  ...n,
+                  note: n,
+                  noteIndex,
                   midi,
+                  dot: b.dot,
                   step: diatonicStep,
                   accidental,
                   y: rowY + Y_of_step(diatonicStep)
@@ -1469,14 +1854,16 @@ export const TabSheetEditor: React.FC = () => {
               return (
                 <g key={`notes-${b.id}`}>
                   {/* A. Standard Notation noteheads & stems */}
-                  {calculatedNotes.map((n) => {
-                    const isSelected = activeMeasureIndex === mIdx && activeBeatIndex === bIdx && activeStringIndex === n.stringIndex;
+                  {showNotation && calculatedNotes.map((n) => {
+                    const isSelected = isCursorNote(mIdx, bIdx, n.noteIndex, b.notes);
 
-                    // Skip notes that would render below the TAB staff area
-                    if (n.y > rowY + TAB_STAFF_TOP + ts - 8) return null;
+                    // Skip notes that would render below the TAB staff area (or,
+                    // with the TAB hidden, below the row's reserved space)
+                    if (showTab && n.y > rowY + TAB_STAFF_TOP + ts - 8) return null;
+                    if (!showTab && n.y > rowY + ROW_HEIGHT - 10) return null;
 
                     return (
-                      <g key={`note-${mIdx}-${bIdx}-${n.stringIndex}`}>
+                      <g key={`note-${mIdx}-${bIdx}-${n.noteIndex}`}>
                         {/* Ledger Lines if note lies outside the 5-line staff */}
                         {(() => {
                           const lines = [];
@@ -1501,6 +1888,7 @@ export const TabSheetEditor: React.FC = () => {
                                 x2={beatX + 7}
                                 y2={lineY}
                                 className="staff-ledger-line"
+                                style={{ pointerEvents: 'none' }}
                               />
                             );
                           });
@@ -1508,7 +1896,7 @@ export const TabSheetEditor: React.FC = () => {
 
                         {/* Accidental (#) if sharp */}
                         {n.accidental === '#' && (
-                          <g stroke="#f2ece4" strokeWidth="1.3" opacity="0.9">
+                          <g stroke="#f2ece4" strokeWidth="1.3" opacity="0.9" style={{ pointerEvents: 'none' }}>
                             <line x1={beatX - 13} y1={n.y - 6} x2={beatX - 13} y2={n.y + 6} />
                             <line x1={beatX - 10} y1={n.y - 8} x2={beatX - 10} y2={n.y + 4} />
                             <line x1={beatX - 16} y1={n.y - 2.5} x2={beatX - 7} y2={n.y - 4} />
@@ -1550,7 +1938,7 @@ export const TabSheetEditor: React.FC = () => {
                           strokeWidth="1.4"
                           className="notehead"
                           onClick={() => {
-                            selectNote(mIdx, bIdx, n.stringIndex);
+                            selectNote(mIdx, bIdx, n.noteIndex, b.notes);
                           }}
                         />
                         {/* Dotted note dot */}
@@ -1562,7 +1950,7 @@ export const TabSheetEditor: React.FC = () => {
                   })}
 
                   {/* Shared stem for chord */}
-                  {hasStem && (
+                  {showNotation && hasStem && (
                     <g>
                       <line
                         x1={stemX}
@@ -1603,11 +1991,13 @@ export const TabSheetEditor: React.FC = () => {
                   )}
 
                   {/* B. TAB numbers (fret digits over strings) */}
-                  {b.notes.map(n => {
+                  {showTab && b.notes.map((rawNote, noteIndex) => {
+                    if (!isFrettedNote(rawNote)) return null;
+                    const n = rawNote;
                     const stringY = rowY + TAB_STAFF_TOP + ts + n.stringIndex * 10;
-                    const isSelected = activeMeasureIndex === mIdx && activeBeatIndex === bIdx && activeStringIndex === n.stringIndex;
+                    const isSelected = isCursorNote(mIdx, bIdx, noteIndex, b.notes);
 
-                    const fretDisplay = (note: TabNote): string => {
+                    const fretDisplay = (note: FrettedNote): string => {
                       if (note.ghostNote) return 'x';
                       let text = note.harmonic ? `<${note.fret}>` : `${note.fret}`;
                       if (note.bend) text += 'b';
@@ -1619,11 +2009,11 @@ export const TabSheetEditor: React.FC = () => {
                     const bgWidth = Math.max(10, displayText.length * 6 + 4);
 
                     return (
-                      <g 
+                      <g
                         key={`tab-note-${mIdx}-${bIdx}-${n.stringIndex}`}
                         className={`tab-fret-container ${isSelected ? 'active-note' : ''}`}
                         onClick={() => {
-                          selectNote(mIdx, bIdx, n.stringIndex);
+                          selectNote(mIdx, bIdx, noteIndex, b.notes);
                         }}
                       >
                         {/* Background rectangle to block staff line behind fret number */}
@@ -1648,7 +2038,7 @@ export const TabSheetEditor: React.FC = () => {
                           let prevPos: { x: number; y: number } | null = null;
                           for (let i = bIdx - 1; i >= 0; i--) {
                             const prevBeat = measure.beats[i];
-                            const prevNote = prevBeat?.notes.find(nn => nn.stringIndex === n.stringIndex);
+                            const prevNote = prevBeat?.notes.find(nn => isFrettedNote(nn) && nn.stringIndex === n.stringIndex);
                             if (prevNote) {
                               prevPos = {
                                 x: getBeatCoordinates(mIdx, i),
@@ -1691,7 +2081,7 @@ export const TabSheetEditor: React.FC = () => {
                   })}
 
                   {/* TAB rhythm stem (duration indicator below TAB staff) */}
-                  {hasStem && (
+                  {showTab && hasStem && (
                     <line
                       x1={stemUp ? beatX + 4 : beatX - 4}
                       y1={rowY + TAB_STAFF_TOP + ts + stringCount * 10 + 2}
@@ -1704,12 +2094,12 @@ export const TabSheetEditor: React.FC = () => {
                   )}
 
                   {/* Palm mute / let ring indicators */}
-                  {b.notes.some(n => n.palmMute) && (
+                  {showTab && b.notes.some(n => n.palmMute) && (
                     <text x={beatX - 12} y={rowY + TAB_STAFF_TOP + ts - 4} className="music-text" fontSize="8" fill="#e0a83f" style={{ pointerEvents: 'none' }}>
                       P.M.
                     </text>
                   )}
-                  {b.notes.some(n => n.letRing) && (
+                  {showTab && b.notes.some(n => n.letRing) && (
                     <text x={beatX - 12} y={rowY + TAB_STAFF_TOP + ts - 14} className="music-text" fontSize="8" fill="#3fb98a" style={{ pointerEvents: 'none' }}>
                       let ring
                     </text>
@@ -1719,7 +2109,7 @@ export const TabSheetEditor: React.FC = () => {
               })}
 
               {/* Beams for standard notation */}
-              {beamGroups.map((g, gi) => {
+              {showNotation && beamGroups.map((g, gi) => {
                 const firstX = getBeatCoordinates(mIdx, g.startIdx);
                 const lastX = getBeatCoordinates(mIdx, g.endIdx);
                 const mainStemUp = getBeamStemUp(measure, g);
@@ -1815,7 +2205,7 @@ export const TabSheetEditor: React.FC = () => {
               })}
 
               {/* TAB rhythm beams (connecting the stems below TAB staff) */}
-              {beamGroups.map((g, gi) => {
+              {showTab && beamGroups.map((g, gi) => {
                 const firstX = getBeatCoordinates(mIdx, g.startIdx);
                 const lastX = getBeatCoordinates(mIdx, g.endIdx);
                 const mainStemUp = getBeamStemUp(measure, g);
@@ -1931,8 +2321,73 @@ export const TabSheetEditor: React.FC = () => {
         </svg>
       </div>
 
+      {/* Piano keyboard — replaces the fretboard in sheet-only mode, where
+          string/fret input makes no sense but pitch input does. */}
+      {showFretboard && !showTab && (
+        <div className="sheetor-fretboard">
+          <div className="fretboard-header">
+            <div className="fretboard-title">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" width="15" height="15">
+                <rect x="3" y="4" width="18" height="16" rx="2" />
+                <path d="M9 4v9M15 4v9" />
+              </svg>
+              Keyboard
+            </div>
+            <div className="sheet-controls">
+              <div className="duration-selector">{durationButtons}{dotButton}</div>
+              <button
+                className={`btn ${activeBeat?.isRest ? 'btn-active' : ''}`}
+                onClick={toggleActiveBeatRest}
+                title="Toggle rest on the selected beat"
+              >
+                Rest
+              </button>
+              <button
+                className="btn btn-danger"
+                onClick={() => updateActiveBeatNotes(() => [])}
+                title="Clear every note on the selected beat"
+              >
+                Clear
+              </button>
+            </div>
+          </div>
+
+          <div className="piano-keyboard">
+            <div className="piano-white-row">
+              {whiteKeyMidis.map((midi) => (
+                <button
+                  key={`wk-${midi}`}
+                  className={`piano-key white ${activeMidis.has(midi) ? 'active' : ''} ${playbackMidis.has(midi) ? 'playback-active' : ''}`}
+                  onClick={() => toggleNoteAtMidi(midi)}
+                  title={midiToNoteOctave(midi)}
+                >
+                  <span className="piano-key-label">{midiToNoteOctave(midi)}</span>
+                </button>
+              ))}
+            </div>
+            {blackKeys.map(({ midi, leftPct }) => (
+              <button
+                key={`bk-${midi}`}
+                className={`piano-key black ${activeMidis.has(midi) ? 'active' : ''} ${playbackMidis.has(midi) ? 'playback-active' : ''}`}
+                style={{
+                  left: `${leftPct}%`,
+                  width: `${blackKeyWidthPct}%`,
+                  marginLeft: `-${blackKeyWidthPct / 2}%`,
+                }}
+                onClick={() => toggleNoteAtMidi(midi)}
+                title={midiToNoteOctave(midi)}
+              />
+            ))}
+          </div>
+
+          <span className="fretboard-title" style={{ letterSpacing: 0, textTransform: 'none', color: 'var(--text-faint)', fontWeight: 500 }}>
+            Click a key to add or remove that pitch on the selected beat
+          </span>
+        </div>
+      )}
+
       {/* Virtual Fretboard */}
-      {showFretboard && (
+      {showFretboard && showTab && (
         <div className="sheetor-fretboard">
           <div className="fretboard-header">
             <div className="fretboard-title">
@@ -2019,16 +2474,16 @@ export const TabSheetEditor: React.FC = () => {
 
                 // Check if this fret is currently selected in the active beat
                 const isSelectedNote = activeBeat && activeBeat.notes.some(
-                  n => n.stringIndex === stringIdx && n.fret === fretNum
+                  n => isFrettedNote(n) && n.stringIndex === stringIdx && n.fret === fretNum
                 );
 
                 // Check if playback cursor is currently playing this note
                 let isPlaybackNote = false;
                 const pb = playback.playbackBeat;
                 if (pb) {
-                  const pbBeatObj = song.measures[pb.measureIndex]?.beats[pb.beatIndex];
+                  const pbBeatObj = measures[pb.measureIndex]?.beats[pb.beatIndex];
                   isPlaybackNote = pbBeatObj ? pbBeatObj.notes.some(
-                    n => n.stringIndex === stringIdx && n.fret === fretNum && !pbBeatObj.isRest
+                    n => isFrettedNote(n) && n.stringIndex === stringIdx && n.fret === fretNum && !pbBeatObj.isRest
                   ) : false;
                 }
 
@@ -2088,7 +2543,11 @@ export const TabSheetEditor: React.FC = () => {
         <div className="note-options-panel" onClick={(e) => e.stopPropagation()}>
           <div className="note-options-summary">
             <strong>
-              {activeNote ? `String ${activeStringIndex + 1}, fret ${activeNote.fret}` : `Beat ${activeBeatIndex + 1}`}
+              {!activeNote
+                ? `Beat ${activeBeatIndex + 1}`
+                : isFrettedNote(activeNote)
+                  ? `String ${activeNote.stringIndex + 1}, fret ${activeNote.fret}`
+                  : midiToNoteOctave(activeNote.midi)}
             </strong>
             <span>{activeBeat?.isRest ? 'Rest' : `${selectedNotes.length} note${selectedNotes.length === 1 ? '' : 's'}`}</span>
           </div>
@@ -2141,7 +2600,7 @@ export const TabSheetEditor: React.FC = () => {
             {activeBeat?.isRest ? 'Make playable' : 'Make rest'}
           </button>
           <button className="btn btn-danger" onClick={() => {
-            removeActiveNoteOnString(activeStringIndex);
+            removeCursorNote();
             setShowNoteOptions(false);
           }}>
             Remove note
@@ -2180,9 +2639,9 @@ export const TabSheetEditor: React.FC = () => {
           </label>
           <div className="bottom-menu">
             <button
-              className={`bottom-menu-trigger ${openBottomMenu === 'speed' ? 'active' : ''}`}
-              onClick={() => setOpenBottomMenu(prev => prev === 'speed' ? null : 'speed')}
-              title="Playback speed"
+              className={`bottom-menu-trigger ${openBottomMenu === 'output' ? 'active' : ''}`}
+              onClick={() => setOpenBottomMenu(prev => prev === 'output' ? null : 'output')}
+              title="Speed, master volume and looping"
             >
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                 <circle cx="12" cy="12" r="10" />
@@ -2190,8 +2649,8 @@ export const TabSheetEditor: React.FC = () => {
               </svg>
               {playbackSpeed}x
             </button>
-            {openBottomMenu === 'speed' && (
-              <div className="bottom-popover" style={{ left: 0, right: 'auto', minWidth: 176 }}>
+            {openBottomMenu === 'output' && (
+              <div className="bottom-popover" style={{ left: 0, right: 'auto', minWidth: 200 }}>
                 <span className="popover-title">Speed</span>
                 <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
                   {[0.5, 0.75, 1, 1.25, 1.5, 2].map(speed => (
@@ -2203,22 +2662,28 @@ export const TabSheetEditor: React.FC = () => {
                     >{speed}x</button>
                   ))}
                 </div>
+                <div className="popover-divider" />
+                <label className="compact-field wide-field">
+                  <span>Master</span>
+                  <input
+                    type="range"
+                    min="0"
+                    max="1"
+                    step="0.05"
+                    value={volume}
+                    onChange={(e) => setVolume(parseFloat(e.target.value))}
+                  />
+                </label>
+                <div className="popover-divider" />
+                <button
+                  className={`btn ${loopPlayback ? 'btn-active' : ''}`}
+                  onClick={() => setLoopPlayback(prev => !prev)}
+                >
+                  {loopPlayback ? 'Looping on' : 'Loop off'}
+                </button>
               </div>
             )}
           </div>
-          <button
-            className={`btn ${loopPlayback ? 'btn-active' : ''}`}
-            onClick={() => setLoopPlayback(prev => !prev)}
-            title="Loop playback"
-          >
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <polyline points="17 1 21 5 17 9" />
-              <path d="M3 11V9a4 4 0 0 1 4-4h14" />
-              <polyline points="7 23 3 19 7 15" />
-              <path d="M21 13v2a4 4 0 0 1-4 4H3" />
-            </svg>
-            Loop
-          </button>
         </div>
 
         <div className="cmd-spacer" />
@@ -2303,192 +2768,69 @@ export const TabSheetEditor: React.FC = () => {
             )}
           </div>
 
+          <div className="cmd-divider" />
+
           <div className="bottom-menu">
             <button
-              className={`bottom-menu-trigger ${openBottomMenu === 'tuning' ? 'active' : ''}`}
-              onClick={() => setOpenBottomMenu(prev => prev === 'tuning' ? null : 'tuning')}
+              className={`bottom-menu-trigger ${openBottomMenu === 'view' ? 'active' : ''}`}
+              onClick={() => setOpenBottomMenu(prev => prev === 'view' ? null : 'view')}
+              title="View options"
             >
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <line x1="4" y1="4" x2="20" y2="20" />
-                <path d="M9 4.5a.5.5 0 0 1 .5-.5h5a.5.5 0 0 1 .5.5v.5a.5.5 0 0 1-.5.5h-5a.5.5 0 0 1-.5-.5Z" />
-                <path d="M4 12a8 8 0 0 1 16 0" />
-                <path d="M7 12a5 5 0 0 1 10 0" />
-                <path d="M10 12a2 2 0 0 1 4 0" />
-                <circle cx="12" cy="12" r="2" />
+                <path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z" />
+                <circle cx="12" cy="12" r="3" />
               </svg>
-              Tuning
+              View
             </button>
-            {openBottomMenu === 'tuning' && (
-              <div className="bottom-popover" style={{ minWidth: 220, right: 'auto', left: 0 }}>
-                <label className="compact-field wide-field">
-                  <span>Preset</span>
-                  <select
-                    className="control-select"
-                    value=""
-                    onChange={(e) => {
-                      const val = e.target.value;
-                      if (!val) return;
-                      const pitches = STANDARD_TUNINGS[val];
-                      if (pitches) {
-                        setTuning(pitches);
-                        setActiveStringIndex(prev => Math.min(prev, pitches.length - 1));
-                        setSong(prev => pruneNotesToStringCount(prev, pitches.length));
-                      }
-                    }}
-                  >
-                    <option value="">-- Select --</option>
-                    {TUNING_PRESETS.map(([name]) => (
-                      <option key={name} value={name}>{name}</option>
-                    ))}
-                  </select>
-                </label>
-                <label className="compact-field wide-field">
-                  <span>Strings</span>
-                  <select
-                    className="control-select"
-                    value={stringCount}
-                    onChange={(e) => {
-                      const count = parseInt(e.target.value) || 6;
-                      setTuning(prev => {
-                        if (prev.length === count) return prev;
-                        if (prev.length < count) {
-                          return [...prev, ...allStringPitches.slice(prev.length, count)];
-                        }
-                        return prev.slice(0, count);
-                      });
-                      setActiveStringIndex(prev => Math.min(prev, count - 1));
-                      setSong(prev => pruneNotesToStringCount(prev, count));
-                    }}
-                  >
-                    {[4, 5, 6, 7, 8, 9, 10, 11, 12].map(n => (
-                      <option key={n} value={n}>{n}</option>
-                    ))}
-                  </select>
-                </label>
-                <div className="popover-divider" />
-                <span className="popover-title">Per string</span>
-                {tuning.map((pitch, i) => (
-                  <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                    <span className="control-label" style={{ width: 12, textAlign: 'right' }}>{i + 1}</span>
-                    <select
-                      className="control-select"
-                      style={{ flex: 1, fontSize: '0.75rem' }}
-                      value={midiToNoteOctave(pitch)}
-                      onChange={(e) => {
-                        const newMidi = noteOctaveToMidi(e.target.value);
-                        if (newMidi > 0) {
-                          setTuning(prev => {
-                            const next = [...prev];
-                            next[i] = newMidi;
-                            return next;
-                          });
-                        }
-                      }}
+            {openBottomMenu === 'view' && (
+              <div className="bottom-popover">
+                <span className="popover-title">Staff — {activeTrack.name}</span>
+                <div className="control-group">
+                  {(isFrettedTrack
+                    ? (['both', 'notation', 'tab'] as StaffDisplay[])
+                    : (['notation'] as StaffDisplay[])
+                  ).map(mode => (
+                    <button
+                      key={mode}
+                      className={`btn ${activeTrack.display === mode ? 'btn-active' : ''}`}
+                      onClick={() => updateActiveTrack({ display: mode })}
+                      style={{ flex: 1 }}
                     >
-                      {GUITAR_NOTE_OPTIONS.map(opt => (
-                        <option key={opt} value={opt}>{opt}</option>
-                      ))}
-                    </select>
-                  </div>
-                ))}
+                      {mode === 'both' ? 'Both' : mode === 'notation' ? 'Notes' : 'TAB'}
+                    </button>
+                  ))}
+                </div>
+                <div className="popover-divider" />
+                <button
+                  className={`btn ${showFretboard ? 'btn-active' : ''}`}
+                  onClick={() => setShowFretboard(prev => !prev)}
+                >
+                  {isFrettedTrack ? 'Fretboard' : 'Keyboard'}
+                </button>
+                <button
+                  className={`btn ${viewMode ? 'btn-active' : ''}`}
+                  onClick={() => {
+                    setViewMode(prev => {
+                      if (!prev) {
+                        setShowNoteOptions(false);
+                        setOpenBottomMenu(null);
+                      }
+                      return !prev;
+                    });
+                  }}
+                >
+                  {viewMode ? 'Read-only on' : 'Read-only off'}
+                </button>
+                <div className="popover-divider" />
+                <button className="btn" onClick={() => {
+                  setOpenBottomMenu(null);
+                  setShowShortcuts(true);
+                }}>
+                  Keyboard shortcuts
+                </button>
               </div>
             )}
           </div>
-
-          <div className="bottom-menu">
-            <button
-              className={`bottom-menu-trigger ${openBottomMenu === 'sound' ? 'active' : ''}`}
-              onClick={() => setOpenBottomMenu(prev => prev === 'sound' ? null : 'sound')}
-            >
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M9 18V5l12-2v13" />
-                <circle cx="6" cy="18" r="3" />
-                <circle cx="18" cy="16" r="3" />
-              </svg>
-              Sound
-            </button>
-            {openBottomMenu === 'sound' && (
-              <div className="bottom-popover">
-              <label className="compact-field wide-field">
-                <span>Type</span>
-                <select
-                  className="control-select"
-                  value={synthType}
-                  onChange={(e) => setSynthType(e.target.value)}
-                >
-                  <option value="guitar">Plucked Guitar</option>
-                  <option value="sine">Sine Wave</option>
-                  <option value="triangle">Triangle Wave</option>
-                  <option value="square">Square Wave</option>
-                  <option value="sawtooth">Saw Wave</option>
-                </select>
-              </label>
-              <label className="compact-field wide-field">
-                <span>Volume</span>
-                <input
-                  type="range"
-                  min="0"
-                  max="1"
-                  step="0.05"
-                  value={volume}
-                  onChange={(e) => setVolume(parseFloat(e.target.value))}
-                />
-              </label>
-            </div>
-            )}
-          </div>
-
-          <div className="cmd-divider" />
-
-          <button className="btn" onClick={() => {
-            setViewMode(prev => {
-              if (!prev) {
-                setShowNoteOptions(false);
-                setOpenBottomMenu(null);
-              }
-              return !prev;
-            });
-          }} title={viewMode ? 'Back to editing' : 'Read-only view'}>
-            {viewMode ? (
-              <>
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                  <path d="M12 20h9" />
-                  <path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z" />
-                </svg>
-                Edit
-              </>
-            ) : (
-              <>
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                  <path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z" />
-                  <circle cx="12" cy="12" r="3" />
-                </svg>
-                View
-              </>
-            )}
-          </button>
-          <button
-            className={`btn ${showFretboard ? 'btn-active' : ''}`}
-            onClick={() => setShowFretboard(prev => !prev)}
-            title={showFretboard ? 'Hide the fretboard' : 'Show the fretboard'}
-          >
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <rect x="2" y="3" width="20" height="14" rx="2" />
-              <line x1="8" y1="21" x2="16" y2="21" />
-              <line x1="12" y1="17" x2="12" y2="21" />
-            </svg>
-            Neck
-          </button>
-          <button className="btn" onClick={() => {
-            setOpenBottomMenu(null);
-            setShowShortcuts(true);
-          }} title="Keyboard shortcuts">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <rect x="3" y="11" width="18" height="11" rx="2" />
-              <path d="M7 11V7a5 5 0 0 1 10 0v4" />
-            </svg>
-            Keys
-          </button>
         </div>
       </div>
 
@@ -2502,6 +2844,8 @@ export const TabSheetEditor: React.FC = () => {
             <div className="shortcut-button-grid">
               <span><kbd>←</kbd><kbd>→</kbd> Beat</span>
               <span><kbd>↑</kbd><kbd>↓</kbd> String</span>
+              <span><kbd>Shift</kbd><kbd>↑</kbd><kbd>↓</kbd> Pitch ±semitone</span>
+              <span><kbd>Shift</kbd><kbd>Ctrl</kbd><kbd>↑</kbd><kbd>↓</kbd> Pitch ±octave</span>
               <span><kbd>0</kbd>-<kbd>9</kbd> Fret</span>
               <span><kbd>Delete</kbd> Remove</span>
               <span><kbd>Space</kbd> Play</span>

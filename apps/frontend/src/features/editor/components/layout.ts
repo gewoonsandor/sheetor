@@ -27,7 +27,14 @@ export const FRETBOARD_STRING_GAP = 24;
 
 export const STEM_TOP_PAD = 25;
 
-export const computeRowHeight = (stringCount: number): number => {
+// With the TAB staff hidden there's no fret-number block to reserve room for —
+// just the standard staff plus clearance below it for stems and ledger lines.
+const SHEET_ONLY_STAFF_CLEARANCE = 85;
+
+export const computeRowHeight = (stringCount: number, includeTab: boolean = true): number => {
+  if (!includeTab) {
+    return STEM_TOP_PAD + SHEET_ONLY_STAFF_CLEARANCE + 20;
+  }
   const tabStaffHeight = stringCount * 10;
   return STEM_TOP_PAD + TAB_STAFF_TOP + tabStaffHeight + 30;
 };
@@ -129,4 +136,22 @@ export const getFretCellLeft = (fret: number): number => {
 
 export const getFretCellWidth = (fret: number): number => {
   return getFretLeftPercentage(fret + 1) - getFretLeftPercentage(fret);
+};
+
+// Piano keyboard (sheet-only mode): the playable pitch range is whatever the
+// current tuning can reach, so the keys always match what the guitar can voice.
+const WHITE_PITCH_CLASSES = [0, 2, 4, 5, 7, 9, 11];
+
+export const isWhiteKey = (midi: number): boolean =>
+  WHITE_PITCH_CLASSES.includes(((midi % 12) + 12) % 12);
+
+export const computeKeyboardRange = (tuning: number[], maxFret: number): number[] => {
+  const low = Math.min(...tuning);
+  const high = Math.max(...tuning) + maxFret;
+  const keys: number[] = [];
+  // Start on a white key so the leftmost edge of the keyboard isn't a stray black key.
+  let start = low;
+  while (!isWhiteKey(start)) start--;
+  for (let midi = start; midi <= high; midi++) keys.push(midi);
+  return keys;
 };

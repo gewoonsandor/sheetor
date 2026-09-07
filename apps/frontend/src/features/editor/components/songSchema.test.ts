@@ -23,9 +23,9 @@ describe('parseSong', () => {
     const result = parseSong(valid());
     expect(result.ok).toBe(true);
     if (!result.ok) return;
-    expect(result.song.measures).toHaveLength(2);
-    expect(result.song.measures[0].beats[0].notes).toEqual([{ stringIndex: 0, fret: 3 }]);
-    expect(result.song.measures[1].beats[0].isRest).toBe(true);
+    expect(result.song.tracks[0].measures).toHaveLength(2);
+    expect(result.song.tracks[0].measures[0].beats[0].notes).toEqual([{ stringIndex: 0, fret: 3 }]);
+    expect(result.song.tracks[0].measures[1].beats[0].isRest).toBe(true);
   });
 
   it('rejects non-objects', () => {
@@ -83,7 +83,7 @@ describe('parseSong', () => {
     expect(result.ok).toBe(true);
     if (!result.ok) return;
     expect('hacked' in result.song).toBe(false);
-    expect(Object.keys(result.song).sort()).toEqual(['artist', 'bpm', 'measures', 'timeSignature', 'title']);
+    expect(Object.keys(result.song).sort()).toEqual(['artist', 'bpm', 'timeSignature', 'title', 'tracks']);
   });
 
   it('repairs a missing artist, ids, and invalid overrides', () => {
@@ -98,11 +98,96 @@ describe('parseSong', () => {
     expect(result.ok).toBe(true);
     if (!result.ok) return;
     expect(result.song.artist).toBe('Unknown Artist');
-    expect(result.song.measures[0].id).toMatch(/^[a-z0-9]+$/);
-    expect(result.song.measures[0].beats[0].id).toMatch(/^[a-z0-9]+$/);
-    expect(result.song.measures[0].beats[0].notes).toEqual([]);
-    expect(result.song.measures[0].bpm).toBeUndefined();
-    expect(result.song.measures[0].timeSignature).toBeUndefined();
+    expect(result.song.tracks[0].measures[0].id).toMatch(/^[a-z0-9]+$/);
+    expect(result.song.tracks[0].measures[0].beats[0].id).toMatch(/^[a-z0-9]+$/);
+    expect(result.song.tracks[0].measures[0].beats[0].notes).toEqual([]);
+    expect(result.song.tracks[0].measures[0].bpm).toBeUndefined();
+    expect(result.song.tracks[0].measures[0].timeSignature).toBeUndefined();
+  });
+
+  it('promotes a legacy single-track song into one guitar track', () => {
+    const result = parseSong(valid());
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.song.tracks).toHaveLength(1);
+    const [track] = result.song.tracks;
+    expect(track.kind).toBe('fretted');
+    expect(track.instrument).toBe('guitar');
+    expect(track.display).toBe('both');
+    expect(track.transpose).toBe(12);
+    expect(track.measures).toHaveLength(2);
+  });
+
+  it('widens a legacy tuning to cover every note in the file', () => {
+    const song = valid();
+    song.measures[0].beats[0].notes = [{ stringIndex: 7, fret: 2 }];
+    const result = parseSong(song);
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.song.tracks[0].tuning).toHaveLength(8);
+  });
+
+  it('accepts an explicit track list', () => {
+    const result = parseSong({
+      title: 'Duet', bpm: 100, timeSignature: { numerator: 4, denominator: 4 },
+      tracks: [
+        { name: 'Gtr', kind: 'fretted', instrument: 'guitar', measures: valid().measures },
+        { name: 'Pno', kind: 'pitched', instrument: 'piano', measures: [{ beats: [{ duration: '4', notes: [{ midi: 60 }] }] }] },
+      ],
+    });
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.song.tracks.map(t => t.name)).toEqual(['Gtr', 'Pno']);
+    expect(result.song.tracks[1].measures[0].beats[0].notes).toEqual([{ midi: 60 }]);
+    expect(result.song.tracks[1].transpose).toBe(0);
+    expect(result.song.tracks[1].tuning).toBeUndefined();
+  });
+
+  it('pads shorter tracks so every track shares one bar count', () => {
+    const result = parseSong({
+      title: 'Duet', bpm: 100, timeSignature: { numerator: 4, denominator: 4 },
+      tracks: [
+        { kind: 'fretted', instrument: 'guitar', measures: valid().measures },   // 2 bars
+        { kind: 'pitched', instrument: 'piano', measures: [{ beats: [{ duration: '4' }] }] }, // 1 bar
+      ],
+    });
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.song.tracks.map(t => t.measures.length)).toEqual([2, 2]);
+  });
+
+  it('rejects a pitched note outside the midi range', () => {
+    expectError({
+      title: 'T', bpm: 100, timeSignature: { numerator: 4, denominator: 4 },
+      tracks: [{ kind: 'pitched', instrument: 'piano', measures: [{ beats: [{ duration: '4', notes: [{ midi: 999 }] }] }] }],
+    }, 'Track 1 measure 1 beat 1 has an invalid pitch.');
+  });
+
+  it('repairs unknown instruments and out-of-range volume instead of rejecting', () => {
+    const result = parseSong({
+      title: 'T', bpm: 100, timeSignature: { numerator: 4, denominator: 4 },
+      tracks: [{ instrument: 'kazoo', volume: 42, display: 'tab', measures: valid().measures }],
+    });
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.song.tracks[0].instrument).toBe('guitar');
+    expect(result.song.tracks[0].volume).toBe(1);
+  });
+
+  it('never gives a pitched track a TAB staff, whatever the file claims', () => {
+    const result = parseSong({
+      title: 'T', bpm: 100, timeSignature: { numerator: 4, denominator: 4 },
+      tracks: [{ kind: 'pitched', instrument: 'piano', display: 'both', measures: valid().measures }],
+    });
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.song.tracks[0].display).toBe('notation');
+  });
+
+  it('rejects an empty track list', () => {
+    expectError({
+      title: 'T', bpm: 100, timeSignature: { numerator: 4, denominator: 4 }, tracks: [],
+    }, 'Song must contain at least one track.');
   });
 
   it('keeps only technique flags that are explicitly true', () => {
@@ -113,6 +198,6 @@ describe('parseSong', () => {
     const result = parseSong(song);
     expect(result.ok).toBe(true);
     if (!result.ok) return;
-    expect(result.song.measures[0].beats[0].notes[0]).toEqual({ stringIndex: 0, fret: 3, vibrato: true });
+    expect(result.song.tracks[0].measures[0].beats[0].notes[0]).toEqual({ stringIndex: 0, fret: 3, vibrato: true });
   });
 });

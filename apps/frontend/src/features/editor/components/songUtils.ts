@@ -1,4 +1,17 @@
-import type { BeatPosition, Duration, TabBeat, TabMeasure, TabSong, BeamGroup, TimeSignature } from './types';
+import type {
+  BeatPosition,
+  Duration,
+  FrettedNote,
+  InstrumentId,
+  TabBeat,
+  TabMeasure,
+  TabNote,
+  TabSong,
+  TabTrack,
+  TrackKind,
+  BeamGroup,
+  TimeSignature,
+} from './types';
 
 // Full 12-string tuning pool (high to low)
 // Strings 1-6: standard guitar  [E4, B3, G3, D3, A2, E2]
@@ -112,9 +125,12 @@ export const GUITAR_NOTE_OPTIONS: string[] = (() => {
   return options;
 })();
 
-// Transpose MIDI to guitar treble clef (which is written 1 octave higher than sounding)
-export const midiToDiatonicAndAccidental = (midi: number) => {
-  const writtenMidi = midi + 12;
+/**
+ * Sounding MIDI to a staff position. `transpose` is how far the staff is
+ * written above what it sounds — 12 for guitar/bass, 0 at concert pitch.
+ */
+export const midiToDiatonicAndAccidental = (midi: number, transpose: number = 12) => {
+  const writtenMidi = midi + transpose;
   const octave = Math.floor(writtenMidi / 12) - 1;
   const pc = pitchClass(writtenMidi);
 
@@ -128,6 +144,18 @@ export const midiToDiatonicAndAccidental = (midi: number) => {
 };
 
 export const Y_of_step = (step: number) => 60 - step * 5;
+
+// Inverse of Y_of_step + midiToDiatonicAndAccidental: a diatonic step on the
+// staff back to the pitch we store. Guitar notation is written an octave above
+// what it sounds, so the written pitch is dropped by 12 to get the sounding one.
+const DIATONIC_SEMITONES = [0, 2, 4, 5, 7, 9, 11];
+
+export const staffStepToSoundingMidi = (step: number, transpose: number = 12): number => {
+  const octave = 4 + Math.floor(step / 7);
+  const degree = ((step % 7) + 7) % 7;
+  const writtenMidi = (octave + 1) * 12 + DIATONIC_SEMITONES[degree];
+  return writtenMidi - transpose;
+};
 
 export const DURATIONS: readonly Duration[] = ['1', '2', '4', '8', '16', '32'];
 
@@ -143,147 +171,149 @@ export const createEmptyMeasure = (): TabMeasure => ({
   }))
 });
 
+// --- NOTES ---
+
+export const isFrettedNote = (note: TabNote): note is FrettedNote => 'fret' in note;
+
+/**
+ * The single place a note becomes a pitch. Pitched tracks carry MIDI directly;
+ * fretted tracks resolve through their tuning, which yields undefined for a
+ * note stranded above the current string count.
+ */
+export const resolveNoteMidi = (note: TabNote, track: TabTrack): number | undefined => {
+  if (!isFrettedNote(note)) return note.midi;
+  const openPitch = track.tuning?.[note.stringIndex];
+  if (openPitch === undefined) return undefined;
+  const midi = openPitch + note.fret;
+  return Number.isFinite(midi) ? midi : undefined;
+};
+
+// --- TRACKS ---
+
+// Guitar and bass are notated an octave above what they sound; the rest are
+// written at concert pitch.
+export const DEFAULT_TRANSPOSE: Record<InstrumentId, number> = {
+  guitar: 12, bass: 12,
+  piano: 0, trumpet: 0, strings: 0, organ: 0,
+  sine: 0, triangle: 0, square: 0, sawtooth: 0,
+};
+
+const DEFAULT_TRACK_NAME: Record<InstrumentId, string> = {
+  guitar: 'Guitar', bass: 'Bass', piano: 'Piano', trumpet: 'Trumpet',
+  strings: 'Strings', organ: 'Organ',
+  sine: 'Sine', triangle: 'Triangle', square: 'Square', sawtooth: 'Saw',
+};
+
+export const createTrack = (
+  kind: TrackKind,
+  instrument: InstrumentId,
+  barCount: number = 1,
+): TabTrack => ({
+  id: createId(),
+  name: DEFAULT_TRACK_NAME[instrument],
+  kind,
+  display: kind === 'fretted' ? 'both' : 'notation',
+  instrument,
+  ...(kind === 'fretted' ? { tuning: getStringPitches(6) } : {}),
+  transpose: DEFAULT_TRANSPOSE[instrument],
+  volume: 1,
+  measures: Array.from({ length: Math.max(1, barCount) }, () => createEmptyMeasure()),
+});
+
+/** A track is heard unless it is muted, or unless some other track is soloed. */
+export const isAudible = (track: TabTrack, tracks: TabTrack[]): boolean => {
+  if (track.muted) return false;
+  const anySoloed = tracks.some(t => t.soloed);
+  return !anySoloed || !!track.soloed;
+};
+
+/** Every track shares one bar count; short tracks are padded with empty bars. */
+export const normalizeTrackLengths = (tracks: TabTrack[]): TabTrack[] => {
+  const barCount = tracks.reduce((max, t) => Math.max(max, t.measures.length), 1);
+  return tracks.map(track => {
+    if (track.measures.length === barCount) return track;
+    const padding = Array.from({ length: barCount - track.measures.length }, () => createEmptyMeasure());
+    return { ...track, measures: [...track.measures, ...padding] };
+  });
+};
+
 export const createEmptySong = (): TabSong => ({
   title: 'New Sketch',
   artist: 'Unknown Artist',
   bpm: 120,
   timeSignature: { numerator: 4, denominator: 4 },
-  measures: [createEmptyMeasure()]
+  tracks: [createTrack('fretted', 'guitar', 1)],
 });
 
-// Measure-level bpm / time signature overrides carry forward until the next override.
+// Measure-level bpm / time signature overrides carry forward until the next
+// override. Track 0 is the conductor, so every track shares one tempo map.
 export const getEffectiveBpm = (song: TabSong, measureIndex: number): number => {
+  const conductor = song.tracks[0]?.measures ?? [];
   for (let i = measureIndex; i >= 0; i--) {
-    const bpm = song.measures[i]?.bpm;
+    const bpm = conductor[i]?.bpm;
     if (typeof bpm === 'number') return bpm;
   }
   return song.bpm;
 };
 
 export const getEffectiveTimeSignature = (song: TabSong, measureIndex: number): TimeSignature => {
+  const conductor = song.tracks[0]?.measures ?? [];
   for (let i = measureIndex; i >= 0; i--) {
-    const ts = song.measures[i]?.timeSignature;
+    const ts = conductor[i]?.timeSignature;
     if (ts) return ts;
   }
   return song.timeSignature;
 };
 
-// Number of strings a song needs for every note it contains to have an open
-// pitch. Tuning is UI state and is not persisted, so a loaded song must widen
-// the tuning instead of rendering notes with an undefined pitch (NaN).
-export const requiredStringCount = (song: TabSong, minimum: number): number => {
+// Number of strings a track needs for every fretted note it contains to have an
+// open pitch, so a loaded track widens its tuning instead of rendering notes
+// with an undefined pitch (NaN).
+export const requiredStringCount = (measures: TabMeasure[], minimum: number): number => {
   let highest = -1;
-  for (const measure of song.measures) {
+  for (const measure of measures) {
     for (const beat of measure.beats) {
       for (const note of beat.notes) {
-        if (note.stringIndex > highest) highest = note.stringIndex;
+        if (isFrettedNote(note) && note.stringIndex > highest) highest = note.stringIndex;
       }
     }
   }
   return Math.min(allStringPitches.length, Math.max(minimum, highest + 1));
 };
 
-// Drops notes stranded above the current string count. Returns the same song
-// reference when nothing needs pruning, so callers can skip needless re-renders.
-export const pruneNotesToStringCount = (song: TabSong, stringCount: number): TabSong => {
-  const needsPrune = song.measures.some(m =>
-    m.beats.some(b => b.notes.some(n => n.stringIndex >= stringCount))
-  );
-  if (!needsPrune) return song;
+// Drops fretted notes stranded above the current string count. Returns the same
+// array reference when nothing needs pruning, so callers can skip needless
+// re-renders.
+export const pruneNotesToStringCount = (measures: TabMeasure[], stringCount: number): TabMeasure[] => {
+  const stranded = (n: TabNote): boolean => isFrettedNote(n) && n.stringIndex >= stringCount;
+  const needsPrune = measures.some(m => m.beats.some(b => b.notes.some(stranded)));
+  if (!needsPrune) return measures;
 
-  return {
-    ...song,
-    measures: song.measures.map(m => ({
-      ...m,
-      beats: m.beats.map(b => {
-        if (!b.notes.some(n => n.stringIndex >= stringCount)) return b;
-        const notes = b.notes.filter(n => n.stringIndex < stringCount);
-        return { ...b, notes, isRest: notes.length === 0 };
-      })
-    }))
-  };
+  return measures.map(m => ({
+    ...m,
+    beats: m.beats.map(b => {
+      if (!b.notes.some(stranded)) return b;
+      const notes = b.notes.filter(n => !stranded(n));
+      return { ...b, notes, isRest: notes.length === 0 };
+    })
+  }));
 };
 
-export const firstBeatPosition = (song: TabSong): BeatPosition | null => {
-  for (let m = 0; m < song.measures.length; m++) {
-    if (song.measures[m].beats.length > 0) return { measureIndex: m, beatIndex: 0 };
+export const firstBeatPosition = (measures: TabMeasure[]): BeatPosition | null => {
+  for (let m = 0; m < measures.length; m++) {
+    if (measures[m].beats.length > 0) return { measureIndex: m, beatIndex: 0 };
   }
   return null;
 };
 
 // Advances one beat. Always terminates: scans forward at most once through the
-// song, then wraps at most once, so a song with no playable beat yields null.
-export const nextBeatPosition = (song: TabSong, from: BeatPosition, loop: boolean): BeatPosition | null => {
-  const current = song.measures[from.measureIndex];
+// track, then wraps at most once, so a track with no playable beat yields null.
+export const nextBeatPosition = (measures: TabMeasure[], from: BeatPosition, loop: boolean): BeatPosition | null => {
+  const current = measures[from.measureIndex];
   if (current && from.beatIndex + 1 < current.beats.length) {
     return { measureIndex: from.measureIndex, beatIndex: from.beatIndex + 1 };
   }
-  for (let m = from.measureIndex + 1; m < song.measures.length; m++) {
-    if (song.measures[m].beats.length > 0) return { measureIndex: m, beatIndex: 0 };
+  for (let m = from.measureIndex + 1; m < measures.length; m++) {
+    if (measures[m].beats.length > 0) return { measureIndex: m, beatIndex: 0 };
   }
-  return loop ? firstBeatPosition(song) : null;
-};
-
-// --- SAMPLE SONGS ---
-
-export const sampleSongs: Record<string, TabSong> = {
-  "Smoke on the Water": {
-    title: "Smoke on the Water",
-    artist: "Deep Purple",
-    bpm: 110,
-    timeSignature: { numerator: 4, denominator: 4 },
-    measures: Array.from({ length: 16 }, () => {
-      const beat = (fret: number, duration: Duration = '8', stringIdx = 4): TabBeat => ({
-        id: createId(),
-        duration,
-        notes: [{ stringIndex: stringIdx, fret }],
-      });
-      const rest = (duration: Duration = '8'): TabBeat => ({
-        id: createId(),
-        duration,
-        notes: [],
-        isRest: true,
-      });
-      return {
-        id: createId(),
-        beats: [beat(3), beat(3), beat(3), rest(), beat(6), beat(6), beat(6), rest(), beat(5), beat(5), beat(5), rest(), beat(3), beat(3), beat(3), rest()],
-      };
-    }),
-  },
-
-  "Nothing Else Matters": {
-    title: "Nothing Else Matters",
-    artist: "Metallica",
-    bpm: 46,
-    timeSignature: { numerator: 4, denominator: 4 },
-    measures: Array.from({ length: 8 }, () => ({
-      id: createId(),
-      beats: [
-        { id: createId(), duration: '4' as const, notes: [{ stringIndex: 2, fret: 0 }, { stringIndex: 3, fret: 2 }, { stringIndex: 4, fret: 3 }] },
-        { id: createId(), duration: '4' as const, notes: [{ stringIndex: 2, fret: 0 }, { stringIndex: 3, fret: 2 }, { stringIndex: 4, fret: 3 }] },
-        { id: createId(), duration: '4' as const, notes: [{ stringIndex: 1, fret: 0 }, { stringIndex: 3, fret: 0 }, { stringIndex: 4, fret: 2 }] },
-        { id: createId(), duration: '4' as const, notes: [{ stringIndex: 1, fret: 0 }, { stringIndex: 3, fret: 0 }, { stringIndex: 4, fret: 2 }] },
-      ],
-    })),
-  },
-
-  "Stairway to Heaven": {
-    title: "Stairway to Heaven",
-    artist: "Led Zeppelin",
-    bpm: 70,
-    timeSignature: { numerator: 4, denominator: 4 },
-    measures: Array.from({ length: 12 }, () => ({
-      id: createId(),
-      beats: [
-        { id: createId(), duration: '8' as const, notes: [{ stringIndex: 0, fret: 0 }] },
-        { id: createId(), duration: '8' as const, notes: [{ stringIndex: 1, fret: 1 }] },
-        { id: createId(), duration: '8' as const, notes: [{ stringIndex: 2, fret: 2 }, { stringIndex: 3, fret: 0 }] },
-        { id: createId(), duration: '8' as const, notes: [{ stringIndex: 2, fret: 0 }] },
-        { id: createId(), duration: '8' as const, notes: [{ stringIndex: 1, fret: 0 }] },
-        { id: createId(), duration: '8' as const, notes: [{ stringIndex: 0, fret: 0 }] },
-        { id: createId(), duration: '8' as const, notes: [{ stringIndex: 1, fret: 1 }] },
-        { id: createId(), duration: '8' as const, notes: [{ stringIndex: 0, fret: 0 }] },
-      ],
-    })),
-  },
+  return loop ? firstBeatPosition(measures) : null;
 };

@@ -551,6 +551,260 @@ input[type="range"] {
   font-variant-numeric: tabular-nums;
 }
 
+/* ------------------------------------------------------------- Track strip */
+
+.sheetor-tracks {
+  display: flex;
+  align-items: stretch;
+  gap: var(--sp-3);
+  padding: var(--sp-2) var(--sp-3);
+  background: var(--surface-1);
+  border: 1px solid var(--border);
+  border-radius: var(--r-lg);
+}
+
+.track-list {
+  display: flex;
+  align-items: stretch;
+  gap: var(--sp-2);
+  flex: 1;
+  min-width: 0;
+  overflow-x: auto;
+}
+
+.track-chip {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-1);
+  padding: var(--sp-1) var(--sp-1) var(--sp-1) var(--sp-2);
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: var(--r-md);
+  transition: border-color 0.12s var(--ease), background 0.12s var(--ease), opacity 0.12s var(--ease);
+}
+
+.track-chip.is-active {
+  background: var(--accent-soft);
+  border-color: var(--border-focus);
+}
+
+/* Muted, or shadowed by another track's solo. */
+.track-chip.is-silent {
+  opacity: 0.45;
+}
+
+.track-chip-main {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 1px;
+  padding: var(--sp-1) var(--sp-2);
+  background: none;
+  border: none;
+  border-radius: var(--r-sm);
+  cursor: pointer;
+  font-family: inherit;
+  text-align: left;
+  white-space: nowrap;
+}
+
+.track-chip-name {
+  font-size: 0.8125rem;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.track-chip.is-active .track-chip-name {
+  color: var(--accent);
+}
+
+.track-chip-meta {
+  font-size: 0.625rem;
+  color: var(--text-faint);
+}
+
+.track-chip-toggles {
+  display: flex;
+  gap: 2px;
+}
+
+.track-toggle {
+  width: var(--ctl-h-sm);
+  height: var(--ctl-h-sm);
+  display: grid;
+  place-items: center;
+  background: var(--surface-3);
+  color: var(--text-faint);
+  border: 1px solid transparent;
+  border-radius: var(--r-sm);
+  cursor: pointer;
+  font-family: inherit;
+  font-size: 0.6875rem;
+  font-weight: 700;
+  transition: background 0.12s var(--ease), color 0.12s var(--ease);
+}
+
+.track-toggle:hover {
+  background: var(--surface-4);
+  color: var(--text);
+}
+
+.track-toggle.is-muted {
+  background: var(--danger-soft);
+  border-color: var(--danger);
+  color: var(--danger);
+}
+
+.track-toggle.is-soloed {
+  background: rgba(63, 185, 138, 0.16);
+  border-color: var(--ok);
+  color: var(--ok);
+}
+
+.track-add {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-1);
+  padding: 0 var(--sp-3);
+  background: none;
+  color: var(--text-dim);
+  border: 1px dashed var(--border-strong);
+  border-radius: var(--r-md);
+  cursor: pointer;
+  font-family: inherit;
+  font-size: 0.75rem;
+  font-weight: 600;
+  white-space: nowrap;
+  transition: color 0.12s var(--ease), border-color 0.12s var(--ease);
+}
+
+.track-add:hover {
+  color: var(--accent);
+  border-color: var(--border-focus);
+}
+
+.track-add svg {
+  width: 14px;
+  height: 14px;
+}
+
+/* Anchors the track settings popover, which opens downward from the strip. */
+.track-settings-anchor {
+  position: relative;
+  display: flex;
+  align-items: center;
+  flex: none;
+}
+
+.track-popover {
+  top: calc(100% + var(--sp-2));
+  bottom: auto;
+  animation: none;
+}
+
+/* A 12-string tuning list would otherwise run off the panel. */
+.popover-scroll {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-2);
+  max-height: 190px;
+  overflow-y: auto;
+}
+
+/* --------------------------------------------------- Piano keyboard (sheet) */
+
+.sheet-controls {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  flex-wrap: wrap;
+}
+
+.piano-keyboard {
+  position: relative;
+  width: 100%;
+  min-width: 720px;
+  height: 132px;
+  border: 1px solid var(--border);
+  border-radius: var(--r-md);
+  overflow: hidden;
+  background: var(--surface-2);
+}
+
+.piano-white-row {
+  display: flex;
+  width: 100%;
+  height: 100%;
+}
+
+.piano-key {
+  padding: 0;
+  border: none;
+  cursor: pointer;
+  font-family: inherit;
+  transition: background 0.12s var(--ease), box-shadow 0.12s var(--ease);
+}
+
+.piano-key.white {
+  flex: 1;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  padding-bottom: var(--sp-2);
+  background: linear-gradient(180deg, #f4efe7 0%, #ded6ca 100%);
+  border-right: 1px solid rgba(40, 34, 28, 0.35);
+  color: var(--text-faint);
+  font-size: 0.5625rem;
+  font-weight: 600;
+}
+
+.piano-key.white:last-child {
+  border-right: none;
+}
+
+.piano-key.white:hover {
+  background: linear-gradient(180deg, #ffffff 0%, #ece4d8 100%);
+}
+
+.piano-key.white.active {
+  background: linear-gradient(180deg, var(--accent-hover) 0%, var(--accent) 100%);
+  color: var(--accent-ink);
+}
+
+.piano-key.white.playback-active {
+  background: linear-gradient(180deg, #5fd3a6 0%, var(--ok) 100%);
+  color: #0d1a15;
+}
+
+/* Black keys ride above the white row, centred on each white-key seam.
+   Width and offset are set inline so they scale with the white-key count. */
+.piano-key.black {
+  position: absolute;
+  top: 0;
+  height: 62%;
+  z-index: 2;
+  border-radius: 0 0 var(--r-sm) var(--r-sm);
+  background: linear-gradient(180deg, #3a322c 0%, #17130f 100%);
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.5);
+}
+
+.piano-key.black:hover {
+  background: linear-gradient(180deg, #4d433a 0%, #241d18 100%);
+}
+
+.piano-key.black.active {
+  background: linear-gradient(180deg, var(--accent) 0%, #a8642a 100%);
+}
+
+.piano-key.black.playback-active {
+  background: linear-gradient(180deg, var(--ok) 0%, #248a63 100%);
+}
+
+.piano-key-label {
+  pointer-events: none;
+  font-variant-numeric: tabular-nums;
+}
+
 /* -------------------------------------------------------------- Command bar */
 
 .bottom-command-bar {
@@ -664,6 +918,10 @@ input[type="range"] {
   border-radius: var(--r-lg);
   box-shadow: var(--shadow-3);
   animation: popoverSlideUp 0.15s var(--ease);
+  /* Never grow past the viewport — the tuning list used to run off-screen. */
+  max-height: min(70vh, 560px);
+  overflow-y: auto;
+  z-index: 45;
 }
 
 .popover-title {
