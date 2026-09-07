@@ -5,36 +5,39 @@
 Sheetor is an interactive guitar TAB + sheet-music editor with in-browser playback. npm-workspaces monorepo:
 
 - `apps/frontend` — React 19 SPA (Vite), the entire product surface.
-- `apps/backend` — Fastify 5 API + Swagger, and the single user-facing HTTP entry point (it fronts the SPA).
+- `apps/backend` — Rust axum API + Swagger (utoipa), and in production the single user-facing HTTP entry point (it serves the built SPA).
 
-The editor is currently **offline-first**: no frontend code calls the backend. Songs live in `localStorage`. The backend exists as an API scaffold (`GET /api/v1/health`) plus SPA host/dev-proxy.
+The editor is currently **offline-first**: no frontend code calls the backend. Songs live in `localStorage`. The backend exists as an API scaffold (`GET /api/v1/health`) plus prod SPA host.
 
 ## Architecture & Data Flow
 
-### Serving topology (one port, two processes)
+### Serving topology
 
-`npm run dev` starts both apps with `concurrently`. Everything is used through **`http://localhost:4000`**; Vite's `:5173` is an upstream detail.
+`npm run dev` starts both processes with `concurrently`. In dev the browser talks to **Vite on `http://localhost:5173`**, which proxies `/api` and `/docs` to axum on `:4000`. In production there is one port: axum serves the built SPA itself on `:4000`.
 
 ```mermaid
 graph LR
-  B[Browser :4000] --> F[Fastify apps/backend]
-  F -->|dev: @fastify/http-proxy, websocket:true| V[Vite :5173]
-  F -->|prod: @fastify/static + SPA fallback| D[apps/frontend/dist]
-  F -->|/api/v1/*| M[modules]
-  F -->|/docs| S[Swagger UI]
+  B[Browser :5173 dev] --> V[Vite :5173]
+  V -->|proxy /api, /docs| A[axum apps/backend :4000]
+  P[Browser :4000 prod] --> A
+  A -->|/api/v1/*| R[api modules]
+  A -->|/docs| S[Swagger UI]
+  A -->|fallback_service| D[apps/frontend/dist]
 ```
 
-`apps/backend/src/plugins/frontend.ts` branches on `env.nodeEnv === 'development'` (strict equality — any other value selects the static/prod path). Vite is **not** in-process middleware.
+Static serving is **presence-based, not env-based**: `frontend::serve` mounts `ServeDir` plus an `index.html` SPA fallback only when `frontend_dist_dir` is a directory; otherwise it logs `frontend build missing` and the router stays api-only. There is no `NODE_ENV` switch and no reverse proxy inside Rust.
 
 ### Backend boot chain
 
-`src/server.ts` (env, `app.listen`, `process.exit(1)`) → `src/app.ts` `buildApp()`. Registration order in `buildApp()` is **load-bearing**:
+`src/main.rs` (config, tracing, `TcpListener`, `axum::serve`) → `src/app.rs` `build(&Config)`. The order inside `build` is **load-bearing**:
 
-1. `registerSwagger` — must precede routes so their schemas are collected.
-2. `registerModules` — the **only** place `/api/v1` is applied.
-3. `registerFrontend` — claims `prefix: '/'` and installs `setNotFoundHandler`; anything registered after it can be shadowed.
+1. `api::router(AppState::default())` → the `/api/v1`-nested router plus the collected `OpenApi`.
+2. `/api` and `/api/{*path}` catch-alls → JSON `{"message":"Not Found"}`, so an unknown API path never falls through to the SPA.
+3. `SwaggerUi::new("/docs").url("/docs/openapi.json", openapi)`.
+4. `frontend::serve` — installs the SPA `fallback_service`; it must stay last because it claims everything unmatched.
+5. `TraceLayer` wraps the finished router.
 
-`src/plugins/*` are **not** Fastify plugins — they are plain `(app: FastifyInstance, …) => Promise<void>` wiring functions called with the root instance. Only `src/modules/<feature>/routes.ts` files are real `FastifyPluginAsync`. `fastify-plugin` is not a dependency.
+There is no plugin system: `src/api/<feature>.rs` holds handlers with their `#[utoipa::path]`, and `src/api/mod.rs` is the only place `/api/v1` and the tag list exist.
 
 ### Frontend data flow
 
@@ -51,9 +54,8 @@ Mount chain: `index.html#root` → `src/main.tsx` (`createRoot` + `StrictMode`) 
 
 | Path | Purpose |
 |---|---|
-| `apps/backend/src/modules/<feature>/routes.ts` | Feature routes (`FastifyPluginAsync`), prefix-relative paths |
-| `apps/backend/src/plugins/` | Infra wiring functions (swagger, frontend serving) |
-| `apps/backend/src/config/` | `env.ts` — the whole runtime config surface |
+| `apps/backend/src/api/` | `mod.rs` (`/api/v1` nesting, `ApiDoc` tags, `not_found`) plus one file per feature |
+| `apps/backend/src/` | `main.rs`, `app.rs` (router assembly), `config.rs`, `state.rs`, `frontend.rs` |
 | `apps/frontend/src/app/layout/` | `AppLayout`/`AppHeader`/`AppFooter`, presentational only |
 | `apps/frontend/src/features/editor/components/` | The editor **and** its pure modules (`types.ts`, `layout.ts`, `songUtils.ts`, `songSchema.ts`, `persistence.ts`, `audioEngine.ts`, `usePlayback.ts`) plus their `*.test.ts` files |
 | `apps/frontend/src/features/editor/pages/` | `EditorPage.tsx` (5 lines of indirection) |
@@ -63,24 +65,26 @@ Note the shape gotcha: the non-component modules sit under `components/`, not at
 ## Development Commands
 
 ```bash
-npm install                 # root only — workspaces are hoisted
-npm run dev                 # backend + frontend; use http://localhost:4000
-npm run dev:backend         # tsx watch src/server.ts
-npm run dev:frontend        # vite (:5173, strictPort)
-npm run build               # both workspaces
-npm run lint                # frontend: eslint . (backend has no ESLint config)
-npm run typecheck           # frontend: tsc -b | backend: tsc --noEmit
-npm test                    # frontend: vitest run (pure modules)
-npm run start:backend       # node dist/server.js  (needs NODE_ENV=production)
+npm install                 # root only — the npm workspace is apps/frontend
+npm run dev                 # cargo watch + vite; use http://localhost:5173
+npm run dev:backend         # cargo watch -q -c -w apps/backend -x run  (:4000)
+npm run dev:frontend        # vite (:5173, strictPort), proxies /api + /docs to :4000
+npm run build               # frontend dist, then cargo build --release
+npm run lint                # eslint (frontend) + cargo clippy -D warnings
+npm run typecheck           # tsc -b (frontend) + cargo check --all-targets
+npm test                    # vitest run (pure modules) + cargo test
+npm run start:backend       # cargo run --release — one port, :4000
 ```
+
+Every command needs the dev shell (`nix develop`, or direnv) for `cargo`/`cargo-watch`.
 
 Verification gates, exactly:
 
 ```bash
 npm test                                        # vitest run — pure modules
-npm run typecheck                               # tsc -b (frontend) + tsc --noEmit (backend)
-npm run lint                                    # ESLint (frontend only)
-NODE_ENV=production npm run build && NODE_ENV=production npm run start:backend
+npm run typecheck                               # tsc -b + cargo check
+npm run lint                                    # ESLint + clippy
+npm run build && npm run start:backend          # axum serves dist on :4000
 curl -s localhost:4000/api/v1/health            # smoke
 ```
 
@@ -88,38 +92,33 @@ curl -s localhost:4000/api/v1/health            # smoke
 
 ## Code Conventions & Common Patterns
 
-### Both apps
+### Backend (Rust)
 
-- ESM everywhere (`"type": "module"`); named exports are the norm (`App` and `TabSheetEditor` are the only default exports).
-- `import type { … }` for every type-only import (`verbatimModuleSyntax` is on for the frontend).
-- Arrow-function consts with explicit return annotations for module-level functions.
-- No path aliases in any tsconfig — **relative imports only**.
-- TypeScript is pinned `~5.9.3` per workspace.
-
-### Backend
-
-- **Relative imports MUST carry `.js`** (`NodeNext`): `import { env } from './config/env.js'`.
+- Edition 2024, one crate (`sheetor-backend`) in a root Cargo workspace; `cargo fmt` and `cargo clippy --all-targets -- -D warnings` are clean and are the gate. No `unsafe`, no comments.
 - Adding a feature module:
 
-  ```ts
-  // src/modules/songs/routes.ts
-  import type { FastifyPluginAsync } from 'fastify';
+  ```rust
+  // src/api/songs.rs
+  #[derive(Serialize, ToSchema)]
+  pub struct Song { /* … */ }
 
-  export const songRoutes: FastifyPluginAsync = async (app) => {
-    app.get('/songs', {
-      schema: { tags: ['songs'], summary: 'List songs',
-        response: { 200: { type: 'array', items: { type: 'object' } } } },
-    }, async () => listSongs());
-  };
+  #[utoipa::path(get, path = "/songs", tag = "songs", summary = "List songs",
+      responses((status = 200, body = Vec<Song>)))]
+  pub async fn list(State(state): State<AppState>) -> Json<Vec<Song>> { /* … */ }
   ```
 
-  Then register in `src/modules/index.ts` with `{ prefix: '/api/v1' }`, and add any new Swagger tag to the `tags` array in `src/plugins/swagger.ts`. Never hardcode `/api/v1` inside a route file.
-- Handlers **return** payloads; `reply` is untouched in module routes. Schemas are inline JSON Schema (no TypeBox/zod, no type provider — so a handler's return type is *not* checked against its schema; extra fields are silently stripped at serialization).
-- Config: extend `AppEnv` + `env` in `config/env.ts` rather than reading `process.env` inline. `env` is snapshotted at module load. (`LOG_LEVEL`, read directly in `app.ts`, is the one existing violation.)
-- Error handling is Fastify default — no `setErrorHandler`, no custom error classes, no CORS plugin, no graceful shutdown. The only hand-written error body is the prod SPA 404 `{ message: 'Not Found' }` for `/api*` and `/docs*`.
+  Then `mod songs;` and `.routes(routes!(songs::list))` in `src/api/mod.rs`, and add the tag to `ApiDoc`'s `tags(…)`. `path` is prefix-relative — never hardcode `/api/v1` in a handler; `api::router`'s `nest` applies it once, to both the routes and the spec.
+- Handlers return `Json<T>`/`impl IntoResponse`; the `#[utoipa::path]` attribute sits on the handler so `routes!` can collect method, path, and schema together. utoipa validates nothing at runtime — the return type is the contract.
+- Shared runtime values live in `AppState` (`src/state.rs`) and are reached with the `State` extractor. It is `Copy` today; anything non-`Copy` goes behind an `Arc`.
+- Config: extend `Config` in `src/config.rs` instead of reading `std::env` inline. It is built once, in `main`, and passed by reference.
+- Errors are hand-rolled and minimal: `api::not_found` is the only one. No error type, no CORS layer, no auth, no graceful shutdown.
 
 ### Frontend
 
+- ESM (`"type": "module"`); named exports are the norm (`App` and `TabSheetEditor` are the only default exports).
+- `import type { … }` for every type-only import (`verbatimModuleSyntax` is on).
+- Arrow-function consts with explicit return annotations for module-level functions.
+- No path aliases in any tsconfig — **relative imports only**. TypeScript is pinned `~5.9.3`.
 - Function components only; arrow + named export (`export const AppHeader = () => …`). `React.FC` appears once; there is no established `type Props = …` convention (`AppLayout({ children }: PropsWithChildren)` is the only props-taking component).
 - Naming: components PascalCase (`TabSheetEditor.tsx`, matching `TabSheetEditor.css`), non-component modules camelCase (`songUtils.ts`), directories lowercase.
 - CSS: plain global stylesheets imported for side effect; kebab-case classes namespaced `sheetor-*`; inline `style={{}}` only for computed geometry. No CSS modules, no Tailwind.
@@ -141,17 +140,18 @@ curl -s localhost:4000/api/v1/health            # smoke
 
 | File | Role |
 |---|---|
-| `apps/backend/src/server.ts` / `app.ts` | Process entry / `buildApp()` + registration order |
-| `apps/backend/src/config/env.ts` | `AppEnv`, `env`, `toPort` |
-| `apps/backend/src/plugins/frontend.ts` | Dev proxy vs prod static + SPA fallback |
-| `apps/backend/src/modules/index.ts` | Sole `/api/v1` prefix site |
-| `apps/backend/src/modules/health/routes.ts` | Canonical route template |
+| `apps/backend/src/main.rs` / `app.rs` | Process entry / `build(&Config)` and its registration order |
+| `apps/backend/src/config.rs` | `Config::from_env` — the whole runtime config surface |
+| `apps/backend/src/frontend.rs` | `ServeDir` + SPA fallback, mounted only when `dist` exists |
+| `apps/backend/src/api/mod.rs` | Sole `/api/v1` prefix site, `ApiDoc` tags, JSON `not_found` |
+| `apps/backend/src/api/health.rs` | Canonical route template |
+| `Cargo.toml` (root) | Cargo workspace, `members = ["apps/backend"]`, shared `target/` |
 | `apps/frontend/src/features/editor/components/TabSheetEditor.tsx` | The application (state, keyboard, SVG render) |
 | `apps/frontend/src/features/editor/components/usePlayback.ts` | All playback: scheduler, voices, transport state |
 | `apps/frontend/src/features/editor/components/songSchema.ts` | `parseSong` — the only validation boundary for stored/imported songs |
 | `apps/frontend/src/features/editor/components/layout.ts` | Pure layout geometry |
 | `apps/frontend/src/features/editor/components/songUtils.ts` | Music theory, beaming, MIDI ↔ note names, `createId`/`createEmptySong`, beat-position walking |
-| `apps/frontend/vite.config.ts` | `port: 5173, strictPort: true` — must match `FRONTEND_DEV_URL` |
+| `apps/frontend/vite.config.ts` | `port: 5173, strictPort: true` + the dev proxy of `/api` and `/docs` to `:4000` |
 | `apps/frontend/vitest.config.ts` | `include: ['src/**/*.test.ts']`, `environment: 'node'` |
 | `apps/frontend/eslint.config.js` | ESLint 9 flat config (frontend only) |
 
@@ -159,23 +159,24 @@ curl -s localhost:4000/api/v1/health            # smoke
 
 | Var | Default | Notes |
 |---|---|---|
-| `PORT` | `4000` | Coerced by `toPort`; non-finite or ≤0 falls back |
+| `PORT` | `4000` | Parsed as `u16`; unparsable or `0` falls back |
 | `HOST` | `0.0.0.0` | |
-| `NODE_ENV` | `development` | `=== 'development'` selects the Vite proxy; anything else serves `dist` |
-| `FRONTEND_DEV_URL` | `http://localhost:5173` | Proxy upstream |
-| `LOG_LEVEL` | `info` | Read directly in `app.ts`, not in `AppEnv` |
+| `LOG_LEVEL` | `info` | Used as the `EnvFilter` directive; `RUST_LOG` overrides it entirely |
+| `FRONTEND_DIST_DIR` | `<crate>/../frontend/dist` | Compile-time default from `CARGO_MANIFEST_DIR`; set it when the binary is deployed elsewhere |
 
-No `.env` file exists, and `.gitignore` does **not** ignore `.env*` — do not commit one without adding the pattern.
+No `.env` file exists, nothing loads one (no `dotenvy`), and `.gitignore` does **not** ignore `.env*` — do not commit one without adding the pattern.
 
 ## Runtime/Tooling Preferences
 
 - **npm is the package manager** (single root `package-lock.json`, `lockfileVersion: 3`). No Bun, pnpm, or yarn anywhere; no `packageManager` or `engines` field. Install from the repo root, never inside a workspace.
 - Node ≥ 20 in practice (`@types/node` ^24, NodeNext ESM); unpinned.
 - `vite` is aliased to **`npm:rolldown-vite@7.2.5`**, not upstream Vite. Plugin/version advice must account for the Rolldown build.
-- Backend dev runs TypeScript directly via `tsx watch` — no build step in dev. Prod is `tsc -p tsconfig.build.json` → `node dist/server.js`.
-- Frontend tsconfig is solution-style (`tsconfig.json` → `tsconfig.app.json` for `src`, `tsconfig.node.json` for `vite.config.ts`), driven by `tsc -b`. Frontend strictness exceeds the backend's: `strict`, `noUnusedLocals`, `noUnusedParameters`, `erasableSyntaxOnly`, `noFallthroughCasesInSwitch`, `verbatimModuleSyntax`.
-- **No formatter** (no Prettier, no `.editorconfig`), **no CI**, **no git hooks**. Match surrounding style by hand.
-- ESLint covers the frontend only; the backend's gate is `npm run typecheck` (`tsc --noEmit`).
+- Backend dev is `cargo watch -x run`: a debug rebuild per save, no separate dev runtime. Prod is `cargo build --release` → `target/release/sheetor-backend`.
+- The Rust toolchain comes from `flake.nix` (nixpkgs stable: `rustc`, `cargo`, `clippy`, `rustfmt`, `rust-analyzer`, `cargo-watch`) — no `rustup`, no `rust-toolchain.toml`. Edition 2024, workspace `resolver = "3"`, one `Cargo.lock` and one `target/` at the repo root.
+- `utoipa-swagger-ui` is built with the `vendored` feature, so the build never downloads the Swagger UI bundle (also makes it sandbox-safe).
+- Frontend tsconfig is solution-style (`tsconfig.json` → `tsconfig.app.json` for `src`, `tsconfig.node.json` for `vite.config.ts`), driven by `tsc -b`, with `strict`, `noUnusedLocals`, `noUnusedParameters`, `erasableSyntaxOnly`, `noFallthroughCasesInSwitch`, `verbatimModuleSyntax`.
+- `cargo fmt` is the repo's only formatter; TS/CSS have none (no Prettier, no `.editorconfig`) — match surrounding style by hand. **No CI, no git hooks.**
+- ESLint covers the frontend only; the backend's gates are `cargo check` and `cargo clippy -- -D warnings`.
 
 ## Git & Commits
 
@@ -187,7 +188,7 @@ No `.env` file exists, and `.gitignore` does **not** ignore `.env*` — do not c
 
 ## Testing & QA
 
-Vitest 3 is installed in the **frontend workspace only** (`vitest run`, config at `apps/frontend/vitest.config.ts`). Tests are colocated as `src/**/*.test.ts` and cover the pure modules — `songUtils`, `songSchema`, `persistence`, `audioEngine`. There is no jsdom, no component/DOM testing library, and no coverage gate: anything needing a browser is verified by hand.
+Vitest 3 is installed in the **frontend workspace only** (`vitest run`, config at `apps/frontend/vitest.config.ts`). Tests are colocated as `src/**/*.test.ts` and cover the pure modules — `songUtils`, `songSchema`, `persistence`, `audioEngine`. There is no jsdom, no component/DOM testing library, and no coverage gate: anything needing a browser is verified by hand. The backend has **no tests yet** — `cargo test` runs zero; add integration tests under `apps/backend/tests/` and drive `app::build` with `tower::ServiceExt::oneshot`.
 
 Conventions for new tests:
 
@@ -199,13 +200,14 @@ Conventions for new tests:
 Verify a change by:
 
 1. `npm test` — pure-module behavior.
-2. `npm run typecheck` — both workspaces (`tsc -b` for the frontend; stale `.tsbuildinfo` can mask errors and no `clean` script exists).
-3. `npm run lint` — frontend ESLint.
-4. Manual runtime check: `npm run dev`, then exercise the editor at `http://localhost:4000/`, Swagger at `/docs`. Playback, focus, and SVG-render changes have no automated coverage and **must** be driven in a browser.
+2. `npm run typecheck` — `tsc -b` for the frontend (stale `.tsbuildinfo` can mask errors and no `clean` script exists) plus `cargo check`.
+3. `npm run lint` — frontend ESLint plus clippy.
+4. Manual runtime check: `npm run dev`, then exercise the editor at `http://localhost:5173/` and Swagger at `http://localhost:5173/docs`. Playback, focus, and SVG-render changes have no automated coverage and **must** be driven in a browser.
 
 ## Gotchas
 
-- `npm run start:backend` without `NODE_ENV=production` proxies to a Vite server that isn't running. Prod also requires `build:frontend` first — `frontendDistDir` is `path.resolve(__dirname, '../../../frontend/dist')` relative to the **compiled** file, so moving `outDir` or that file silently breaks static serving at runtime.
+- `npm run start:backend` serves `apps/frontend/dist` only if that directory exists; without `npm run build:frontend` you get the API plus a logged `frontend build missing` warning. The default dist path is baked in at compile time from `CARGO_MANIFEST_DIR`, so a relocated binary needs `FRONTEND_DIST_DIR`.
+- Dev has two ports and only one of them is the app: `:5173` (Vite, with HMR and the API proxy) is the one to open. `:4000` in dev answers the API but serves whatever stale `dist` is on disk.
 - `TabSheetEditor.tsx` is monolithic; prefer extracting pure helpers into `layout.ts`/`songUtils.ts` over growing it.
 - The command bar is the **only** control surface; earlier duplicates (`.sheetor-toolbar`, `.sheetor-controls`, `.sheetor-footer`) were deleted, so a command is added in exactly one place. Duration-glyph SVGs are still written out per duration in the note-options panel.
 - Playback settings are live via `settingsRef` in `usePlayback`; if you add a setting, thread it through `PlaybackSettings` or it will silently stay frozen at `start()` time.

@@ -1,5 +1,5 @@
 {
-  description = "Sheetor — guitar TAB + sheet-music editor (Fastify backend + React frontend)";
+  description = "Sheetor — guitar TAB + sheet-music editor (axum backend + React frontend)";
 
   inputs.nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
 
@@ -22,11 +22,21 @@
         in
         {
           default = pkgs.mkShell {
-            packages = [ pkgs.nodejs_24 ];
+            packages = [
+              pkgs.nodejs_24
+              pkgs.rustc
+              pkgs.cargo
+              pkgs.clippy
+              pkgs.rustfmt
+              pkgs.rust-analyzer
+              pkgs.cargo-watch
+            ];
+
+            env.RUST_SRC_PATH = "${pkgs.rustPlatform.rustLibSrc}";
 
             shellHook = ''
-              echo "sheetor: node $(node --version), npm $(npm --version)"
-              echo "npm install && npm run dev  ->  http://localhost:4000"
+              echo "sheetor: node $(node --version), npm $(npm --version), $(rustc --version)"
+              echo "npm install && npm run dev  ->  http://localhost:5173 (api proxied to :4000)"
             '';
           };
         }

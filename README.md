@@ -1,21 +1,20 @@
 # Sheetor Monorepo
 
-This repository is now an npm workspaces monorepo with separate frontend and backend apps:
-
 - `apps/frontend`: React + TypeScript + Vite
-- `apps/backend`: Fastify + TypeScript API framework with Swagger docs
+- `apps/backend`: Rust + axum API with Swagger docs (utoipa)
 
 ## Quick start
 
 ```bash
+nix develop        # or direnv allow — provides node, cargo, clippy, rustfmt, rust-analyzer, cargo-watch
 npm install
 npm run dev
 ```
 
-With `npm run dev`, use the backend URL for everything:
+`npm run dev` runs the axum backend on `:4000` and Vite on `:5173`. **Open `http://localhost:5173`** — Vite proxies `/api` and `/docs` to the backend, so there is nothing to configure in the frontend code.
 
-- App: `http://localhost:4000/`
-- Swagger: `http://localhost:4000/docs`
+- App: `http://localhost:5173/`
+- Swagger: `http://localhost:5173/docs`
 
 Or run each app separately:
 
@@ -24,26 +23,17 @@ npm run dev:frontend
 npm run dev:backend
 ```
 
-## Backend API framework
+## Backend
 
-The backend is structured to make feature growth easy:
-
-- `src/modules/*` for feature modules and routes
-- `src/plugins/*` for infrastructure plugins
-- `src/config/*` for runtime config
-
-Swagger UI is available at:
-
-- `http://localhost:4000/docs`
-
-During development, the backend proxies frontend requests to the Vite server so the app is available on backend root (`/`).
-
-Current sample endpoint:
+See `apps/backend/README.md` for the crate layout and how to add an endpoint. Current endpoint:
 
 - `GET /api/v1/health`
 
-## Build
+## Production
 
 ```bash
-npm run build
+npm run build          # frontend dist + cargo build --release
+npm run start:backend  # single port: http://localhost:4000
 ```
+
+In production the backend serves `apps/frontend/dist` itself, with an `index.html` fallback for client-side routes; unknown `/api` paths return JSON `404` instead of the SPA.
