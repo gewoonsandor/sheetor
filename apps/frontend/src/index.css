@@ -9,16 +9,16 @@
   --surface-4: #362f2a;
 
   /* Score paper — the staff sits on its own slightly lifted surface */
-  --paper: #1c1917;
+  --paper: #201c19;
 
   /* Score ink — one paper-white base for every staff element */
   --ink-rgb: 240 232 222;
-  --staff-line: rgb(var(--ink-rgb) / 0.26);
+  --staff-line: rgb(var(--ink-rgb) / 0.28);
   --staff-line-strong: rgb(var(--ink-rgb) / 0.44);
   --bar-line: rgb(var(--ink-rgb) / 0.36);
   --bar-line-end: rgb(var(--ink-rgb) / 0.62);
   --fret-wash: rgb(var(--ink-rgb) / 0.07);
-  --fret-marker: rgb(var(--ink-rgb) / 0.15);
+  --fret-marker: rgb(var(--ink-rgb) / 0.18);
 
   /* Hairlines */
   --border: rgba(238, 230, 220, 0.08);

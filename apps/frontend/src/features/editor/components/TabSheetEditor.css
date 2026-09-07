@@ -70,6 +70,7 @@
 .sheetor-artist-input:focus {
   background: var(--surface-1);
   border-color: var(--border-focus);
+  box-shadow: 0 0 0 2px var(--accent-soft);
   outline: none;
 }
 

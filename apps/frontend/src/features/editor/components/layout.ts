@@ -8,6 +8,11 @@ export const MIN_32ND_WIDTH = 46;
 export const MIN_MEASURE_WIDTH = 100;
 export const MAX_ROW_WIDTH = 980;
 
+/* How far a row may be stretched to fill the line, and how full the final row
+   must be before it is stretched at all. */
+export const MAX_JUSTIFY_STRETCH = 1.5;
+export const MIN_JUSTIFY_FILL = 0.62;
+
 export const TAB_STAFF_TOP = 90;
 export const TAB_STAFF_HEIGHT_PX = 10; // pixels per string line
 export const TAB_FRET_FONT_SIZE = TAB_STAFF_HEIGHT_PX * 0.9;
@@ -85,7 +90,9 @@ export const computeMeasureLayouts = (measures: TabMeasure[]): MLayout[] => {
     }
   }
 
-  // Second pass: stretch measures within each row to fill MAX_ROW_WIDTH
+  // Second pass: justify each row to the full line width. A final row that is
+  // barely started stays at its natural width — engravers leave the last
+  // system short rather than blowing one bar up across the page.
   const rowTotals = new Map<number, number>();
   layouts.forEach(l => {
     rowTotals.set(l.row, (rowTotals.get(l.row) || 0) + l.width);
@@ -93,20 +100,19 @@ export const computeMeasureLayouts = (measures: TabMeasure[]): MLayout[] => {
 
   rowTotals.forEach((totalRowWidth, row) => {
     if (totalRowWidth >= MAX_ROW_WIDTH) return;
-    const factor = Math.min(MAX_ROW_WIDTH / totalRowWidth, 1.5);
+    if (row === curRow && totalRowWidth < MAX_ROW_WIDTH * MIN_JUSTIFY_FILL) return;
+
     const rowLayouts = layouts.filter(l => l.row === row);
+    const factor = Math.min(MAX_ROW_WIDTH / totalRowWidth, MAX_JUSTIFY_STRETCH);
+    // Anything the stretch cap leaves over is shared out, never dumped on the
+    // last bar of the row.
+    const share = Math.max(0, MAX_ROW_WIDTH - totalRowWidth * factor) / rowLayouts.length;
     let newX = 0;
     rowLayouts.forEach(l => {
-      const stretched = l.width * factor;
       l.x = newX;
-      l.width = stretched;
-      newX += stretched;
+      l.width = l.width * factor + share;
+      newX += l.width;
     });
-    // Give remaining space to the last measure on the row so the line fills
-    if (newX < MAX_ROW_WIDTH) {
-      const last = rowLayouts[rowLayouts.length - 1];
-      last.width += MAX_ROW_WIDTH - newX;
-    }
   });
 
   return layouts;
