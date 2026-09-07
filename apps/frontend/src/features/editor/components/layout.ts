@@ -10,6 +10,7 @@ export const MAX_ROW_WIDTH = 980;
 
 export const TAB_STAFF_TOP = 90;
 export const TAB_STAFF_HEIGHT_PX = 10; // pixels per string line
+export const TAB_FRET_FONT_SIZE = TAB_STAFF_HEIGHT_PX * 0.9;
 
 export const getBeatMinContribution = (duration: Duration): number => {
   if (duration === '16') return MIN_16TH_WIDTH;
