@@ -8,8 +8,10 @@
   flex: 1;
   gap: var(--sp-4);
   width: 100%;
+  max-width: var(--page-max);
+  margin: 0 auto;
   min-height: 100%;
-  padding: var(--sp-5) var(--sp-5) 104px;
+  padding: var(--sp-5) var(--sp-5) calc(var(--cmdbar-h) + var(--sp-6));
   color: var(--text);
   font-family: var(--font);
   text-align: left;
@@ -42,8 +44,8 @@
   font-family: inherit;
   padding: 2px var(--sp-2);
   margin-left: calc(var(--sp-2) * -1);
-  width: min(52ch, 60vw);
-  transition: background 0.15s var(--ease), border-color 0.15s var(--ease);
+  width: min(30ch, 100%);
+  transition: background var(--t) var(--ease), border-color var(--t) var(--ease);
 }
 
 .sheetor-title-input {
@@ -92,18 +94,10 @@
 .readout-chip {
   display: flex;
   flex-direction: column;
-  gap: 1px;
+  gap: var(--sp-hair);
   padding: var(--sp-2) var(--sp-3);
   background: var(--surface-1);
   min-width: 66px;
-}
-
-.readout-chip dt {
-  font-size: 0.6rem;
-  font-weight: 700;
-  letter-spacing: 0.09em;
-  text-transform: uppercase;
-  color: var(--text-faint);
 }
 
 .readout-chip dd {
@@ -120,7 +114,10 @@
 
 /* ------------------------------------------------------------------- Buttons */
 
-.btn {
+/* One silhouette for every command: buttons and menu triggers are the same
+   object, so they share one rule. */
+.btn,
+.bottom-menu-trigger {
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -137,22 +134,27 @@
   font-weight: 600;
   white-space: nowrap;
   cursor: pointer;
-  transition: background 0.15s var(--ease), border-color 0.15s var(--ease), color 0.15s var(--ease);
+  user-select: none;
+  transition: background var(--t) var(--ease), border-color var(--t) var(--ease), color var(--t) var(--ease), transform var(--t-fast) var(--ease);
 }
 
-.btn svg {
+.btn svg,
+.bottom-menu-trigger svg {
   width: 16px;
   height: 16px;
   flex: none;
 }
 
-.btn:hover {
+.btn:hover,
+.bottom-menu-trigger:hover {
   background: var(--surface-3);
   border-color: var(--border-strong);
 }
 
-.btn:active {
+.btn:active,
+.bottom-menu-trigger:active {
   background: var(--surface-4);
+  transform: translateY(1px);
 }
 
 .btn-primary {
@@ -169,18 +171,20 @@
 
 .btn-danger {
   background: var(--danger-soft);
-  border-color: rgba(226, 99, 92, 0.32);
+  border-color: var(--danger-border);
   color: var(--danger);
 }
 
 .btn-danger:hover {
-  background: rgba(226, 99, 92, 0.22);
-  border-color: rgba(226, 99, 92, 0.5);
-  color: #f08880;
+  background: var(--danger-hover);
+  border-color: var(--danger-hover-border);
+  color: var(--danger-hover-text);
 }
 
+/* A toggle that is on, in either silhouette. */
 .btn-active,
-.btn.btn-active:hover {
+.btn.btn-active:hover,
+.bottom-menu-trigger.active {
   background: var(--accent-soft);
   border-color: var(--border-focus);
   color: var(--accent);
@@ -197,10 +201,14 @@
 }
 
 .control-label,
-.compact-field > span {
+.compact-field > span,
+.popover-title,
+.fretboard-title,
+.readout-chip dt,
+.shortcut-button-grid span.shortcut-divider {
   font-size: 0.6875rem;
   font-weight: 700;
-  letter-spacing: 0.07em;
+  letter-spacing: 0.08em;
   text-transform: uppercase;
   color: var(--text-faint);
   white-space: nowrap;
@@ -218,7 +226,7 @@
   font-family: inherit;
   font-size: 0.8125rem;
   font-weight: 600;
-  transition: border-color 0.15s var(--ease), box-shadow 0.15s var(--ease);
+  transition: border-color var(--t) var(--ease), box-shadow var(--t) var(--ease);
 }
 
 .control-input {
@@ -247,7 +255,7 @@
 
 input[type="range"] {
   accent-color: var(--accent);
-  height: 18px;
+  height: var(--ctl-h-xs);
 }
 
 .compact-field input[type="range"] {
@@ -261,10 +269,11 @@ input[type="range"] {
   width: 100%;
   overflow-x: auto;
   overflow-y: hidden;
+  padding: var(--sp-2) 0;
   background: var(--paper);
   border: 1px solid var(--border);
   border-radius: var(--r-lg);
-  box-shadow: var(--shadow-1);
+  box-shadow: var(--shadow-1), inset 0 1px 0 rgb(var(--ink-rgb) / 0.04);
 }
 
 .sheetor-canvas-container:focus-visible {
@@ -273,6 +282,8 @@ input[type="range"] {
 
 .music-svg {
   display: block;
+  /* Below this the staff stops being readable: scroll the score, don't shrink it. */
+  min-width: 720px;
   user-select: none;
   background: var(--paper);
   border-radius: var(--r-lg);
@@ -283,22 +294,22 @@ input[type="range"] {
 }
 
 .staff-line {
-  stroke: rgba(240, 232, 222, 0.2);
+  stroke: var(--staff-line);
   stroke-width: 1;
 }
 
 .staff-ledger-line {
-  stroke: rgba(240, 232, 222, 0.4);
+  stroke: var(--staff-line-strong);
   stroke-width: 1.2;
 }
 
 .bar-line {
-  stroke: rgba(240, 232, 222, 0.28);
+  stroke: var(--bar-line);
   stroke-width: 1.2;
 }
 
 .bar-line-end {
-  stroke: rgba(240, 232, 222, 0.6);
+  stroke: var(--bar-line-end);
   stroke-width: 2.5;
 }
 
@@ -333,7 +344,7 @@ input[type="range"] {
 
 .notehead {
   cursor: pointer;
-  transition: fill 0.1s;
+  transition: fill var(--t-fast) var(--ease);
 }
 
 .notehead:hover {
@@ -346,7 +357,7 @@ input[type="range"] {
 
 .tab-fret-bg {
   fill: var(--paper);
-  transition: fill 0.15s;
+  transition: fill var(--t) var(--ease);
 }
 
 .tab-fret-container:hover .tab-fret-bg {
@@ -369,22 +380,40 @@ input[type="range"] {
   stroke-width: 1;
 }
 
-.sheetor-canvas-container::-webkit-scrollbar {
+.sheetor-canvas-container::-webkit-scrollbar,
+.sheetor-fretboard::-webkit-scrollbar,
+.track-list::-webkit-scrollbar,
+.bottom-popover::-webkit-scrollbar,
+.popover-scroll::-webkit-scrollbar {
+  width: 10px;
   height: 10px;
 }
 
-.sheetor-canvas-container::-webkit-scrollbar-track {
+.sheetor-canvas-container::-webkit-scrollbar-track,
+.sheetor-fretboard::-webkit-scrollbar-track,
+.track-list::-webkit-scrollbar-track,
+.bottom-popover::-webkit-scrollbar-track,
+.popover-scroll::-webkit-scrollbar-track {
   background: transparent;
 }
 
-.sheetor-canvas-container::-webkit-scrollbar-thumb {
+.sheetor-canvas-container::-webkit-scrollbar-thumb,
+.sheetor-fretboard::-webkit-scrollbar-thumb,
+.track-list::-webkit-scrollbar-thumb,
+.bottom-popover::-webkit-scrollbar-thumb,
+.popover-scroll::-webkit-scrollbar-thumb {
   background: var(--surface-4);
-  border: 3px solid var(--paper);
+  border: 3px solid transparent;
+  background-clip: padding-box;
   border-radius: var(--r-pill);
 }
 
-.sheetor-canvas-container::-webkit-scrollbar-thumb:hover {
-  background: var(--accent);
+.sheetor-canvas-container::-webkit-scrollbar-thumb:hover,
+.sheetor-fretboard::-webkit-scrollbar-thumb:hover,
+.track-list::-webkit-scrollbar-thumb:hover,
+.bottom-popover::-webkit-scrollbar-thumb:hover,
+.popover-scroll::-webkit-scrollbar-thumb:hover {
+  background: var(--text-faint);
 }
 
 /* ----------------------------------------------------------------- Fretboard */
@@ -397,7 +426,9 @@ input[type="range"] {
   background: var(--surface-1);
   border: 1px solid var(--border);
   border-radius: var(--r-lg);
+  box-shadow: var(--shadow-1);
   overflow-x: auto;
+  overscroll-behavior-x: contain;
 }
 
 .fretboard-header {
@@ -411,11 +442,17 @@ input[type="range"] {
   display: flex;
   align-items: center;
   gap: var(--sp-2);
-  font-size: 0.6875rem;
-  font-weight: 700;
-  letter-spacing: 0.09em;
-  text-transform: uppercase;
   color: var(--text-dim);
+}
+
+/* Panel hint: the same slot as a title, but sentence case and quiet. */
+.fretboard-hint {
+  font-size: 0.6875rem;
+  font-weight: 500;
+  color: var(--text-faint);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .fretboard-title svg {
@@ -454,8 +491,9 @@ input[type="range"] {
 
 .fretboard-marker {
   position: absolute;
-  background: rgba(240, 232, 222, 0.15);
+  background: var(--fret-marker);
   border-radius: 50%;
+  transform: translate(-50%, -50%);
   z-index: 1;
 }
 
@@ -463,21 +501,20 @@ input[type="range"] {
   width: 14px;
   height: 14px;
   top: 50%;
-  transform: translate(-50%, -50%);
 }
 
-.fretboard-marker.double-1 {
-  width: 10px;
-  height: 10px;
-  top: 25%;
-  transform: translate(-50%, -50%);
-}
-
+.fretboard-marker.double-1,
 .fretboard-marker.double-2 {
   width: 10px;
   height: 10px;
+}
+
+.fretboard-marker.double-1 {
+  top: 25%;
+}
+
+.fretboard-marker.double-2 {
   top: 75%;
-  transform: translate(-50%, -50%);
 }
 
 .fretboard-string {
@@ -496,11 +533,11 @@ input[type="range"] {
   cursor: pointer;
   z-index: 4;
   border-radius: var(--r-sm);
-  transition: background-color 0.12s var(--ease);
+  transition: background-color var(--t-fast) var(--ease);
 }
 
 .fretboard-fret-cell:hover {
-  background-color: rgba(240, 232, 222, 0.07);
+  background-color: var(--fret-wash);
 }
 
 .fretboard-note-bubble {
@@ -514,7 +551,7 @@ input[type="range"] {
   font-size: 0.625rem;
   font-weight: 700;
   opacity: 0;
-  transition: opacity 0.12s var(--ease), background 0.12s var(--ease), color 0.12s var(--ease);
+  transition: opacity var(--t-fast) var(--ease), background var(--t-fast) var(--ease), color var(--t-fast) var(--ease);
 }
 
 .fretboard-fret-cell:hover .fretboard-note-bubble {
@@ -533,8 +570,8 @@ input[type="range"] {
 .fretboard-note-bubble.playback-active {
   opacity: 1;
   background: var(--ok);
-  color: #0d1a15;
-  box-shadow: 0 0 0 3px rgba(63, 185, 138, 0.22);
+  color: var(--ok-ink);
+  box-shadow: 0 0 0 3px var(--ok-glow);
 }
 
 .fret-labels {
@@ -561,6 +598,7 @@ input[type="range"] {
   background: var(--surface-1);
   border: 1px solid var(--border);
   border-radius: var(--r-lg);
+  box-shadow: var(--shadow-1);
 }
 
 .track-list {
@@ -580,7 +618,7 @@ input[type="range"] {
   background: var(--surface-2);
   border: 1px solid var(--border);
   border-radius: var(--r-md);
-  transition: border-color 0.12s var(--ease), background 0.12s var(--ease), opacity 0.12s var(--ease);
+  transition: border-color var(--t-fast) var(--ease), background var(--t-fast) var(--ease), opacity var(--t-fast) var(--ease);
 }
 
 .track-chip.is-active {
@@ -597,7 +635,7 @@ input[type="range"] {
   display: flex;
   flex-direction: column;
   align-items: flex-start;
-  gap: 1px;
+  gap: var(--sp-hair);
   padding: var(--sp-1) var(--sp-2);
   background: none;
   border: none;
@@ -625,7 +663,7 @@ input[type="range"] {
 
 .track-chip-toggles {
   display: flex;
-  gap: 2px;
+  gap: var(--sp-hair);
 }
 
 .track-toggle {
@@ -641,7 +679,7 @@ input[type="range"] {
   font-family: inherit;
   font-size: 0.6875rem;
   font-weight: 700;
-  transition: background 0.12s var(--ease), color 0.12s var(--ease);
+  transition: background var(--t-fast) var(--ease), color var(--t-fast) var(--ease);
 }
 
 .track-toggle:hover {
@@ -656,7 +694,7 @@ input[type="range"] {
 }
 
 .track-toggle.is-soloed {
-  background: rgba(63, 185, 138, 0.16);
+  background: var(--ok-soft);
   border-color: var(--ok);
   color: var(--ok);
 }
@@ -665,6 +703,8 @@ input[type="range"] {
   display: flex;
   align-items: center;
   gap: var(--sp-1);
+  height: var(--ctl-h);
+  align-self: center;
   padding: 0 var(--sp-3);
   background: none;
   color: var(--text-dim);
@@ -675,7 +715,7 @@ input[type="range"] {
   font-size: 0.75rem;
   font-weight: 600;
   white-space: nowrap;
-  transition: color 0.12s var(--ease), border-color 0.12s var(--ease);
+  transition: color var(--t-fast) var(--ease), border-color var(--t-fast) var(--ease);
 }
 
 .track-add:hover {
@@ -694,12 +734,6 @@ input[type="range"] {
   display: flex;
   align-items: center;
   flex: none;
-}
-
-.track-popover {
-  top: calc(100% + var(--sp-2));
-  bottom: auto;
-  animation: none;
 }
 
 /* A 12-string tuning list would otherwise run off the panel. */
@@ -773,7 +807,7 @@ input[type="range"] {
 
 .piano-key.white.playback-active {
   background: linear-gradient(180deg, #5fd3a6 0%, var(--ok) 100%);
-  color: #0d1a15;
+  color: var(--ok-ink);
 }
 
 /* Black keys ride above the white row, centred on each white-key seam.
@@ -812,12 +846,14 @@ input[type="range"] {
   left: 0;
   right: 0;
   bottom: 0;
-  z-index: 40;
+  z-index: var(--z-bar);
   display: flex;
   align-items: center;
   gap: var(--sp-2);
-  padding: var(--sp-3) var(--sp-4);
-  background: rgba(18, 16, 14, 0.93);
+  min-height: calc(var(--ctl-h) + var(--sp-4));
+  /* Line the transport up with the page column instead of the window edge. */
+  padding: var(--sp-2) max(var(--sp-4), calc((100% - var(--page-max)) / 2 + var(--sp-5)));
+  background: var(--bar-surface);
   backdrop-filter: blur(12px);
   border-top: 1px solid var(--border);
 }
@@ -837,7 +873,7 @@ input[type="range"] {
 
 .cmd-divider {
   width: 1px;
-  height: 22px;
+  height: var(--ctl-h-xs);
   background: var(--border);
   flex: none;
   margin: 0 var(--sp-1);
@@ -857,7 +893,7 @@ input[type="range"] {
 }
 
 .transport-field .control-input {
-  height: 26px;
+  height: var(--ctl-h-sm);
   width: 52px;
 }
 
@@ -865,44 +901,7 @@ input[type="range"] {
   position: relative;
 }
 
-/* Menu triggers share the button shape exactly — one silhouette per row */
-.bottom-menu-trigger {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: var(--sp-2);
-  flex: none;
-  height: var(--ctl-h);
-  padding: 0 var(--sp-3);
-  background: var(--surface-2);
-  border: 1px solid var(--border);
-  border-radius: var(--r-md);
-  color: var(--text);
-  font-family: inherit;
-  font-size: 0.8125rem;
-  font-weight: 600;
-  white-space: nowrap;
-  cursor: pointer;
-  user-select: none;
-  transition: background 0.15s var(--ease), border-color 0.15s var(--ease), color 0.15s var(--ease);
-}
-
-.bottom-menu-trigger svg {
-  width: 16px;
-  height: 16px;
-  flex: none;
-}
-
-.bottom-menu-trigger:hover {
-  background: var(--surface-3);
-  border-color: var(--border-strong);
-}
-
-.bottom-menu-trigger.active {
-  background: var(--accent-soft);
-  border-color: var(--border-focus);
-  color: var(--accent);
-}
+/* Menu triggers share the button shape exactly — see the `.btn` rule. */
 
 .bottom-popover {
   position: absolute;
@@ -917,19 +916,28 @@ input[type="range"] {
   border: 1px solid var(--border-strong);
   border-radius: var(--r-lg);
   box-shadow: var(--shadow-3);
-  animation: popoverSlideUp 0.15s var(--ease);
+  transform-origin: bottom right;
+  animation: popoverSlideUp 0.14s var(--ease);
   /* Never grow past the viewport — the tuning list used to run off-screen. */
   max-height: min(70vh, 560px);
   overflow-y: auto;
-  z-index: 45;
+  z-index: var(--z-popover);
 }
 
-.popover-title {
-  font-size: 0.6875rem;
-  font-weight: 700;
-  letter-spacing: 0.09em;
-  text-transform: uppercase;
-  color: var(--text-faint);
+/* The track menu hangs off the strip at the top of the page, so it opens
+   downward. This has to sit after `.bottom-popover` to win on source order. */
+.track-popover {
+  top: calc(100% + var(--sp-2));
+  bottom: auto;
+  transform-origin: top right;
+  animation: popoverDrop 0.14s var(--ease);
+}
+
+/* Invisible catcher so a click anywhere else closes the open menu. */
+.popover-scrim {
+  position: fixed;
+  inset: 0;
+  z-index: var(--z-bar);
 }
 
 .popover-divider {
@@ -949,20 +957,31 @@ input[type="range"] {
   }
 }
 
+@keyframes popoverDrop {
+  from {
+    opacity: 0;
+    transform: translateY(-6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
 /* ------------------------------------------------------- Note options panel */
 
 .note-options-overlay {
   position: fixed;
   inset: 0;
-  z-index: 50;
+  z-index: var(--z-panel);
 }
 
 .note-options-panel {
   position: fixed;
   left: 50%;
-  bottom: 84px;
+  bottom: calc(var(--cmdbar-h) + var(--sp-3));
   transform: translateX(-50%);
-  z-index: 51;
+  z-index: calc(var(--z-panel) + 1);
   display: flex;
   align-items: center;
   gap: var(--sp-2);
@@ -978,7 +997,7 @@ input[type="range"] {
 .note-options-summary {
   display: flex;
   flex-direction: column;
-  gap: 1px;
+  gap: var(--sp-hair);
   padding-right: var(--sp-3);
   border-right: 1px solid var(--border);
   font-size: 0.8125rem;
@@ -992,8 +1011,8 @@ input[type="range"] {
 
 .duration-selector {
   display: flex;
-  gap: 2px;
-  padding: 2px;
+  gap: var(--sp-hair);
+  padding: var(--sp-hair);
   background: var(--bg);
   border: 1px solid var(--border);
   border-radius: var(--r-md);
@@ -1010,7 +1029,7 @@ input[type="range"] {
   border-radius: var(--r-sm);
   color: var(--text-dim);
   cursor: pointer;
-  transition: background 0.12s var(--ease), color 0.12s var(--ease);
+  transition: background var(--t-fast) var(--ease), color var(--t-fast) var(--ease);
 }
 
 .duration-btn svg {
@@ -1035,7 +1054,7 @@ input[type="range"] {
 .technique-row {
   display: flex;
   align-items: center;
-  gap: 2px;
+  gap: var(--sp-hair);
 }
 
 .technique-btn {
@@ -1050,7 +1069,7 @@ input[type="range"] {
   font-size: 0.6875rem;
   font-weight: 700;
   cursor: pointer;
-  transition: background 0.12s var(--ease), color 0.12s var(--ease), border-color 0.12s var(--ease);
+  transition: background var(--t-fast) var(--ease), color var(--t-fast) var(--ease), border-color var(--t-fast) var(--ease);
 }
 
 .technique-btn:hover {
@@ -1066,25 +1085,33 @@ input[type="range"] {
 
 /* ----------------------------------------------------------- Shortcut sheet */
 
-.shortcut-overlay {
+.shortcut-overlay,
+.sheetor-modal-backdrop {
   position: fixed;
   inset: 0;
-  z-index: 70;
   display: grid;
   place-items: center;
   padding: var(--sp-4);
-  background: rgba(10, 9, 8, 0.72);
+  background: var(--scrim);
   backdrop-filter: blur(3px);
 }
 
-.shortcut-panel {
-  width: min(640px, 100%);
+.shortcut-overlay {
+  z-index: var(--z-sheet);
+}
+
+.shortcut-panel,
+.sheetor-modal {
   padding: var(--sp-5);
   background: var(--surface-1);
   border: 1px solid var(--border-strong);
   border-radius: var(--r-lg);
   box-shadow: var(--shadow-3);
-  animation: popoverSlideUp 0.18s var(--ease);
+  animation: popoverSlideUp var(--t-slow) var(--ease);
+}
+
+.shortcut-panel {
+  width: min(640px, 100%);
 }
 
 .shortcut-panel-header {
@@ -1122,16 +1149,11 @@ input[type="range"] {
   background: transparent;
   border: none;
   padding: var(--sp-3) 0 var(--sp-1);
-  font-size: 0.6875rem;
-  font-weight: 700;
-  letter-spacing: 0.09em;
-  text-transform: uppercase;
-  color: var(--text-faint);
 }
 
 kbd {
   min-width: 26px;
-  padding: 3px 6px;
+  padding: var(--sp-hair) var(--sp-1);
   background: var(--surface-3);
   border: 1px solid var(--border-strong);
   border-radius: var(--r-sm);
@@ -1146,24 +1168,11 @@ kbd {
 /* --------------------------------------------------------------------- Modal */
 
 .sheetor-modal-backdrop {
-  position: fixed;
-  inset: 0;
-  z-index: 80;
-  display: grid;
-  place-items: center;
-  padding: var(--sp-4);
-  background: rgba(10, 9, 8, 0.72);
-  backdrop-filter: blur(3px);
+  z-index: var(--z-modal);
 }
 
 .sheetor-modal {
   width: min(680px, 100%);
-  padding: var(--sp-5);
-  background: var(--surface-1);
-  border: 1px solid var(--border-strong);
-  border-radius: var(--r-lg);
-  box-shadow: var(--shadow-3);
-  animation: popoverSlideUp 0.18s var(--ease);
 }
 
 .sheetor-modal-header {
@@ -1186,7 +1195,7 @@ kbd {
   color: var(--text-dim);
   font-size: 1.15rem;
   cursor: pointer;
-  transition: background 0.15s var(--ease), color 0.15s var(--ease);
+  transition: background var(--t) var(--ease), color var(--t) var(--ease);
 }
 
 .sheetor-modal-close:hover {
@@ -1228,8 +1237,13 @@ kbd {
 
 /* ------------------------------------------------------------- Narrow screens */
 
-/* Let the bar wrap onto a second row rather than squeezing labels away */
-@media (max-width: 1120px) {
+/* Let the bar wrap onto a second row rather than squeezing labels away. The
+   clearance token moves with it, so nothing below the fold has to be retuned. */
+@media (max-width: 620px) {
+  :root {
+    --cmdbar-h: 104px;
+  }
+
   .bottom-command-bar {
     flex-wrap: wrap;
     row-gap: var(--sp-2);
@@ -1238,15 +1252,11 @@ kbd {
   .cmd-spacer {
     display: none;
   }
-
-  .sheetor-container {
-    padding-bottom: 152px;
-  }
 }
 
 @media (max-width: 768px) {
   .sheetor-container {
-    padding: var(--sp-4) var(--sp-3) 108px;
+    padding: var(--sp-4) var(--sp-3) calc(var(--cmdbar-h) + var(--sp-5));
   }
 
   .sheetor-title-input,
@@ -1257,7 +1267,6 @@ kbd {
   .note-options-panel {
     left: var(--sp-2);
     right: var(--sp-2);
-    bottom: 88px;
     transform: none;
     flex-wrap: wrap;
     justify-content: center;

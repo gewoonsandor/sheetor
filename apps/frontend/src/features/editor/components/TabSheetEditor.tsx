@@ -864,7 +864,8 @@ export const TabSheetEditor: React.FC = () => {
     return rowYOffsets[r] ?? STEM_TOP_PAD;
   };
 
-  const totalSVGHeight = cumY + 10;
+  /* The last row needs no headroom for a row that never follows it. */
+  const totalSVGHeight = cumY + 10 - STEM_TOP_PAD;
 
   const getMeasureWidth = (index: number): number => measureLayouts[index]?.width ?? 0;
   const getMeasurePadding = (index: number): number => measureLayouts[index]?.padding ?? 18;
@@ -2382,7 +2383,7 @@ export const TabSheetEditor: React.FC = () => {
             ))}
           </div>
 
-          <span className="fretboard-title" style={{ letterSpacing: 0, textTransform: 'none', color: 'var(--text-faint)', fontWeight: 500 }}>
+          <span className="fretboard-hint">
             Click a key to add or remove that pitch on the selected beat
           </span>
         </div>
@@ -2399,7 +2400,7 @@ export const TabSheetEditor: React.FC = () => {
               </svg>
               Fretboard
             </div>
-            <span className="fretboard-title" style={{ letterSpacing: 0, textTransform: 'none', color: 'var(--text-faint)', fontWeight: 500 }}>
+            <span className="fretboard-hint">
               Click a fret to place a note on the selected beat
             </span>
           </div>
@@ -2612,6 +2613,10 @@ export const TabSheetEditor: React.FC = () => {
         </div>
       )}
 
+      {openBottomMenu && (
+        <div className="popover-scrim" onClick={() => setOpenBottomMenu(null)} />
+      )}
+
       <div className="bottom-command-bar">
         {/* Transport: everything that affects playback */}
         <div className="bottom-cluster">
@@ -2681,7 +2686,7 @@ export const TabSheetEditor: React.FC = () => {
                   className={`btn ${loopPlayback ? 'btn-active' : ''}`}
                   onClick={() => setLoopPlayback(prev => !prev)}
                 >
-                  {loopPlayback ? 'Looping on' : 'Loop off'}
+                  {loopPlayback ? 'Loop on' : 'Loop off'}
                 </button>
               </div>
             )}
@@ -2737,8 +2742,8 @@ export const TabSheetEditor: React.FC = () => {
               </div>
               <div className="popover-divider" />
               <span className="popover-title">Song file</span>
-              <button className="btn" onClick={handleExport}>Share JSON</button>
-              <button className="btn" onClick={handleImport}>Load JSON</button>
+              <button className="btn" onClick={handleExport}>Export JSON</button>
+              <button className="btn" onClick={handleImport}>Import JSON</button>
               <div className="popover-divider" />
               <button className="btn btn-danger" onClick={clearSong}>Clear song</button>
             </div>
@@ -2888,15 +2893,15 @@ export const TabSheetEditor: React.FC = () => {
                     </>
                   )}
                 </svg>
-                {modalOpen === 'export' ? 'Export Song JSON' : 'Import Song JSON'}
+                {modalOpen === 'export' ? 'Export song' : 'Import song'}
               </span>
               <button className="sheetor-modal-close" onClick={() => setModalOpen(null)}>&times;</button>
             </h3>
             
             <p className="sheetor-modal-desc">
-              {modalOpen === 'export' 
-                ? 'Copy this JSON representation to share your song, or download it as a file.'
-                : 'Paste a song JSON representation here and click load.'}
+              {modalOpen === 'export'
+                ? 'Copy this JSON to share your song, or download it as a file.'
+                : 'Paste song JSON here, then import it. This replaces the song you have open.'}
             </p>
 
             <textarea
@@ -2919,7 +2924,7 @@ export const TabSheetEditor: React.FC = () => {
                       <rect x="9" y="9" width="13" height="13" rx="2" />
                       <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
                     </svg>
-                    Copy Code
+                    Copy JSON
                   </button>
                   <button className="btn btn-primary" onClick={downloadJsonFile}>
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" width="16" height="16">
@@ -2927,7 +2932,7 @@ export const TabSheetEditor: React.FC = () => {
                       <polyline points="7 10 12 15 17 10" />
                       <line x1="12" y1="15" x2="12" y2="3" />
                     </svg>
-                    Download File
+                    Download file
                   </button>
                 </>
               ) : (
@@ -2937,7 +2942,7 @@ export const TabSheetEditor: React.FC = () => {
                     <polyline points="17 8 12 3 7 8" />
                     <line x1="12" y1="3" x2="12" y2="15" />
                   </svg>
-                  Load Song
+                  Import song
                 </button>
               )}
               <button className="btn" onClick={() => setModalOpen(null)}>Close</button>

@@ -11,6 +11,15 @@
   /* Score paper — the staff sits on its own slightly lifted surface */
   --paper: #1c1917;
 
+  /* Score ink — one paper-white base for every staff element */
+  --ink-rgb: 240 232 222;
+  --staff-line: rgb(var(--ink-rgb) / 0.26);
+  --staff-line-strong: rgb(var(--ink-rgb) / 0.44);
+  --bar-line: rgb(var(--ink-rgb) / 0.36);
+  --bar-line-end: rgb(var(--ink-rgb) / 0.62);
+  --fret-wash: rgb(var(--ink-rgb) / 0.07);
+  --fret-marker: rgb(var(--ink-rgb) / 0.15);
+
   /* Hairlines */
   --border: rgba(238, 230, 220, 0.08);
   --border-strong: rgba(238, 230, 220, 0.16);
@@ -31,16 +40,27 @@
   /* Semantic */
   --danger: #e2635c;
   --danger-soft: rgba(226, 99, 92, 0.14);
+  --danger-border: rgba(226, 99, 92, 0.32);
+  --danger-hover: rgba(226, 99, 92, 0.22);
+  --danger-hover-border: rgba(226, 99, 92, 0.5);
+  --danger-hover-text: #f08880;
   --warn: #e0a83f;
   --ok: #3fb98a;
+  --ok-soft: rgba(63, 185, 138, 0.16);
+  --ok-glow: rgba(63, 185, 138, 0.22);
+  --ok-ink: #0d1a15;
 
   /* Spacing scale */
+  --sp-hair: 2px;
   --sp-1: 4px;
   --sp-2: 8px;
   --sp-3: 12px;
   --sp-4: 16px;
   --sp-5: 24px;
   --sp-6: 32px;
+
+  /* The editor is a document: one centred measure of content, never full-bleed */
+  --page-max: 1180px;
 
   /* Radii */
   --r-sm: 6px;
@@ -51,16 +71,32 @@
   /* Control heights — one row rhythm for every button and field */
   --ctl-h: 36px;
   --ctl-h-sm: 28px;
+  --ctl-h-xs: 22px;
 
-  /* Elevation */
+  /* Command bar height — every clearance below the fold derives from it */
+  --cmdbar-h: 54px;
+
+  /* Elevation and layering */
   --shadow-1: 0 1px 2px rgba(0, 0, 0, 0.4);
   --shadow-2: 0 8px 24px -6px rgba(0, 0, 0, 0.6);
   --shadow-3: 0 18px 48px -12px rgba(0, 0, 0, 0.7);
+  --scrim: rgba(10, 9, 8, 0.72);
+  --bar-surface: rgba(18, 16, 14, 0.92);
+
+  --z-bar: 40;
+  --z-popover: 45;
+  --z-panel: 50;
+  --z-sheet: 70;
+  --z-modal: 80;
 
   --font: 'Outfit', 'Inter', system-ui, -apple-system, sans-serif;
   --font-mono: ui-monospace, 'SF Mono', 'JetBrains Mono', monospace;
 
   --ease: cubic-bezier(0.2, 0.8, 0.3, 1);
+
+  --t-fast: 0.12s;
+  --t: 0.15s;
+  --t-slow: 0.2s;
 }
 
 * {
@@ -77,6 +113,13 @@ body {
   -webkit-font-smoothing: antialiased;
 }
 
+/* Dark, thin scrollbars everywhere — light OS bars inside a dark popover read
+   as a rendering bug. */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--surface-4) transparent;
+}
+
 /* Shared focus treatment: amber ring, never the default blue halo */
 :where(button, input, select, textarea, [tabindex]):focus-visible {
   outline: 2px solid var(--border-focus);
@@ -86,4 +129,15 @@ body {
 ::selection {
   background: var(--accent-glow);
   color: var(--text);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
 }
