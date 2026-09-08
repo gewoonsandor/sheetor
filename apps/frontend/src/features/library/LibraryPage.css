@@ -27,6 +27,57 @@
   line-height: 1.5;
 }
 
+.library-header-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sp-2);
+}
+
+/* ------------------------------------------------------------- Breadcrumb */
+.library-breadcrumb {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  margin-bottom: var(--sp-3);
+}
+
+.library-crumb-step {
+  display: inline-flex;
+  align-items: center;
+}
+
+.library-crumb-sep {
+  padding: 0 var(--sp-1);
+  color: var(--text-faint);
+  font-size: 0.8125rem;
+}
+
+.library-crumb {
+  display: inline-flex;
+  align-items: center;
+  height: var(--ctl-h-sm);
+  padding: 0 var(--sp-2);
+  background: none;
+  border: 1px solid transparent;
+  border-radius: var(--r-sm);
+  color: var(--text-dim);
+  font-family: inherit;
+  font-size: 0.8125rem;
+  cursor: pointer;
+  transition: background var(--t-fast) var(--ease), color var(--t-fast) var(--ease),
+    border-color var(--t-fast) var(--ease);
+}
+
+.library-crumb:hover {
+  background: var(--surface-2);
+  color: var(--text);
+}
+
+.library-crumb[aria-current='page'] {
+  color: var(--text);
+  font-weight: 600;
+}
+
 .library-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
@@ -34,6 +85,18 @@
   margin: 0;
   padding: 0;
   list-style: none;
+}
+
+/* Folders are shelves: they size to their own content instead of stretching to
+   the height of a song card in the same row. */
+.library-grid-folders {
+  grid-template-columns: repeat(auto-fill, minmax(230px, 1fr));
+  margin-bottom: var(--sp-6);
+}
+
+.library-section {
+  margin: 0 0 var(--sp-3);
+  color: var(--text-faint);
 }
 
 .library-card {
@@ -44,14 +107,100 @@
   border: 1px solid var(--border);
   border-radius: var(--r-lg);
   box-shadow: var(--shadow-1);
+  /* Every card is a drag source: songs and folders both move by dropping. */
+  cursor: grab;
   transition: background var(--t) var(--ease), border-color var(--t) var(--ease),
     box-shadow var(--t) var(--ease), transform var(--t-fast) var(--ease);
+}
+
+.library-card:active {
+  cursor: grabbing;
 }
 
 .library-card:hover {
   border-color: var(--border-strong);
   box-shadow: var(--shadow-2);
   transform: translateY(calc(-1 * var(--sp-hair)));
+}
+
+/* A folder is a shelf, not a document: raised surface, amber mark, no artist. */
+.library-folder {
+  background: var(--surface-2);
+}
+
+/* One count line, so it does not need a song card's breathing room. */
+.library-folder .library-card-meta {
+  margin: var(--sp-2) 0 var(--sp-3);
+}
+
+.library-folder-head,
+.library-folder-open {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-3);
+  width: 100%;
+  min-width: 0;
+}
+
+.library-folder-open {
+  padding: 0;
+  background: none;
+  border: none;
+  color: var(--text);
+  font-family: inherit;
+  font-size: 0.9375rem;
+  font-weight: 600;
+  line-height: 1.35;
+  text-align: left;
+  cursor: pointer;
+  transition: color var(--t-fast) var(--ease);
+}
+
+.library-folder-open:hover {
+  color: var(--accent);
+}
+
+.library-folder-icon {
+  display: inline-flex;
+  flex: none;
+  color: var(--accent);
+}
+
+.library-folder-icon svg {
+  width: 20px;
+  height: 20px;
+}
+
+.library-folder-name {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.library-rename {
+  flex: 1;
+  min-width: 0;
+  height: var(--ctl-h-sm);
+  padding: 0 var(--sp-2);
+  background: var(--bg);
+  border: 1px solid var(--border-focus);
+  border-radius: var(--r-sm);
+  color: var(--text);
+  font-family: inherit;
+  font-size: 0.9375rem;
+  font-weight: 600;
+  cursor: text;
+}
+
+/* The live drop target, whether a folder tile or a breadcrumb step. */
+.library-card.is-drop-target,
+.library-crumb.is-drop-target {
+  background: var(--accent-soft);
+  border-color: var(--accent);
+  color: var(--text);
+}
+
+.library-card.is-drop-target {
+  box-shadow: var(--shadow-2);
 }
 
 .library-card.is-current {
@@ -115,6 +264,37 @@
   margin-top: auto;
   padding-top: var(--sp-4);
   border-top: 1px solid var(--border);
+}
+
+/* The keyboard path for a move; dragging a card is the mouse path. Shares the
+   button silhouette so the actions row keeps one rhythm. */
+.library-move {
+  flex: none;
+  height: var(--ctl-h);
+  padding: 0 var(--sp-2);
+  background: var(--surface-3);
+  border: 1px solid var(--border);
+  border-radius: var(--r-md);
+  color: var(--text);
+  font-family: inherit;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background var(--t-fast) var(--ease), border-color var(--t-fast) var(--ease);
+}
+
+.library-move:hover {
+  background: var(--surface-4);
+  border-color: var(--border-strong);
+}
+
+/* Spells out where a deleted folder's contents land, on its own row. */
+.library-confirm {
+  flex: 1 1 100%;
+  margin: 0;
+  font-size: 0.75rem;
+  color: var(--text-dim);
+  line-height: 1.45;
 }
 
 .library-empty {

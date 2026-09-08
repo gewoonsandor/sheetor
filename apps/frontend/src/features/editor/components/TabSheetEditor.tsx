@@ -577,10 +577,12 @@ export const TabSheetEditor: React.FC = () => {
 
   const startNewSong = () => {
     playback.stop();
-    const created = addSong(librarySlot.current, {
-      ...createEmptySong(),
-      bpm: settings.defaultBpm,
-    });
+    // A new song lands in the folder the open one lives in, not the root.
+    const created = addSong(
+      librarySlot.current,
+      { ...createEmptySong(), bpm: settings.defaultBpm },
+      librarySlot.current.entries.find((entry) => entry.id === songId)?.folderId ?? null,
+    );
     librarySlot.current = created.library;
     saveLibrary(created.library);
     setSongId(created.entry.id);
