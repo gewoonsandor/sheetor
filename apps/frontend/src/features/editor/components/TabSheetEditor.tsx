@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
+import { Link } from 'react-router-dom';
 import './TabSheetEditor.css';
 
 import type {
@@ -34,7 +35,15 @@ import {
 import { INSTRUMENTS } from './audioEngine';
 import { TrackStrip } from './TrackStrip';
 import { parseSong } from './songSchema';
-import { loadSong, saveSong } from './persistence';
+import {
+  addSong,
+  getCurrentEntry,
+  loadLibrary,
+  replaceSong,
+  saveLibrary,
+} from '../../library/libraryStore';
+import type { Library } from '../../library/libraryStore';
+import { loadSettings, updateSettings } from '../../settings/settingsStore';
 import { usePlayback } from './usePlayback';
 import {
   computeRowHeight,
@@ -88,7 +97,22 @@ const INSTRUMENT_OPTIONS = Object.entries(INSTRUMENTS).map(([id, voice]) => ({
 export const TabSheetEditor: React.FC = () => {
   // --- STATE ---
 
-  const [song, setSong] = useState<TabSong>(() => loadSong(createEmptySong()));
+  // One snapshot per editor session: the library entry this editor writes into,
+  // and the settings its playback and panel state start from.
+  const [session] = useState(() => {
+    const settings = loadSettings();
+    const library = loadLibrary();
+    const existing = getCurrentEntry(library);
+    if (existing) return { settings, library, entry: existing };
+    const created = addSong(library, { ...createEmptySong(), bpm: settings.defaultBpm });
+    saveLibrary(created.library);
+    return { settings, library: created.library, entry: created.entry };
+  });
+  const settings = session.settings;
+  const librarySlot = useRef<Library>(session.library);
+
+  const [songId, setSongId] = useState<string>(session.entry.id);
+  const [song, setSong] = useState<TabSong>(session.entry.song);
   const [activeTrackIndex, setActiveTrackIndex] = useState<number>(0);
   const [activeMeasureIndex, setActiveMeasureIndex] = useState<number>(0);
   const [activeBeatIndex, setActiveBeatIndex] = useState<number>(0);
@@ -107,15 +131,15 @@ export const TabSheetEditor: React.FC = () => {
 
   const [durationSelect, setDurationSelect] = useState<Duration>('4');
   const [dotSelect, setDotSelect] = useState<boolean>(false);
-  const [volume, setVolume] = useState<number>(0.8);
-  const [viewMode, setViewMode] = useState<boolean>(false);
-  const [showFretboard, setShowFretboard] = useState<boolean>(true);
+  const [volume, setVolume] = useState<number>(settings.masterVolume);
+  const [viewMode, setViewMode] = useState<boolean>(settings.readOnly);
+  const [showFretboard, setShowFretboard] = useState<boolean>(settings.showToolPanel);
   const [showShortcuts, setShowShortcuts] = useState<boolean>(false);
   const [showNoteOptions, setShowNoteOptions] = useState<boolean>(false);
   const [openBottomMenu, setOpenBottomMenu] = useState<'song' | 'edit' | 'output' | 'view' | 'track' | null>(null);
 
-  const [playbackSpeed, setPlaybackSpeed] = useState<number>(1);
-  const [loopPlayback, setLoopPlayback] = useState<boolean>(false);
+  const [playbackSpeed, setPlaybackSpeed] = useState<number>(settings.playbackSpeed);
+  const [loopPlayback, setLoopPlayback] = useState<boolean>(settings.loopPlayback);
 
   // Import/Export Modal state
   const [modalOpen, setModalOpen] = useState<'import' | 'export' | null>(null);
@@ -222,10 +246,23 @@ export const TabSheetEditor: React.FC = () => {
   const startPlaybackFromCursor = () =>
     playback.start({ measureIndex: activeMeasureIndex, beatIndex: activeBeatIndex });
 
-  // Auto-save song to localStorage on every change
+  // Autosave into the library entry this editor session opened.
   useEffect(() => {
-    saveSong(song);
-  }, [song]);
+    librarySlot.current = replaceSong(librarySlot.current, songId, song);
+    saveLibrary(librarySlot.current);
+  }, [song, songId]);
+
+  // Playback and panel choices made here are the same values the settings page
+  // shows, so they are written back as they change.
+  useEffect(() => {
+    updateSettings({
+      masterVolume: volume,
+      playbackSpeed,
+      loopPlayback,
+      showToolPanel: showFretboard,
+      readOnly: viewMode,
+    });
+  }, [volume, playbackSpeed, loopPlayback, showFretboard, viewMode]);
 
   // --- STATE EDITORS ---
 
@@ -536,6 +573,23 @@ export const TabSheetEditor: React.FC = () => {
     setActiveMeasureIndex(0);
     setActiveBeatIndex(0);
     setActiveStringIndex(0);
+  };
+
+  const startNewSong = () => {
+    playback.stop();
+    const created = addSong(librarySlot.current, {
+      ...createEmptySong(),
+      bpm: settings.defaultBpm,
+    });
+    librarySlot.current = created.library;
+    saveLibrary(created.library);
+    setSongId(created.entry.id);
+    setSong(created.entry.song);
+    setActiveTrackIndex(0);
+    setActiveMeasureIndex(0);
+    setActiveBeatIndex(0);
+    setActiveStringIndex(0);
+    setOpenBottomMenu(null);
   };
 
   // --- KEYBOARD CONTROLS ---
@@ -2740,6 +2794,12 @@ export const TabSheetEditor: React.FC = () => {
                   ))}
                 </select>
               </div>
+              <div className="popover-divider" />
+              <span className="popover-title">Library</span>
+              <button className="btn btn-primary" onClick={startNewSong}>New song</button>
+              <Link className="btn" to="/library" onClick={() => setOpenBottomMenu(null)}>
+                Open library
+              </Link>
               <div className="popover-divider" />
               <span className="popover-title">Song file</span>
               <button className="btn" onClick={handleExport}>Export JSON</button>

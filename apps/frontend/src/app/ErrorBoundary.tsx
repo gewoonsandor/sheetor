@@ -1,7 +1,13 @@
 import { Component } from 'react';
 import type { ErrorInfo, PropsWithChildren, ReactNode } from 'react';
 
-import { clearSavedSong } from '../features/editor/components/persistence';
+import { deleteSong, loadLibrary, saveLibrary } from '../features/library/libraryStore';
+
+const dropOpenSong = (): void => {
+  const library = loadLibrary();
+  if (library.currentId !== null) saveLibrary(deleteSong(library, library.currentId));
+  window.location.reload();
+};
 
 interface ErrorBoundaryState {
   error: Error | null;
@@ -29,21 +35,15 @@ export class ErrorBoundary extends Component<PropsWithChildren, ErrorBoundarySta
         <h2>The editor crashed</h2>
         <p className="app-error-message">{error.message}</p>
         <p>
-          If this happens again right after reloading, the autosaved song is likely at fault.
-          Resetting it keeps a copy under the <code>sheetor-song.invalid</code> key.
+          If this happens again right after reloading, the song you had open is likely at fault.
+          Discarding it removes that one song from your library and leaves the rest untouched.
         </p>
         <div className="app-error-actions">
           <button className="btn btn-primary" onClick={() => window.location.reload()}>
             Reload
           </button>
-          <button
-            className="btn btn-danger"
-            onClick={() => {
-              clearSavedSong();
-              window.location.reload();
-            }}
-          >
-            Reset saved song
+          <button className="btn btn-danger" onClick={dropOpenSong}>
+            Discard the open song
           </button>
         </div>
       </div>

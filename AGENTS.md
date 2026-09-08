@@ -41,11 +41,14 @@ There is no plugin system: `src/api/<feature>.rs` holds handlers with their `#[u
 
 ### Frontend data flow
 
-Mount chain: `index.html#root` → `src/main.tsx` (`createRoot` + `StrictMode`) → `src/App.tsx` → `src/app/layout/AppLayout.tsx` → `src/app/ErrorBoundary.tsx` → `src/features/editor/pages/EditorPage.tsx` → `TabSheetEditor.tsx`. No router, no context, no providers.
+Mount chain: `index.html#root` → `src/main.tsx` (`createRoot` + `StrictMode`) → `src/App.tsx` (`BrowserRouter`) → `src/app/layout/AppLayout.tsx` → `src/app/ErrorBoundary.tsx` → the routed page. Three routes, all client-side: `/` → `features/editor/pages/EditorPage.tsx` → `TabSheetEditor.tsx`, `/library` → `features/library/pages/LibraryPage.tsx`, `/settings` → `features/settings/pages/SettingsPage.tsx`; anything unmatched falls back to the editor. `react-router-dom` is the only routing dependency — still no context and no providers. Deep links survive a hard reload because axum's SPA fallback serves `index.html` for unknown paths.
 
 - **State**: ~20 `useState` hooks inside `TabSheetEditor.tsx` — the whole app, minus playback. No `useReducer`, no store library. `usePlayback` is the only custom hook.
 - **Mutation**: every edit is a named closure using `setSong(prev => …)` with immutable `map`/spread rebuilds. `updateActiveBeatNotes` is the shared primitive behind fret entry, technique toggles, and note removal.
-- **Persistence**: `useEffect(() => saveSong(song), [song])` → `localStorage` key `'sheetor-song'` (`persistence.ts`). Loads are validated by `parseSong` (`songSchema.ts`); a rejected blob is moved to `'sheetor-song.invalid'` and the fallback song is used. Only `song` is persisted — `tuning`, `volume`, `synthType`, and UI flags reset on reload (initial `tuning` width is derived from the loaded song via `requiredStringCount`).
+- **Persistence**: two stores, both `localStorage`, both validating with `parseSong` (`songSchema.ts`) at the boundary.
+  - `features/library/libraryStore.ts` owns key `'sheetor-library'` — `{ entries: LibraryEntry[]; currentId: string | null }`, newest-touched first. Every mutator (`addSong`, `replaceSong`, `duplicateSong`, `deleteSong`, `setCurrentSong`) is pure: it takes a `Library` and returns a new one, and the caller decides when to `saveLibrary`. An entry whose song fails validation is **dropped**; an unusable blob is quarantined to `'sheetor-library.invalid'`. On first load with no library it migrates the pre-library key `'sheetor-song'` into a single entry and removes it.
+  - `features/settings/settingsStore.ts` owns key `'sheetor-settings'` (`AppSettings`: `masterVolume`, `playbackSpeed`, `loopPlayback`, `showToolPanel`, `readOnly`, `defaultBpm`). Validation is **field by field** — one bad value can never discard the rest.
+  - The editor takes one snapshot of both at mount (the `session` state), autosaves the open song with `useEffect(() => saveLibrary(replaceSong(…)), [song, songId])`, and writes the five shared playback/panel values back through `updateSettings` when they change, so the settings page and the transport never disagree. `tuning` is still per-track song data; `synthType` and the remaining UI flags reset on reload.
 - **Playback**: owned entirely by `usePlayback.ts` (raw Web Audio API). `requestAnimationFrame` lookahead scheduler (100 ms) advancing `nextBeatTimeRef`; cursor position advances through `nextBeatPosition`, which always terminates. Every setting (`song`, `tuning`, `volume`, `synthType`, `loop`, `speed`) is read through `settingsRef`, refreshed by a dependency-less effect after each render, so mid-playback changes take effect on the next scheduled beat. `synthType === 'guitar'` uses the Karplus-Strong buffer from `audioEngine.ts`, otherwise an `OscillatorNode` + ADSR gain.
 - **Rendering**: notation is one inline `<svg className="music-svg">` with a computed `viewBox` and hand-written `<path>` glyphs (clef, flags, beams); the virtual fretboard is DOM `<div>`s with computed inline styles. No canvas, no VexFlow/alphaTab.
 - **Geometry**: `layout.ts` is pure, React-free, and owns all constants (`MAX_ROW_WIDTH 980`, `TAB_STAFF_TOP 90`, `FRET_COUNT 15`, …) plus `computeMeasureLayouts` two-pass line breaking/stretching.
@@ -56,11 +59,13 @@ Mount chain: `index.html#root` → `src/main.tsx` (`createRoot` + `StrictMode`) 
 |---|---|
 | `apps/backend/src/api/` | `mod.rs` (`/api/v1` nesting, `ApiDoc` tags, `not_found`) plus one file per feature |
 | `apps/backend/src/` | `main.rs`, `app.rs` (router assembly), `config.rs`, `state.rs`, `frontend.rs` |
-| `apps/frontend/src/app/layout/` | `AppLayout`/`AppHeader`/`AppFooter`, presentational only |
-| `apps/frontend/src/features/editor/components/` | The editor **and** its pure modules (`types.ts`, `layout.ts`, `songUtils.ts`, `songSchema.ts`, `persistence.ts`, `audioEngine.ts`, `usePlayback.ts`) plus their `*.test.ts` files |
+| `apps/frontend/src/app/layout/` | `AppLayout` + `AppHeader` (logo and the three `NavLink`s), presentational only |
+| `apps/frontend/src/features/editor/components/` | The editor **and** its pure modules (`types.ts`, `layout.ts`, `songUtils.ts`, `songSchema.ts`, `audioEngine.ts`, `usePlayback.ts`) plus their `*.test.ts` files |
 | `apps/frontend/src/features/editor/pages/` | `EditorPage.tsx` (5 lines of indirection) |
+| `apps/frontend/src/features/library/` | `libraryStore.ts` + test, `LibraryPage.css`, `pages/LibraryPage.tsx` |
+| `apps/frontend/src/features/settings/` | `settingsStore.ts` + test, `SettingsPage.css`, `pages/SettingsPage.tsx` |
 
-Note the shape gotcha: the non-component modules sit under `components/`, not at `features/editor/`. There is no `shared/`, `lib/`, or `utils/` directory.
+Note the shape gotcha: the editor's non-component modules sit under `components/`, not at `features/editor/`. The two newer features do **not** copy that — their stores sit at the feature root (`features/library/libraryStore.ts`) with only the page under `pages/`. Prefer the newer shape. There is no `shared/`, `lib/`, or `utils/` directory.
 
 ## Development Commands
 
@@ -146,6 +151,9 @@ curl -s localhost:4000/api/v1/health            # smoke
 | `apps/backend/src/api/mod.rs` | Sole `/api/v1` prefix site, `ApiDoc` tags, JSON `not_found` |
 | `apps/backend/src/api/health.rs` | Canonical route template |
 | `Cargo.toml` (root) | Cargo workspace, `members = ["apps/backend"]`, shared `target/` |
+| `apps/frontend/src/App.tsx` | `BrowserRouter` and the three routes |
+| `apps/frontend/src/features/library/libraryStore.ts` | The song library: pure mutators, validation, legacy migration |
+| `apps/frontend/src/features/settings/settingsStore.ts` | `AppSettings` with field-by-field validation |
 | `apps/frontend/src/features/editor/components/TabSheetEditor.tsx` | The application (state, keyboard, SVG render) |
 | `apps/frontend/src/features/editor/components/usePlayback.ts` | All playback: scheduler, voices, transport state |
 | `apps/frontend/src/features/editor/components/songSchema.ts` | `parseSong` — the only validation boundary for stored/imported songs |
@@ -171,6 +179,7 @@ No `.env` file exists, nothing loads one (no `dotenvy`), and `.gitignore` does *
 - **npm is the package manager** (single root `package-lock.json`, `lockfileVersion: 3`). No Bun, pnpm, or yarn anywhere; no `packageManager` or `engines` field. Install from the repo root, never inside a workspace.
 - Node ≥ 20 in practice (`@types/node` ^24, NodeNext ESM); unpinned.
 - `vite` is aliased to **`npm:rolldown-vite@7.2.5`**, not upstream Vite. Plugin/version advice must account for the Rolldown build.
+- Frontend runtime dependencies are exactly `react`, `react-dom` and `react-router-dom`. There is no UI kit, icon package, date library or state library — icons are hand-inlined SVG and relative timestamps are a local helper in `LibraryPage.tsx`.
 - Backend dev is `cargo watch -x run`: a debug rebuild per save, no separate dev runtime. Prod is `cargo build --release` → `target/release/sheetor-backend`.
 - The Rust toolchain comes from `flake.nix` (nixpkgs stable: `rustc`, `cargo`, `clippy`, `rustfmt`, `rust-analyzer`, `cargo-watch`) — no `rustup`, no `rust-toolchain.toml`. Edition 2024, workspace `resolver = "3"`, one `Cargo.lock` and one `target/` at the repo root.
 - `utoipa-swagger-ui` is built with the `vendored` feature, so the build never downloads the Swagger UI bundle (also makes it sandbox-safe).
@@ -188,7 +197,7 @@ No `.env` file exists, nothing loads one (no `dotenvy`), and `.gitignore` does *
 
 ## Testing & QA
 
-Vitest 3 is installed in the **frontend workspace only** (`vitest run`, config at `apps/frontend/vitest.config.ts`). Tests are colocated as `src/**/*.test.ts` and cover the pure modules — `songUtils`, `songSchema`, `persistence`, `audioEngine`. There is no jsdom, no component/DOM testing library, and no coverage gate: anything needing a browser is verified by hand. The backend has **no tests yet** — `cargo test` runs zero; add integration tests under `apps/backend/tests/` and drive `app::build` with `tower::ServiceExt::oneshot`.
+Vitest 3 is installed in the **frontend workspace only** (`vitest run`, config at `apps/frontend/vitest.config.ts`). Tests are colocated as `src/**/*.test.ts` and cover the pure modules — `songUtils`, `songSchema`, `audioEngine`, `libraryStore`, `settingsStore` (120 tests). There is no jsdom, no component/DOM testing library, and no coverage gate: anything needing a browser is verified by hand. The backend has **no tests yet** — `cargo test` runs zero; add integration tests under `apps/backend/tests/` and drive `app::build` with `tower::ServiceExt::oneshot`.
 
 Conventions for new tests:
 
@@ -213,7 +222,8 @@ Verify a change by:
 - Playback settings are live via `settingsRef` in `usePlayback`; if you add a setting, thread it through `PlaybackSettings` or it will silently stay frozen at `start()` time.
 - `computeMeasureLayouts` mutates the `MLayout` objects it returns during the stretch pass — treat the array as freshly owned, never cache it.
 - No memoization anywhere (`useMemo`/`useCallback`/`React.memo` are absent): full layout + beam computation reruns every render.
-- `persistence.ts` quarantines an invalid `sheetor-song` to `sheetor-song.invalid` and logs a `console.warn`; it has no schema *version*, so shape migrations must be expressed as repair rules inside `parseSong`.
+- `libraryStore.ts` quarantines an unusable `sheetor-library` to `sheetor-library.invalid` and drops individual entries whose song fails `parseSong`. Neither store has a schema *version*, so shape migrations are repair rules at parse time — in `parseSong` for songs, in `parseEntry`/`readSettings` for the wrappers. The pre-library `sheetor-song` key is migrated once and then deleted; `sheetor-song.invalid` is left alone.
+- Editor state that is also a setting (`volume`, `playbackSpeed`, `loopPlayback`, `showFretboard`, `viewMode`) is written back through `updateSettings` by one effect. Add a sixth and you must extend both `AppSettings` and that effect, or the settings page will silently disagree with the transport.
 - `tuning` is UI state and is not persisted. It is widened on load/import (`requiredStringCount`) and shrinking it prunes stranded notes (`pruneNotesToStringCount`); any new tuning-mutation site must do both or notes get an `undefined` pitch (`NaN`).
 - `sampleSongs` in `songUtils.ts` is exported but never imported (dead data). `src/assets/react.svg` is an unreferenced template leftover, and a stale pre-monorepo `dist/` sits at the repo root — not produced by any current script.
 - Time-signature validation (`checkMeasureBeats`) is advisory only: it tints the measure, it does not prevent over/under-filled bars.

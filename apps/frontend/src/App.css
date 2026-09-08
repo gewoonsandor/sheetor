@@ -52,12 +52,48 @@
   color: var(--text);
 }
 
-.header-tagline {
-  margin: 0;
-  font-size: 0.75rem;
-  color: var(--text-faint);
+.app-nav {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-1);
+  margin-left: var(--sp-3);
   padding-left: var(--sp-3);
   border-left: 1px solid var(--border);
+}
+
+.app-nav-link {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sp-2);
+  height: var(--ctl-h-sm);
+  padding: 0 var(--sp-3);
+  border-radius: var(--r-md);
+  color: var(--text-dim);
+  font-size: 0.8125rem;
+  font-weight: 600;
+  text-decoration: none;
+  transition: background var(--t) var(--ease), color var(--t) var(--ease);
+}
+
+.app-nav-link svg {
+  width: 15px;
+  height: 15px;
+  flex: none;
+  opacity: 0.75;
+}
+
+.app-nav-link:hover {
+  background: var(--surface-2);
+  color: var(--text);
+}
+
+.app-nav-link.is-active {
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+
+.app-nav-link.is-active svg {
+  opacity: 1;
 }
 
 .app-main {
@@ -68,9 +104,29 @@
   min-width: 0;
 }
 
+/* Every page that is not the editor sits in the same centred column. */
+.page-shell {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  gap: var(--sp-5);
+  width: 100%;
+  max-width: var(--page-max);
+  margin: 0 auto;
+  padding: var(--sp-5) var(--sp-5) calc(var(--cmdbar-h) + var(--sp-5));
+}
+
 @media (max-width: 700px) {
-  .header-tagline {
+  .app-nav-link {
+    padding: 0 var(--sp-2);
+  }
+
+  .app-nav-link span {
     display: none;
+  }
+
+  .page-shell {
+    padding: var(--sp-4) var(--sp-3) var(--sp-5);
   }
 }
 

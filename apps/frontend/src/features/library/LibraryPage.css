@@ -1,0 +1,144 @@
+/* .page-header / .page-title / .page-subtitle are shared page chrome: the
+   settings page reuses them from this stylesheet and must not redefine them. */
+.page-header {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  align-items: end;
+  gap: var(--sp-2) var(--sp-4);
+  margin: 0 0 var(--sp-6);
+  padding-bottom: var(--sp-4);
+  border-bottom: 1px solid var(--border);
+}
+
+.page-title {
+  grid-column: 1;
+  margin: 0;
+  font-size: 1.5rem;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  line-height: 1.2;
+}
+
+.page-subtitle {
+  grid-column: 1;
+  margin: 0;
+  font-size: 0.8125rem;
+  color: var(--text-dim);
+  line-height: 1.5;
+}
+
+.library-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: var(--sp-4);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.library-card {
+  display: flex;
+  flex-direction: column;
+  padding: var(--sp-4);
+  background: var(--surface-1);
+  border: 1px solid var(--border);
+  border-radius: var(--r-lg);
+  box-shadow: var(--shadow-1);
+  transition: background var(--t) var(--ease), border-color var(--t) var(--ease),
+    box-shadow var(--t) var(--ease), transform var(--t-fast) var(--ease);
+}
+
+.library-card:hover {
+  border-color: var(--border-strong);
+  box-shadow: var(--shadow-2);
+  transform: translateY(calc(-1 * var(--sp-hair)));
+}
+
+.library-card.is-current {
+  background: var(--accent-soft);
+  border-color: var(--border-focus);
+}
+
+.library-card-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--sp-2);
+}
+
+.library-card-title {
+  margin: 0;
+  font-size: 0.9375rem;
+  font-weight: 600;
+  line-height: 1.35;
+  overflow-wrap: anywhere;
+}
+
+.library-card .library-card-badge {
+  display: inline-flex;
+  align-items: center;
+  flex: none;
+  height: var(--ctl-h-xs);
+  padding: 0 var(--sp-2);
+  background: var(--accent-soft);
+  border: 1px solid var(--border-focus);
+  border-radius: var(--r-pill);
+  color: var(--accent);
+}
+
+.library-card-artist {
+  margin: var(--sp-1) 0 0;
+  font-size: 0.8125rem;
+  color: var(--text-dim);
+  overflow-wrap: anywhere;
+}
+
+.library-card-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  margin: var(--sp-3) 0 var(--sp-4);
+  font-size: 0.75rem;
+  color: var(--text-faint);
+  font-variant-numeric: tabular-nums;
+}
+
+.library-card-meta span + span::before {
+  content: '\00b7';
+  margin: 0 var(--sp-2);
+}
+
+.library-card-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sp-2);
+  margin-top: auto;
+  padding-top: var(--sp-4);
+  border-top: 1px solid var(--border);
+}
+
+.library-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  max-width: 52ch;
+  margin-inline: auto;
+  padding: var(--sp-6);
+  background: var(--surface-1);
+  border: 1px solid var(--border);
+  border-radius: var(--r-lg);
+  box-shadow: var(--shadow-1);
+}
+
+.library-empty-title {
+  margin: var(--sp-2) 0 0;
+  font-size: 1.0625rem;
+  font-weight: 600;
+}
+
+.library-empty-body {
+  margin: var(--sp-2) 0 var(--sp-5);
+  font-size: 0.875rem;
+  color: var(--text-dim);
+  line-height: 1.55;
+}
