@@ -92,6 +92,46 @@
   font-variant-numeric: tabular-nums;
 }
 
+.settings-row-control .settings-text-input {
+  width: min(260px, 46vw);
+  text-align: left;
+  font-variant-numeric: normal;
+}
+
+.settings-choices {
+  display: flex;
+  gap: var(--sp-1);
+}
+
+.settings-swatches {
+  display: flex;
+  gap: var(--sp-2);
+}
+
+/* Each swatch carries its own data-accent, so the palette blocks in index.css
+   resolve on the button and it previews a colour style the page is not using.
+   That only works through rgb(var(--accent-rgb)) — var(--accent) was already
+   substituted at :root and would paint every swatch the same. */
+.accent-swatch {
+  width: var(--ctl-h-sm);
+  height: var(--ctl-h-sm);
+  padding: 0;
+  background: rgb(var(--accent-rgb));
+  border: 1px solid var(--border-strong);
+  border-radius: var(--r-pill);
+  cursor: pointer;
+  transition: transform var(--t-fast) var(--ease), box-shadow var(--t-fast) var(--ease);
+}
+
+.accent-swatch:hover {
+  transform: scale(1.08);
+}
+
+.accent-swatch.is-active {
+  border-color: var(--text);
+  box-shadow: 0 0 0 2px var(--bg), 0 0 0 3px rgb(var(--accent-rgb));
+}
+
 @media (max-width: 640px) {
   .settings-row {
     flex-direction: column;

@@ -1526,7 +1526,7 @@ export const TabSheetEditor: React.FC = () => {
                     y={rowY + 2}
                     width={measureW}
                     height={getStaffBottom(ts) - 2 + 8}
-                    fill="rgba(224, 168, 63, 0.035)"
+                    className="measure-wash"
                     style={{ pointerEvents: 'none' }}
                   />
                 )}
@@ -1623,7 +1623,7 @@ export const TabSheetEditor: React.FC = () => {
                 {/* Clef, TAB, tuning labels (rendered on the first measure of every row) */}
                 {(measureLayouts[mIdx]?.x === 0) && (
                   <g transform={`translate(${measureX}, ${rowY})`}>
-                    {showNotation && <path d={TREBLE_CLEF_PATH} fillRule="evenodd" fill="#f2ece4" />}
+                    {showNotation && <path d={TREBLE_CLEF_PATH} fillRule="evenodd" className="glyph-ink" />}
 
                     {/* Stacked TAB text */}
                     {showTab && (
@@ -1644,7 +1644,7 @@ export const TabSheetEditor: React.FC = () => {
                           x="-8"
                           y={TAB_STAFF_TOP + ts + i * TAB_STAFF_HEIGHT_PX}
                           dominantBaseline="central"
-                          fill="#a09890"
+                          className="glyph-label"
                           fontFamily="'Outfit', 'Inter', sans-serif"
                           fontSize="7"
                           fontWeight="600"
@@ -1768,8 +1768,7 @@ export const TabSheetEditor: React.FC = () => {
                         y={rowY + getStaffTop(ts) - 5}
                         width="20"
                         height={getStaffBottom(ts) - getStaffTop(ts) + 10}
-                        fill="rgba(201, 119, 46, 0.12)"
-                        stroke="#d98a3f"
+                        className="selection-ring"
                         strokeWidth="1.5"
                         rx="4"
                         pointerEvents="none"
@@ -1781,7 +1780,7 @@ export const TabSheetEditor: React.FC = () => {
                           cy={rowY + TAB_STAFF_TOP + ts + activeStringIndex * 10}
                           r="5.5"
                           fill="transparent"
-                          stroke="#e0a83f"
+                          className="cursor-ring"
                           strokeWidth="1.5"
                           pointerEvents="none"
                         />
@@ -1796,7 +1795,7 @@ export const TabSheetEditor: React.FC = () => {
                       y1={rowY + getStaffTop(ts) - 8}
                       x2={beatX}
                       y2={rowY + getStaffBottom(ts) + 10}
-                      stroke="#3fb98a"
+                      className="playback-line"
                       strokeWidth="2.5"
                       strokeDasharray="2"
                       pointerEvents="none"
@@ -1828,40 +1827,39 @@ export const TabSheetEditor: React.FC = () => {
                     {/* Render Rest on Standard Staff */}
                     {dur === '1' && (
                       // Whole rest: hanging rectangle on line 4 (y=20)
-                      <rect x={beatX - 6} y="20" width="12" height="6" fill="#f2ece4" />
+                      <rect x={beatX - 6} y="20" width="12" height="6" className="glyph-ink" />
                     )}
                     {dur === '2' && (
                       // Half rest: sitting rectangle on line 3 (y=30)
-                      <rect x={beatX - 6} y="24" width="12" height="6" fill="#f2ece4" />
+                      <rect x={beatX - 6} y="24" width="12" height="6" className="glyph-ink" />
                     )}
                     {dur === '4' && (
                       // Quarter rest: classic squiggle (rendered as path)
                       <path
                         d={`M ${beatX - 1.5} ${30 - 10} l 3 3 c -1.5 1.5, -3 3, -0.75 4.5 c 1.5 1.5, 0.75 3, -2.25 4.5 c -1.5 -0.75, -2.25 -1.5, -0.75 -2.25 c 1.5 -0.75, 0.75 -1.5, 0 -2.25 c -1.5 -0.75, -1.1 -2.25, 0.75 -3.3 Z`}
-                        fill="#f2ece4"
-                        stroke="#f2ece4"
+                        className="glyph-ink glyph-ink-stroke"
                         strokeWidth="1.5"
                       />
                     )}
                     {(dur === '8' || dur === '16' || dur === '32') && (
                       // Eighth / Sixteenth / Thirty-Second rest: slash with hooks
                       <g>
-                        <line x1={beatX + 2} y1={22} x2={beatX - 3} y2={35} stroke="#f2ece4" strokeWidth="1.5" />
-                        <circle cx={beatX - 3} cy={24} r="2.2" fill="#f2ece4" />
+                        <line x1={beatX + 2} y1={22} x2={beatX - 3} y2={35} className="glyph-ink-stroke" strokeWidth="1.5" />
+                        <circle cx={beatX - 3} cy={24} r="2.2" className="glyph-ink" />
                         {dur === '16' && (
-                          <circle cx={beatX - 5} cy={29} r="2.2" fill="#f2ece4" />
+                          <circle cx={beatX - 5} cy={29} r="2.2" className="glyph-ink" />
                         )}
                         {dur === '32' && (
                           <>
-                            <circle cx={beatX - 5} cy={29} r="2.2" fill="#f2ece4" />
-                            <circle cx={beatX - 7} cy={34} r="2.2" fill="#f2ece4" />
+                            <circle cx={beatX - 5} cy={29} r="2.2" className="glyph-ink" />
+                            <circle cx={beatX - 7} cy={34} r="2.2" className="glyph-ink" />
                           </>
                         )}
                       </g>
                     )}
                     {/* Dotted rest dot */}
                     {b.dot && (
-                      <circle cx={beatX + 10} cy={dur === '1' ? 23 : dur === '2' ? 27 : 25} r="2.2" fill="#f2ece4" pointerEvents="none" />
+                      <circle cx={beatX + 10} cy={dur === '1' ? 23 : dur === '2' ? 27 : 25} r="2.2" className="glyph-ink" pointerEvents="none" />
                     )}
                     </>)}
                   </g>
@@ -1954,13 +1952,13 @@ export const TabSheetEditor: React.FC = () => {
 
                         {/* Accidental (#) if sharp */}
                         {n.accidental === '#' && (
-                          <g stroke="#f2ece4" strokeWidth="1.3" opacity="0.9" style={{ pointerEvents: 'none' }}>
+                          <g className="glyph-ink-stroke" strokeWidth="1.3" opacity="0.9" style={{ pointerEvents: 'none' }}>
                             <line x1={beatX - 13} y1={n.y - 6} x2={beatX - 13} y2={n.y + 6} />
                             <line x1={beatX - 10} y1={n.y - 8} x2={beatX - 10} y2={n.y + 4} />
                             <line x1={beatX - 16} y1={n.y - 2.5} x2={beatX - 7} y2={n.y - 4} />
                             <line x1={beatX - 16} y1={n.y + 2.5} x2={beatX - 7} y2={n.y + 1} />
                       {!beamInfo && b.duration === '32' && (
-                        <g fill="#f2ece4">
+                        <g className="glyph-ink">
                           <path
                             d={stemUp 
                               ? `M ${stemX} ${stemEndY} c 4 3, 7 9, 5 17 c -1 -5, -3 -9, -5 -12` 
@@ -1991,17 +1989,15 @@ export const TabSheetEditor: React.FC = () => {
                           rx="4.5"
                           ry="3.0"
                           transform={`rotate(-20 ${beatX} ${n.y})`}
-                          fill={isSelected ? "#d98a3f" : (b.duration === '1' || b.duration === '2' ? "none" : "#f2ece4")}
-                          stroke={isSelected ? "#d98a3f" : "#f2ece4"}
                           strokeWidth="1.4"
-                          className="notehead"
+                          className={`notehead${isSelected ? ' is-selected' : ''}${b.duration === '1' || b.duration === '2' ? ' is-hollow' : ''}`}
                           onClick={() => {
                             selectNote(mIdx, bIdx, n.noteIndex, b.notes);
                           }}
                         />
                         {/* Dotted note dot */}
                         {b.dot && (
-                          <circle cx={beatX + 8} cy={n.y} r="2.2" fill="#f2ece4" pointerEvents="none" />
+                          <circle cx={beatX + 8} cy={n.y} r="2.2" className="glyph-ink" pointerEvents="none" />
                         )}
                       </g>
                     );
@@ -2015,7 +2011,7 @@ export const TabSheetEditor: React.FC = () => {
                         y1={stemUp ? lowestY : highestY}
                         x2={stemX}
                         y2={stemEndY}
-                        stroke="#f2ece4"
+                        className="glyph-ink-stroke"
                         strokeWidth="1.5"
                       />
 
@@ -2026,11 +2022,11 @@ export const TabSheetEditor: React.FC = () => {
                             ? `M ${stemX} ${stemEndY} c 4 3, 7 9, 5 17 c -1 -5, -3 -9, -5 -12` 
                             : `M ${stemX} ${stemEndY} c 4 -3, 7 -9, 5 -17 c -1 5, -3 9, -5 12`
                           }
-                          fill="#f2ece4"
+                          className="glyph-ink"
                         />
                       )}
                       {!beamInfo && b.duration === '16' && (
-                        <g fill="#f2ece4">
+                        <g className="glyph-ink">
                           <path
                             d={stemUp 
                               ? `M ${stemX} ${stemEndY} c 4 3, 7 9, 5 17 c -1 -5, -3 -9, -5 -12` 
@@ -2114,7 +2110,7 @@ export const TabSheetEditor: React.FC = () => {
                               <path
                                 d={`M ${prevPos.x} ${prevPos.y - 3} C ${prevPos.x + dx * 0.35} ${cy - 6}, ${beatX - dx * 0.35} ${cy - 6}, ${beatX} ${stringY - 3}`}
                                 fill="none"
-                                stroke="#a89f96"
+                                className="slur-line"
                                 strokeWidth="1.2"
                                 style={{ pointerEvents: 'none' }}
                               />
@@ -2127,7 +2123,7 @@ export const TabSheetEditor: React.FC = () => {
                                 y1={prevPos.y}
                                 x2={beatX - 7}
                                 y2={stringY}
-                                stroke="#a89f96"
+                                className="slur-line"
                                 strokeWidth="1"
                                 style={{ pointerEvents: 'none' }}
                               />
@@ -2146,7 +2142,7 @@ export const TabSheetEditor: React.FC = () => {
                       y1={rowY + TAB_STAFF_TOP + ts + stringCount * 10 + 2}
                       x2={stemUp ? beatX + 4 : beatX - 4}
                       y2={rowY + TAB_STAFF_TOP + ts + stringCount * 10 + 2 + (beamInfo ? 11.5 : 10)}
-                      stroke="#6f6862"
+                      className="tab-stem"
                       strokeWidth="1.2"
                       style={{ pointerEvents: 'none' }}
                     />
@@ -2154,12 +2150,12 @@ export const TabSheetEditor: React.FC = () => {
 
                   {/* Palm mute / let ring indicators */}
                   {showTab && b.notes.some(n => n.palmMute) && (
-                    <text x={beatX - 12} y={rowY + TAB_STAFF_TOP + ts - 4} className="music-text" fontSize="8" fill="#e0a83f" style={{ pointerEvents: 'none' }}>
+                    <text x={beatX - 12} y={rowY + TAB_STAFF_TOP + ts - 4} className="music-text technique-pm" fontSize="8" style={{ pointerEvents: 'none' }}>
                       P.M.
                     </text>
                   )}
                   {showTab && b.notes.some(n => n.letRing) && (
-                    <text x={beatX - 12} y={rowY + TAB_STAFF_TOP + ts - 14} className="music-text" fontSize="8" fill="#3fb98a" style={{ pointerEvents: 'none' }}>
+                    <text x={beatX - 12} y={rowY + TAB_STAFF_TOP + ts - 14} className="music-text technique-ring" fontSize="8" style={{ pointerEvents: 'none' }}>
                       let ring
                     </text>
                   )}
@@ -2206,7 +2202,7 @@ export const TabSheetEditor: React.FC = () => {
                 return (
                   <g key={`beam-${gi}`} style={{ pointerEvents: 'none' }}>
                     {/* Primary beam: spans the full group */}
-                    <rect x={firstSX} y={beamY - 2} width={Math.max(lastSX - firstSX, 2)} height="4" fill="#f2ece4" />
+                    <rect x={firstSX} y={beamY - 2} width={Math.max(lastSX - firstSX, 2)} height="4" className="glyph-ink" />
                     {/* Secondary beam: over 16th+32nd runs, extended 1/4 way to adjacent 8ths */}
                     {secondarySegments.map((seg, si) => {
                       const segFirstX = getBeatCoordinates(mIdx, seg.start);
@@ -2230,7 +2226,7 @@ export const TabSheetEditor: React.FC = () => {
                       const leftSX = mainStemUp ? leftX + 4 - 0.75 : leftX - 4 - 0.75;
                       const rightSX = mainStemUp ? rightX + 4 + 0.75 : rightX - 4 + 0.75;
                       return (
-                        <rect key={`beam16-${gi}-${si}`} x={leftSX} y={beamY - 2 + beamDir * 5} width={Math.max(rightSX - leftSX, 2)} height="4" fill="#f2ece4" />
+                        <rect key={`beam16-${gi}-${si}`} x={leftSX} y={beamY - 2 + beamDir * 5} width={Math.max(rightSX - leftSX, 2)} height="4" className="glyph-ink" />
                       );
                     })}
                     {/* Tertiary beam: over 32nd runs, extended 1/4 way to adjacent 16ths/8ths */}
@@ -2256,7 +2252,7 @@ export const TabSheetEditor: React.FC = () => {
                       const leftSX = mainStemUp ? leftX + 4 - 0.75 : leftX - 4 - 0.75;
                       const rightSX = mainStemUp ? rightX + 4 + 0.75 : rightX - 4 + 0.75;
                       return (
-                        <rect key={`beam32-${gi}-${si}`} x={leftSX} y={beamY - 2 + beamDir * 10} width={Math.max(rightSX - leftSX, 2)} height="4" fill="#f2ece4" />
+                        <rect key={`beam32-${gi}-${si}`} x={leftSX} y={beamY - 2 + beamDir * 10} width={Math.max(rightSX - leftSX, 2)} height="4" className="glyph-ink" />
                       );
                     })}
                   </g>
@@ -2305,7 +2301,7 @@ export const TabSheetEditor: React.FC = () => {
                       y={rhythmY - 1.5}
                       width={Math.max(lastSX - firstSX, 2)}
                       height="3"
-                      fill="#6f6862"
+                      className="tab-beam"
                     />
                     {secondarySegments.map((seg, si) => {
                       const segFirstX = getBeatCoordinates(mIdx, seg.start);
@@ -2335,7 +2331,7 @@ export const TabSheetEditor: React.FC = () => {
                           y={rhythmY - 1.5 - 4}
                           width={Math.max(rightSX - leftSX, 2)}
                           height="3"
-                          fill="#6f6862"
+                          className="tab-beam"
                         />
                       );
                     })}
@@ -2367,7 +2363,7 @@ export const TabSheetEditor: React.FC = () => {
                           y={rhythmY - 1.5 - 8}
                           width={Math.max(rightSX - leftSX, 2)}
                           height="3"
-                          fill="#6f6862"
+                          className="tab-beam"
                         />
                       );
                     })}

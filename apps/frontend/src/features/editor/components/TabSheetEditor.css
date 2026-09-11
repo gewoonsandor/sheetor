@@ -344,9 +344,72 @@ input[type="range"] {
   opacity: 0.85;
 }
 
+/* Glyph paint. SVG presentation attributes cannot resolve var(), so every
+   notation colour is a CSS property on a class instead of an inline fill. */
+
+.glyph-ink {
+  fill: var(--ink);
+}
+
+.glyph-ink-stroke {
+  stroke: var(--ink);
+}
+
+.glyph-label {
+  fill: var(--ink-dim);
+}
+
+.slur-line {
+  stroke: var(--ink-dim);
+}
+
+.tab-stem {
+  stroke: var(--ink-faint);
+}
+
+.tab-beam {
+  fill: var(--ink-faint);
+}
+
+.selection-ring {
+  fill: var(--accent-wash);
+  stroke: var(--accent);
+}
+
+.cursor-ring {
+  stroke: var(--warn);
+}
+
+.playback-line {
+  stroke: var(--ok);
+}
+
+.measure-wash {
+  fill: var(--warn-wash);
+}
+
+.technique-pm {
+  fill: var(--warn);
+}
+
+.technique-ring {
+  fill: var(--ok);
+}
+
 .notehead {
+  fill: var(--ink);
+  stroke: var(--ink);
   cursor: pointer;
   transition: fill var(--t-fast) var(--ease);
+}
+
+.notehead.is-hollow {
+  fill: none;
+}
+
+.notehead.is-selected {
+  fill: var(--accent);
+  stroke: var(--accent);
 }
 
 .notehead:hover {
@@ -469,7 +532,7 @@ input[type="range"] {
   position: relative;
   width: 100%;
   min-width: 900px;
-  background: linear-gradient(180deg, #2b211a 0%, #1f1815 100%);
+  background: linear-gradient(180deg, var(--instr-neck-top) 0%, var(--instr-neck-bottom) 100%);
   border: 1px solid var(--border);
   border-radius: var(--r-md);
   overflow: hidden;
@@ -481,7 +544,7 @@ input[type="range"] {
   left: 30px;
   width: 6px;
   height: 100%;
-  background: linear-gradient(90deg, #ece2d4, #b9ae9e);
+  background: linear-gradient(90deg, var(--instr-nut-a), var(--instr-nut-b));
   z-index: 3;
 }
 
@@ -490,13 +553,13 @@ input[type="range"] {
   top: 0;
   width: 2px;
   height: 100%;
-  background: linear-gradient(90deg, rgba(196, 186, 170, 0.55), rgba(120, 110, 100, 0.55));
+  background: linear-gradient(90deg, var(--instr-fret-a), var(--instr-fret-b));
   z-index: 2;
 }
 
 .fretboard-marker {
   position: absolute;
-  background: var(--fret-marker);
+  background: var(--instr-inlay);
   border-radius: 50%;
   transform: translate(-50%, -50%);
   z-index: 1;
@@ -526,7 +589,7 @@ input[type="range"] {
   position: absolute;
   left: 0;
   width: 100%;
-  background: linear-gradient(180deg, rgba(255, 250, 240, 0.9), rgba(150, 140, 130, 0.7));
+  background: linear-gradient(180deg, var(--instr-string-a), var(--instr-string-b));
   z-index: 3;
   pointer-events: none;
 }
@@ -542,7 +605,7 @@ input[type="range"] {
 }
 
 .fretboard-fret-cell:hover {
-  background-color: var(--fret-wash);
+  background-color: var(--instr-fret-wash);
 }
 
 .fretboard-note-bubble {
@@ -790,9 +853,9 @@ input[type="range"] {
   align-items: flex-end;
   justify-content: center;
   padding-bottom: var(--sp-2);
-  background: linear-gradient(180deg, #f4efe7 0%, #ded6ca 100%);
-  border-right: 1px solid rgba(40, 34, 28, 0.35);
-  color: var(--text-faint);
+  background: linear-gradient(180deg, var(--instr-key-white-top) 0%, var(--instr-key-white-bottom) 100%);
+  border-right: 1px solid var(--instr-key-white-edge);
+  color: var(--instr-key-label);
   font-size: 0.5625rem;
   font-weight: 600;
 }
@@ -802,7 +865,7 @@ input[type="range"] {
 }
 
 .piano-key.white:hover {
-  background: linear-gradient(180deg, #ffffff 0%, #ece4d8 100%);
+  background: linear-gradient(180deg, var(--instr-key-white-hover-top) 0%, var(--instr-key-white-hover-bottom) 100%);
 }
 
 .piano-key.white.active {
@@ -811,7 +874,7 @@ input[type="range"] {
 }
 
 .piano-key.white.playback-active {
-  background: linear-gradient(180deg, #5fd3a6 0%, var(--ok) 100%);
+  background: linear-gradient(180deg, rgb(var(--ok-rgb) / 0.72) 0%, var(--ok) 100%);
   color: var(--ok-ink);
 }
 
@@ -823,20 +886,20 @@ input[type="range"] {
   height: 62%;
   z-index: 2;
   border-radius: 0 0 var(--r-sm) var(--r-sm);
-  background: linear-gradient(180deg, #3a322c 0%, #17130f 100%);
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.5);
+  background: linear-gradient(180deg, var(--instr-key-black-top) 0%, var(--instr-key-black-bottom) 100%);
+  box-shadow: 0 2px 4px var(--instr-key-shadow);
 }
 
 .piano-key.black:hover {
-  background: linear-gradient(180deg, #4d433a 0%, #241d18 100%);
+  background: linear-gradient(180deg, var(--instr-key-black-hover-top) 0%, var(--instr-key-black-hover-bottom) 100%);
 }
 
 .piano-key.black.active {
-  background: linear-gradient(180deg, var(--accent) 0%, #a8642a 100%);
+  background: linear-gradient(180deg, var(--accent) 0%, rgb(var(--accent-rgb) / 0.55) 100%);
 }
 
 .piano-key.black.playback-active {
-  background: linear-gradient(180deg, var(--ok) 0%, #248a63 100%);
+  background: linear-gradient(180deg, var(--ok) 0%, rgb(var(--ok-rgb) / 0.55) 100%);
 }
 
 .piano-key-label {

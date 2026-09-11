@@ -1,9 +1,14 @@
-import { NavLink } from 'react-router-dom';
+import { useSyncExternalStore } from 'react';
+import { Link, NavLink } from 'react-router-dom';
+
+import { deriveInitials, getUserSnapshot, subscribeUser } from '../../features/user/userStore';
 
 const navClass = ({ isActive }: { isActive: boolean }): string =>
   isActive ? 'app-nav-link is-active' : 'app-nav-link';
 
 export const AppHeader = () => {
+  const user = useSyncExternalStore(subscribeUser, getUserSnapshot);
+
   return (
     <header className="app-header">
       <div className="logo-area">
@@ -37,6 +42,11 @@ export const AppHeader = () => {
           <span>Settings</span>
         </NavLink>
       </nav>
+
+      <Link to="/settings" className="app-user" title="User settings">
+        <span className="app-user-avatar" aria-hidden="true">{deriveInitials(user.name)}</span>
+        <span className="app-user-name">{user.name}</span>
+      </Link>
     </header>
   );
 };

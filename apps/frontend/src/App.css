@@ -96,6 +96,47 @@
   opacity: 1;
 }
 
+.app-user {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sp-2);
+  margin-left: auto;
+  height: var(--ctl-h-sm);
+  padding: 0 var(--sp-2) 0 var(--sp-1);
+  border-radius: var(--r-pill);
+  color: var(--text-dim);
+  font-size: 0.8125rem;
+  font-weight: 600;
+  text-decoration: none;
+  transition: background var(--t) var(--ease), color var(--t) var(--ease);
+}
+
+.app-user:hover {
+  background: var(--surface-2);
+  color: var(--text);
+}
+
+.app-user-avatar {
+  display: grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  flex: none;
+  border-radius: var(--r-pill);
+  background: var(--accent-soft);
+  border: 1px solid var(--border-focus);
+  color: var(--accent);
+  font-size: 0.625rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+}
+
+.app-user-avatar-lg {
+  width: var(--ctl-h);
+  height: var(--ctl-h);
+  font-size: 0.8125rem;
+}
+
 .app-main {
   flex: 1;
   display: flex;
@@ -122,6 +163,10 @@
   }
 
   .app-nav-link span {
+    display: none;
+  }
+
+  .app-user-name {
     display: none;
   }
 

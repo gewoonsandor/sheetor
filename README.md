@@ -1,6 +1,6 @@
 # Sheetor Monorepo
 
-- `apps/frontend`: React + TypeScript + Vite. Three client-side routes: `/` the editor, `/library` the saved songs (in folders you can nest, with drag-and-drop filing), `/settings` the preferences.
+- `apps/frontend`: React + TypeScript + Vite. Three client-side routes: `/` the editor, `/library` the saved songs (in folders you can nest, with drag-and-drop filing), `/settings` the user settings — a local profile plus light/dark themes and five colour styles. Everything lives in `localStorage`; there is no account and nothing is sent anywhere.
 - `apps/backend`: Rust + axum API with Swagger docs (utoipa)
 
 ## Quick start

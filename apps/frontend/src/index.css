@@ -1,54 +1,105 @@
 /* Design tokens — the single source of truth for colour, spacing and shape.
-   Everything else in the app references these; never hardcode a hex again. */
+   Everything else in the app references these; never hardcode a hex again.
+
+   Colour has two independent axes, both attributes on <html>:
+     data-theme="light|dark"  — the lightness ladder and the ink polarity
+     data-accent="<palette>"  — the hue/saturation tint and the accent triplet
+   Both are written by applyTheme() in src/features/user/theme.ts.
+
+   A custom property's var()s are substituted where the property is DECLARED,
+   and descendants inherit the substituted value. So re-pointing --tint-h in a
+   [data-accent] block re-tints the neutrals only because that block and :root
+   both match <html>, the element the surface and text declarations sit
+   on; and an element deeper in the tree that sets --accent-rgb changes only
+   what reads rgb(var(--accent-rgb)) directly, never the inherited --accent. */
 :root {
-  /* Surfaces: warm near-black, each step ~+6% lightness */
-  --bg: #12100e;
-  --surface-1: #1a1715;
-  --surface-2: #221e1b;
-  --surface-3: #2b2622;
-  --surface-4: #362f2a;
+  color-scheme: dark;
 
-  /* Score paper — the staff sits on its own slightly lifted surface */
-  --paper: #201c19;
+  /* Colour style: the two knobs every palette re-points. Amber lives here so a
+     missing or unknown data-accent still renders the shipped look. */
+  --tint-h: 26;
+  --tint-s: 12%;
+  --accent-rgb: 217 138 63;
+  --accent-hover-rgb: 231 154 79;
+  --accent-ink: hsl(26 30% 8%);
 
-  /* Score ink — one paper-white base for every staff element */
+  /* Surfaces: warm near-black, each step lighter as it lifts */
+  --bg: hsl(var(--tint-h) var(--tint-s) 6%);
+  --surface-1: hsl(var(--tint-h) var(--tint-s) 9.5%);
+  --surface-2: hsl(var(--tint-h) var(--tint-s) 12%);
+  --surface-3: hsl(var(--tint-h) var(--tint-s) 15%);
+  --surface-4: hsl(var(--tint-h) var(--tint-s) 19%);
+
+  /* Score paper and ink. --ink-rgb is the polarity that flips with the theme;
+     every staff element and glyph derives from it, so the notation follows. */
+  --paper: hsl(var(--tint-h) var(--tint-s) 11%);
   --ink-rgb: 240 232 222;
+  --ink: rgb(var(--ink-rgb));
+  --ink-dim: rgb(var(--ink-rgb) / 0.62);
+  --ink-faint: rgb(var(--ink-rgb) / 0.42);
   --staff-line: rgb(var(--ink-rgb) / 0.28);
   --staff-line-strong: rgb(var(--ink-rgb) / 0.44);
   --bar-line: rgb(var(--ink-rgb) / 0.36);
   --bar-line-end: rgb(var(--ink-rgb) / 0.62);
-  --fret-wash: rgb(var(--ink-rgb) / 0.07);
-  --fret-marker: rgb(var(--ink-rgb) / 0.18);
 
   /* Hairlines */
-  --border: rgba(238, 230, 220, 0.08);
-  --border-strong: rgba(238, 230, 220, 0.16);
-  --border-focus: rgba(217, 138, 63, 0.55);
+  --border: hsl(var(--tint-h) 25% 92% / 0.08);
+  --border-strong: hsl(var(--tint-h) 25% 92% / 0.16);
+  --border-focus: rgb(var(--accent-rgb) / 0.55);
 
   /* Text */
-  --text: #f2ece4;
-  --text-dim: #a89f96;
-  --text-faint: #6f6862;
+  --text: hsl(var(--tint-h) 30% 92%);
+  --text-dim: hsl(var(--tint-h) 10% 62%);
+  --text-faint: hsl(var(--tint-h) 8% 41%);
 
-  /* Amber accent */
-  --accent: #d98a3f;
-  --accent-hover: #e79a4f;
-  --accent-ink: #1a1512;
-  --accent-soft: rgba(217, 138, 63, 0.14);
-  --accent-glow: rgba(217, 138, 63, 0.28);
+  /* Accent, derived from the palette triplet */
+  --accent: rgb(var(--accent-rgb));
+  --accent-hover: rgb(var(--accent-hover-rgb));
+  --accent-soft: rgb(var(--accent-rgb) / 0.14);
+  --accent-glow: rgb(var(--accent-rgb) / 0.28);
+  --accent-wash: rgb(var(--accent-rgb) / 0.12);
 
-  /* Semantic */
-  --danger: #e2635c;
-  --danger-soft: rgba(226, 99, 92, 0.14);
-  --danger-border: rgba(226, 99, 92, 0.32);
-  --danger-hover: rgba(226, 99, 92, 0.22);
-  --danger-hover-border: rgba(226, 99, 92, 0.5);
-  --danger-hover-text: #f08880;
-  --warn: #e0a83f;
-  --ok: #3fb98a;
-  --ok-soft: rgba(63, 185, 138, 0.16);
-  --ok-glow: rgba(63, 185, 138, 0.22);
-  --ok-ink: #0d1a15;
+  /* Semantic, derived the same way */
+  --danger-rgb: 226 99 92;
+  --warn-rgb: 224 168 63;
+  --ok-rgb: 63 185 138;
+  --danger: rgb(var(--danger-rgb));
+  --danger-soft: rgb(var(--danger-rgb) / 0.14);
+  --danger-border: rgb(var(--danger-rgb) / 0.32);
+  --danger-hover: rgb(var(--danger-rgb) / 0.22);
+  --danger-hover-border: rgb(var(--danger-rgb) / 0.5);
+  --danger-hover-text: hsl(4 78% 72%);
+  --warn: rgb(var(--warn-rgb));
+  --warn-wash: rgb(var(--warn-rgb) / 0.035);
+  --ok: rgb(var(--ok-rgb));
+  --ok-soft: rgb(var(--ok-rgb) / 0.16);
+  --ok-glow: rgb(var(--ok-rgb) / 0.22);
+  --ok-ink: hsl(160 40% 8%);
+
+  /* Instruments are depictions of physical objects — dark wood, white and black
+     keys — so they do NOT flip with the theme. They follow the palette only
+     where they show accent or playback state. */
+  --instr-neck-top: hsl(26 25% 14%);
+  --instr-neck-bottom: hsl(26 20% 10%);
+  --instr-nut-a: hsl(32 35% 88%);
+  --instr-nut-b: hsl(35 15% 67%);
+  --instr-fret-a: rgb(196 186 170 / 0.55);
+  --instr-fret-b: rgb(120 110 100 / 0.55);
+  --instr-string-a: rgb(255 250 240 / 0.9);
+  --instr-string-b: rgb(150 140 130 / 0.7);
+  --instr-inlay: rgb(240 232 222 / 0.18);
+  --instr-fret-wash: rgb(240 232 222 / 0.07);
+  --instr-key-label: hsl(30 8% 35%);
+  --instr-key-white-top: #f4efe7;
+  --instr-key-white-bottom: #ded6ca;
+  --instr-key-white-hover-top: #ffffff;
+  --instr-key-white-hover-bottom: #ece4d8;
+  --instr-key-white-edge: rgb(40 34 28 / 0.35);
+  --instr-key-black-top: #3a322c;
+  --instr-key-black-bottom: #17130f;
+  --instr-key-black-hover-top: #4d433a;
+  --instr-key-black-hover-bottom: #241d18;
+  --instr-key-shadow: rgb(0 0 0 / 0.5);
 
   /* Spacing scale */
   --sp-hair: 2px;
@@ -81,7 +132,7 @@
   --shadow-2: 0 8px 24px -6px rgba(0, 0, 0, 0.6);
   --shadow-3: 0 18px 48px -12px rgba(0, 0, 0, 0.7);
   --scrim: rgba(10, 9, 8, 0.72);
-  --bar-surface: rgba(18, 16, 14, 0.92);
+  --bar-surface: hsl(var(--tint-h) var(--tint-s) 6% / 0.92);
 
   --z-bar: 40;
   --z-popover: 45;
@@ -99,6 +150,64 @@
   --t-slow: 0.2s;
 }
 
+[data-theme='light'] {
+  color-scheme: light;
+
+  --accent-rgb: 176 100 24;
+  --accent-hover-rgb: 156 86 18;
+  --accent-ink: hsl(26 60% 98%);
+
+  --bg: hsl(var(--tint-h) 30% 94%);
+  --surface-1: hsl(var(--tint-h) 45% 99%);
+  --surface-2: hsl(var(--tint-h) 32% 96.5%);
+  --surface-3: hsl(var(--tint-h) 26% 92%);
+  --surface-4: hsl(var(--tint-h) 22% 86%);
+
+  /* Dark ink on near-white paper; the alphas are raised because a dark film
+     over white reads lighter than a light film over near-black. */
+  --paper: hsl(var(--tint-h) 50% 99.5%);
+  --ink-rgb: 34 28 23;
+  --staff-line: rgb(var(--ink-rgb) / 0.32);
+  --staff-line-strong: rgb(var(--ink-rgb) / 0.5);
+  --bar-line: rgb(var(--ink-rgb) / 0.42);
+  --bar-line-end: rgb(var(--ink-rgb) / 0.72);
+
+  --border: hsl(var(--tint-h) 20% 20% / 0.12);
+  --border-strong: hsl(var(--tint-h) 20% 20% / 0.22);
+
+  --text: hsl(var(--tint-h) 25% 13%);
+  --text-dim: hsl(var(--tint-h) 12% 38%);
+  --text-faint: hsl(var(--tint-h) 10% 55%);
+
+  --danger-rgb: 190 48 42;
+  --warn-rgb: 158 108 16;
+  --ok-rgb: 20 122 88;
+  --danger-hover-text: rgb(var(--danger-rgb));
+
+  --shadow-1: 0 1px 2px hsl(var(--tint-h) 30% 20% / 0.08);
+  --shadow-2: 0 8px 24px -6px hsl(var(--tint-h) 30% 20% / 0.16);
+  --shadow-3: 0 18px 48px -12px hsl(var(--tint-h) 30% 20% / 0.22);
+  --scrim: hsl(var(--tint-h) 20% 25% / 0.32);
+  --bar-surface: hsl(var(--tint-h) 40% 99% / 0.9);
+}
+
+/* Colour styles. Each re-points the neutral tint and the accent triplet; the
+   selector also matches nested elements, which is how a swatch button on the
+   settings page previews a palette it is not currently using. */
+[data-accent='amber'] { --tint-h: 26; --tint-s: 12%; --accent-rgb: 217 138 63; --accent-hover-rgb: 231 154 79; --accent-ink: hsl(26 30% 8%); }
+[data-accent='teal'] { --tint-h: 190; --tint-s: 10%; --accent-rgb: 56 189 189; --accent-hover-rgb: 82 205 205; --accent-ink: hsl(190 40% 7%); }
+[data-accent='indigo'] { --tint-h: 232; --tint-s: 12%; --accent-rgb: 129 148 248; --accent-hover-rgb: 150 167 252; --accent-ink: hsl(232 40% 9%); }
+[data-accent='violet'] { --tint-h: 275; --tint-s: 11%; --accent-rgb: 167 129 240; --accent-hover-rgb: 183 150 246; --accent-ink: hsl(275 35% 9%); }
+[data-accent='rose'] { --tint-h: 345; --tint-s: 11%; --accent-rgb: 244 114 160; --accent-hover-rgb: 248 138 178; --accent-ink: hsl(345 35% 9%); }
+
+/* On near-white surfaces the dark-tuned accents lose contrast, so each palette
+   darkens its triplet and inverts its ink. */
+[data-theme='light'][data-accent='amber'], [data-theme='light'] [data-accent='amber'] { --accent-rgb: 176 100 24; --accent-hover-rgb: 156 86 18; --accent-ink: hsl(26 60% 98%); }
+[data-theme='light'][data-accent='teal'], [data-theme='light'] [data-accent='teal'] { --accent-rgb: 13 133 133; --accent-hover-rgb: 10 112 112; --accent-ink: hsl(190 60% 98%); }
+[data-theme='light'][data-accent='indigo'], [data-theme='light'] [data-accent='indigo'] { --accent-rgb: 66 86 214; --accent-hover-rgb: 52 71 190; --accent-ink: hsl(232 60% 98%); }
+[data-theme='light'][data-accent='violet'], [data-theme='light'] [data-accent='violet'] { --accent-rgb: 120 74 202; --accent-hover-rgb: 103 60 180; --accent-ink: hsl(275 60% 98%); }
+[data-theme='light'][data-accent='rose'], [data-theme='light'] [data-accent='rose'] { --accent-rgb: 198 46 106; --accent-hover-rgb: 174 36 92; --accent-ink: hsl(345 60% 98%); }
+
 * {
   box-sizing: border-box;
 }
@@ -113,8 +222,9 @@ body {
   -webkit-font-smoothing: antialiased;
 }
 
-/* Dark, thin scrollbars everywhere — light OS bars inside a dark popover read
-   as a rendering bug. */
+/* Thin scrollbars everywhere. color-scheme above hands native bars, selects and
+   range inputs to the OS in the right polarity; --surface-4 keeps the custom
+   thumb in step with the theme. */
 * {
   scrollbar-width: thin;
   scrollbar-color: var(--surface-4) transparent;

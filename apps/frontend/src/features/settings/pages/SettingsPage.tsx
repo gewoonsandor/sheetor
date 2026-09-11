@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useSyncExternalStore } from 'react';
 import type { ReactNode } from 'react';
 import type { AppSettings } from '../settingsStore';
 import {
@@ -8,6 +8,16 @@ import {
   saveSettings,
   updateSettings,
 } from '../settingsStore';
+import {
+  ACCENTS,
+  ACCENT_LABELS,
+  THEME_LABELS,
+  THEME_PREFERENCES,
+  deriveInitials,
+  getUserSnapshot,
+  subscribeUser,
+  updateUser,
+} from '../../user/userStore';
 import '../SettingsPage.css';
 
 type SettingsRowProps = {
@@ -34,8 +44,11 @@ const SettingsRow = ({ name, description, htmlFor, children }: SettingsRowProps)
 );
 
 export const SettingsPage = () => {
+  const user = useSyncExternalStore(subscribeUser, getUserSnapshot);
   const [settings, setSettings] = useState<AppSettings>(loadSettings);
   const [bpmDraft, setBpmDraft] = useState<string>(() => String(settings.defaultBpm));
+  const [nameDraft, setNameDraft] = useState<string>(user.name);
+  const [emailDraft, setEmailDraft] = useState<string>(user.email);
 
   const apply = (patch: Partial<AppSettings>): void => {
     setSettings(updateSettings(patch));
@@ -56,17 +69,111 @@ export const SettingsPage = () => {
     setBpmDraft(String(DEFAULT_SETTINGS.defaultBpm));
   };
 
+  const commitName = (): void => {
+    setNameDraft(updateUser({ name: nameDraft }).name);
+  };
+
+  const commitEmail = (): void => {
+    setEmailDraft(updateUser({ email: emailDraft }).email);
+  };
+
   return (
     <div className="page-shell">
       <header className="page-header">
-        <h1 className="page-title">Settings</h1>
+        <h1 className="page-title">User settings</h1>
         <p className="page-subtitle">
-          Preferences are kept in this browser only. Nothing leaves your machine, and clearing
-          site data restores the defaults.
+          Signed in locally as {user.name}. Preferences are kept in this browser only — nothing
+          leaves your machine, and clearing site data restores the defaults.
         </p>
       </header>
 
       <div className="settings-sections">
+        <section className="settings-section">
+          <h2 className="settings-section-title">Account</h2>
+          <p className="settings-section-note">Who you are in this browser. There is no sign-in yet.</p>
+          <div className="settings-card">
+            <SettingsRow name="Avatar" description="Initials are taken from your display name.">
+              <span className="app-user-avatar app-user-avatar-lg">{deriveInitials(user.name)}</span>
+            </SettingsRow>
+
+            <SettingsRow
+              name="Display name"
+              description="Shown in the app header. This profile lives in this browser; there is no account to sign in to."
+              htmlFor="settings-user-name"
+            >
+              <input
+                id="settings-user-name"
+                className="control-input settings-text-input"
+                type="text"
+                value={nameDraft}
+                onChange={(e) => setNameDraft(e.target.value)}
+                onBlur={commitName}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') commitName();
+                }}
+              />
+            </SettingsRow>
+
+            <SettingsRow
+              name="Email"
+              description="Optional label for this profile. Nothing is sent anywhere."
+              htmlFor="settings-user-email"
+            >
+              <input
+                id="settings-user-email"
+                className="control-input settings-text-input"
+                type="email"
+                placeholder="Add an email"
+                value={emailDraft}
+                onChange={(e) => setEmailDraft(e.target.value)}
+                onBlur={commitEmail}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') commitEmail();
+                }}
+              />
+            </SettingsRow>
+          </div>
+        </section>
+
+        <section className="settings-section">
+          <h2 className="settings-section-title">Appearance</h2>
+          <p className="settings-section-note">How Sheetor looks. The choice applies instantly and survives a reload.</p>
+          <div className="settings-card">
+            <SettingsRow name="Theme" description="System follows your operating system setting.">
+              <div className="settings-choices" role="group" aria-label="Theme">
+                {THEME_PREFERENCES.map((preference) => (
+                  <button
+                    key={preference}
+                    type="button"
+                    className={`btn${user.theme === preference ? ' btn-active' : ''}`}
+                    aria-pressed={user.theme === preference}
+                    onClick={() => updateUser({ theme: preference })}
+                  >
+                    {THEME_LABELS[preference]}
+                  </button>
+                ))}
+              </div>
+            </SettingsRow>
+
+            <SettingsRow name="Colour style" description="Tints the accent and the surfaces behind it.">
+              <div className="settings-swatches" role="group" aria-label="Colour style">
+                {ACCENTS.map((accent) => (
+                  <button
+                    key={accent}
+                    type="button"
+                    data-accent={accent}
+                    className={`accent-swatch${user.accent === accent ? ' is-active' : ''}`}
+                    aria-pressed={user.accent === accent}
+                    aria-label={ACCENT_LABELS[accent]}
+                    title={ACCENT_LABELS[accent]}
+                    onClick={() => updateUser({ accent })}
+                  />
+                ))}
+              </div>
+            </SettingsRow>
+          </div>
+        </section>
+
         <section className="settings-section">
           <h2 className="settings-section-title">Playback</h2>
           <p className="settings-section-note">How the transport sounds and behaves when you play a song.</p>
@@ -182,7 +289,7 @@ export const SettingsPage = () => {
 
             <SettingsRow
               name="Reset to defaults"
-              description="Puts every setting on this page back to its shipped value."
+              description="Puts playback, editor and new-song settings back to their shipped values. Your name and appearance are untouched."
             >
               <button type="button" className="btn btn-danger" onClick={resetToDefaults}>
                 Reset to defaults

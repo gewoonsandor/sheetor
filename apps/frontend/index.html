@@ -8,6 +8,25 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
     <title>Sheetor - Guitar TAB &amp; Sheet Music Editor</title>
+    <script>
+      /* Pre-paint theme, so a light-mode user never sees a dark flash while the
+         bundle loads. Mirrors applyTheme() in src/features/user/theme.ts; keep the
+         'sheetor-user' key and the theme/accent field names in sync with
+         src/features/user/userStore.ts. */
+      try {
+        var u = JSON.parse(localStorage.getItem('sheetor-user') || '{}');
+        var d = document.documentElement;
+        d.dataset.theme =
+          u.theme === 'light' || u.theme === 'dark'
+            ? u.theme
+            : window.matchMedia('(prefers-color-scheme: light)').matches
+              ? 'light'
+              : 'dark';
+        if (typeof u.accent === 'string') d.dataset.accent = u.accent;
+      } catch (e) {
+        /* first visit, or storage blocked: the :root defaults stand */
+      }
+    </script>
   </head>
   <body>
     <div id="root"></div>
