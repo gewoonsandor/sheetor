@@ -79,20 +79,19 @@ npm run dev                 # cargo watch + vite; use http://localhost:5173
 npm run dev:backend         # cargo watch -q -c -w apps/backend -x run  (:4000)
 npm run dev:frontend        # vite (:5173, strictPort), proxies /api + /docs to :4000
 npm run build               # frontend dist, then cargo build --release
+npm run check               # test + typecheck + lint, in that order — the gate
 npm run lint                # eslint (frontend) + cargo clippy -D warnings
 npm run typecheck           # tsc -b (frontend) + cargo check --all-targets
 npm test                    # vitest run (pure modules) + cargo test
 npm run start:backend       # cargo run --release — one port, :4000
 ```
 
-Every command needs the dev shell (`nix develop`, or direnv) for `cargo`/`cargo-watch`.
+Every command needs the dev shell for `cargo`/`cargo-watch`. `.envrc` is `use flake`, so with direnv allowed they work in a plain shell; without it, prefix with `nix develop --command`.
 
 Verification gates, exactly:
 
 ```bash
-npm test                                        # vitest run — pure modules
-npm run typecheck                               # tsc -b + cargo check
-npm run lint                                    # ESLint + clippy
+npm run check                                   # vitest + tsc -b + cargo check + eslint + clippy
 npm run build && npm run start:backend          # axum serves dist on :4000
 curl -s localhost:4000/api/v1/health            # smoke
 ```
@@ -216,10 +215,8 @@ Conventions for new tests:
 
 Verify a change by:
 
-1. `npm test` — pure-module behavior.
-2. `npm run typecheck` — `tsc -b` for the frontend (stale `.tsbuildinfo` can mask errors and no `clean` script exists) plus `cargo check`.
-3. `npm run lint` — frontend ESLint plus clippy.
-4. Manual runtime check: `npm run dev`, then exercise the editor at `http://localhost:5173/` and Swagger at `http://localhost:5173/docs`. Playback, focus, and SVG-render changes have no automated coverage and **must** be driven in a browser.
+1. `npm run check` — vitest, then `tsc -b` plus `cargo check`, then ESLint plus clippy. Stops at the first failure. (A stale `.tsbuildinfo` can mask type errors and there is no `clean` script.)
+2. Manual runtime check: `npm run dev`, then exercise the editor at `http://localhost:5173/` and Swagger at `http://localhost:5173/docs`. Playback, focus, and SVG-render changes have no automated coverage and **must** be driven in a browser.
 
 ## Gotchas
 

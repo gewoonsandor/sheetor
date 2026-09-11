@@ -9,6 +9,7 @@
     "dev": "concurrently -k -n backend,frontend -c blue,magenta \"npm run dev:backend\" \"npm run dev:frontend\"",
     "dev:frontend": "npm --workspace @sheetor/frontend run dev",
     "dev:backend": "cargo watch -q -c -w apps/backend -x run",
+    "check": "npm run test && npm run typecheck && npm run lint",
     "build": "npm run build:frontend && npm run build:backend",
     "build:frontend": "npm --workspace @sheetor/frontend run build",
     "build:backend": "cargo build --release",
