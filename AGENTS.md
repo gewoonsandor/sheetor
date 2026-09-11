@@ -29,9 +29,11 @@ Static serving is **presence-based, not env-based**: `frontend::serve` mounts `S
 
 ### Backend boot chain
 
-`src/main.rs` (config, tracing, `TcpListener`, `axum::serve`) → `src/app.rs` `build(&Config)`. The order inside `build` is **load-bearing**:
+The crate is a **library plus a thin binary**. `src/lib.rs` declares every module; `src/main.rs` only reads config, opens the pool and serves. That split exists so `apps/backend/tests/` can `use sheetor_backend::…` — an integration test cannot import a bin-only crate — and so `pub` items are public API rather than dead code under `clippy -D warnings`.
 
-1. `api::router(AppState::default())` → the `/api/v1`-nested router plus the collected `OpenApi`.
+`src/main.rs` (config, tracing, `database::init_pool`, `TcpListener`, `axum::serve`) → `src/app.rs` `build(&Config, PgPool)`. The pool is opened **before** the listener: a process that cannot reach its database should fail at boot, not on the first request. The order inside `build` is **load-bearing**:
+
+1. `api::router(AppState::new(db))` → the `/api/v1`-nested router plus the collected `OpenApi`.
 2. `/api` and `/api/{*path}` catch-alls → JSON `{"message":"Not Found"}`, so an unknown API path never falls through to the SPA.
 3. `SwaggerUi::new("/docs").url("/docs/openapi.json", openapi)`.
 4. `frontend::serve` — installs the SPA `fallback_service`; it must stay last because it claims everything unmatched.
@@ -61,7 +63,10 @@ Mount chain: `index.html#root` → `src/main.tsx` (`createRoot` + `StrictMode`) 
 | Path | Purpose |
 |---|---|
 | `apps/backend/src/api/` | `mod.rs` (`/api/v1` nesting, `ApiDoc` tags, `not_found`) plus one file per feature |
-| `apps/backend/src/` | `main.rs`, `app.rs` (router assembly), `config.rs`, `state.rs`, `frontend.rs` |
+| `apps/backend/src/` | `lib.rs` (module list), `main.rs` (process entry only), `app.rs` (router assembly), `config.rs`, `state.rs`, `frontend.rs` |
+| `apps/backend/src/database/` | `mod.rs` (`init_pool`: connect + run migrations) and `schemas/<table>.rs` — the row struct **and** its queries live together |
+| `apps/backend/migrations/` | sqlx migrations, applied at boot by `init_pool` and compiled in by `sqlx::migrate!`. Append-only: edit one that has run and the checksum no longer matches |
+| `apps/backend/tests/` | Integration tests, gated on `TEST_DATABASE_URL` |
 | `apps/frontend/src/app/layout/` | `AppLayout` + `AppHeader` (logo and the three `NavLink`s), presentational only |
 | `apps/frontend/src/features/editor/components/` | The editor **and** its pure modules (`types.ts`, `layout.ts`, `songUtils.ts`, `songSchema.ts`, `audioEngine.ts`, `usePlayback.ts`) |
 | `apps/frontend/src/features/editor/pages/` | `EditorPage.tsx` (5 lines of indirection) |
@@ -120,7 +125,10 @@ curl -s localhost:4000/api/v1/health            # smoke
 
   Then `mod songs;` and `.routes(routes!(songs::list))` in `src/api/mod.rs`, and add the tag to `ApiDoc`'s `tags(…)`. `path` is prefix-relative — never hardcode `/api/v1` in a handler; `api::router`'s `nest` applies it once, to both the routes and the spec.
 - Handlers return `Json<T>`/`impl IntoResponse`; the `#[utoipa::path]` attribute sits on the handler so `routes!` can collect method, path, and schema together. utoipa validates nothing at runtime — the return type is the contract.
-- Shared runtime values live in `AppState` (`src/state.rs`) and are reached with the `State` extractor. It is `Copy` today; anything non-`Copy` goes behind an `Arc`.
+- Shared runtime values live in `AppState` (`src/state.rs`) and are reached with the `State` extractor. It is `Clone`, **not** `Copy`, because it holds a `PgPool`; the pool is an `Arc` internally, so cloning per request is a refcount bump and wrapping the state in another `Arc` would be redundant.
+- Database access uses the **runtime** query API — `sqlx::query_as::<_, T>("… $1 …").bind(…)` — not the `query!` macros. The macros type-check against a live database at compile time, which would make `cargo check` require `DATABASE_URL` or a committed `.sqlx` directory. In sqlx 0.9 those functions take `impl SqlSafeStr`, implemented only for `&'static str`: a literal query just works, anything built with `format!` must be wrapped in `AssertSqlSafe` and audited.
+- **Never check-then-insert.** Asking "is this email free?" before an insert is a time-of-check/time-of-use race: two concurrent requests both see a free name and both proceed. Let the `UNIQUE` constraint arbitrate, then classify the failure — `error.as_database_error()`, `db.is_unique_violation()`, and `db.constraint()` to learn which one collided. Prefer `is_unique_violation()` to comparing SQLSTATE strings, and note that `sqlx::Error` is `#[non_exhaustive]`, so a `match` needs a `_` arm.
+- Constraint names are the contract between the migration and the error mapping: `UNIQUE` on `users.email` yields `users_email_key` (`{table}_{column}_key`). Rename a column, or name a constraint explicitly, and the match arms in `database/schemas/users.rs` must follow or a duplicate becomes a 500.
 - Config: extend `Config` in `src/config.rs` instead of reading `std::env` inline. It is built once, in `main`, and passed by reference.
 - Errors are hand-rolled and minimal: `api::not_found` is the only one. No error type, no CORS layer, no auth, no graceful shutdown.
 
@@ -177,16 +185,18 @@ curl -s localhost:4000/api/v1/health            # smoke
 | `apps/frontend/vitest.config.ts` | `include: ['test/**/*.test.ts']`, `environment: 'node'` |
 | `apps/frontend/eslint.config.js` | ESLint 9 flat config (frontend only) |
 
-### Environment variables (all backend, all optional)
+### Environment variables (all backend)
 
 | Var | Default | Notes |
 |---|---|---|
 | `PORT` | `4000` | Parsed as `u16`; unparsable or `0` falls back |
+| `DATABASE_URL` | **none — required** | `database::init_pool` panics without it, so the process will not boot. Read with `std::env` inside `init_pool`, not through `Config` |
 | `HOST` | `0.0.0.0` | |
 | `LOG_LEVEL` | `info` | Used as the `EnvFilter` directive; `RUST_LOG` overrides it entirely |
 | `FRONTEND_DIST_DIR` | `<crate>/../frontend/dist` | Compile-time default from `CARGO_MANIFEST_DIR`; set it when the binary is deployed elsewhere |
+| `TEST_DATABASE_URL` | none | Tests only. Unset, every test in `apps/backend/tests/` logs `skipped` and passes, which keeps `npm run check` green without a database |
 
-No `.env` file exists, nothing loads one (no `dotenvy`), and `.gitignore` does **not** ignore `.env*` — do not commit one without adding the pattern.
+No `.env` file exists, nothing loads one (no `dotenvy`), and `.gitignore` does **not** ignore `.env*` — do not commit one without adding the pattern. `DATABASE_URL` therefore has to come from the shell or direnv today.
 
 ## Runtime/Tooling Preferences
 
@@ -211,7 +221,15 @@ No `.env` file exists, nothing loads one (no `dotenvy`), and `.gitignore` does *
 
 ## Testing & QA
 
-Vitest 3 is installed in the **frontend workspace only** (`vitest run`, config at `apps/frontend/vitest.config.ts`). Tests live in `apps/frontend/test/`, a shadow tree mirroring `src/`, and cover the pure modules — `songUtils`, `songSchema`, `audioEngine`, `libraryStore`, `settingsStore`, `userStore`, `theme` (188 tests). `tsconfig.app.json` includes both `src` and `test`, so `tsc -b` type-checks the tests too. There is no jsdom, no component/DOM testing library, and no coverage gate: anything needing a browser is verified by hand. The backend has **no tests yet** — `cargo test` runs zero; add integration tests under `apps/backend/tests/` and drive `app::build` with `tower::ServiceExt::oneshot`.
+Vitest 3 is installed in the **frontend workspace only** (`vitest run`, config at `apps/frontend/vitest.config.ts`). Tests live in `apps/frontend/test/`, a shadow tree mirroring `src/`, and cover the pure modules — `songUtils`, `songSchema`, `audioEngine`, `libraryStore`, `settingsStore`, `userStore`, `theme` (188 tests). `tsconfig.app.json` includes both `src` and `test`, so `tsc -b` type-checks the tests too. There is no jsdom, no component/DOM testing library, and no coverage gate: anything needing a browser is verified by hand.
+
+The backend's tests live in `apps/backend/tests/` and talk to a **real Postgres** — there is no mock layer, because what is being tested is what the database does under concurrency. Each one starts `let Some(pool) = pool().await else { return }`, so with `TEST_DATABASE_URL` unset they log `skipped` and pass and the default gate needs no database. Run them with one:
+
+```bash
+TEST_DATABASE_URL=postgres://postgres@127.0.0.1/sheetor_test cargo test
+```
+
+Tests share one database and invent unique names per case (`unique("ada")` appends nanos) rather than truncating between runs, so they are safe in parallel. `sqlx::migrate!` is idempotent, so every test file may call it.
 
 Conventions for new tests:
 

@@ -1,5 +1,6 @@
 use axum::Router;
 use axum::routing::any;
+use sqlx::PgPool;
 use tower_http::trace::TraceLayer;
 use utoipa_swagger_ui::SwaggerUi;
 
@@ -7,8 +8,8 @@ use crate::config::Config;
 use crate::state::AppState;
 use crate::{api, frontend};
 
-pub fn build(config: &Config) -> Router {
-    let (api_router, openapi) = api::router(AppState::default());
+pub fn build(config: &Config, db: PgPool) -> Router {
+    let (api_router, openapi) = api::router(AppState::new(db));
 
     let router = Router::new()
         .merge(api_router)

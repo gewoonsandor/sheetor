@@ -1,15 +1,10 @@
-mod api;
-mod app;
-mod config;
-mod frontend;
-mod state;
-
 use std::io;
 
 use tokio::net::TcpListener;
 use tracing_subscriber::EnvFilter;
 
-use crate::config::Config;
+use sheetor_backend::config::Config;
+use sheetor_backend::{app, database};
 
 #[tokio::main]
 async fn main() -> io::Result<()> {
@@ -22,9 +17,13 @@ async fn main() -> io::Result<()> {
         )
         .init();
 
+    // Before the listener: a process that cannot reach its database should
+    // fail at boot, not on the first request that needs one.
+    let db = database::init_pool().await;
+
     let listener = TcpListener::bind((config.host.as_str(), config.port)).await?;
     tracing::info!("listening on http://{}", listener.local_addr()?);
     tracing::info!("swagger ui on http://{}/docs", listener.local_addr()?);
 
-    axum::serve(listener, app::build(&config)).await
+    axum::serve(listener, app::build(&config, db)).await
 }
