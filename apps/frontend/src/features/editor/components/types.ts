@@ -32,7 +32,10 @@ export type StaffDisplay = 'notation' | 'tab' | 'both';
 
 /**
  * Fretted tracks address pitch as string + fret against a tuning; pitched
- * tracks (piano, trumpet, ...) carry the absolute MIDI number instead.
+ * tracks (piano, trumpet, ...) carry the absolute MIDI number instead. A
+ * track's kind is **derived from its instrument** (`trackKind` in
+ * `songUtils.ts`) and is deliberately not a field — a stored copy could
+ * disagree with the instrument, which is how a guitar track lost its TAB.
  */
 export type TrackKind = 'fretted' | 'pitched';
 
@@ -76,7 +79,6 @@ export interface TabMeasure {
 export interface TabTrack {
   id: string;
   name: string;
-  kind: TrackKind;
   display: StaffDisplay;
   instrument: InstrumentId;
   /** Fretted tracks only: MIDI pitch of each open string, highest first. */

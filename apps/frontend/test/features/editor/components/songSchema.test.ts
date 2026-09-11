@@ -111,7 +111,7 @@ describe('parseSong', () => {
     if (!result.ok) return;
     expect(result.song.tracks).toHaveLength(1);
     const [track] = result.song.tracks;
-    expect(track.kind).toBe('fretted');
+    expect(track.tuning).toHaveLength(6);
     expect(track.instrument).toBe('guitar');
     expect(track.display).toBe('both');
     expect(track.transpose).toBe(12);

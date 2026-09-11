@@ -1,10 +1,10 @@
 import type {
   Duration, InstrumentId, StaffDisplay, TabBeat, TabMeasure, TabNote, TabSong,
-  TabTrack, TimeSignature, TrackKind,
+  TabTrack, TimeSignature,
 } from './types';
 import {
-  DEFAULT_TRANSPOSE, DURATIONS, allStringPitches, createId, createTrack,
-  getStringPitches, normalizeTrackLengths, requiredStringCount,
+  DEFAULT_TRANSPOSE, DURATIONS, MAX_FRET, TECHNIQUE_KEYS, allStringPitches, createId,
+  createTrack, getStringPitches, normalizeTrackLengths, requiredStringCount, trackKind,
 } from './songUtils';
 
 export type ParseSongResult =
@@ -13,7 +13,6 @@ export type ParseSongResult =
 
 const MIN_BPM = 20;
 const MAX_BPM = 400;
-const MAX_FRET = 24;
 const MIN_MIDI = 0;
 const MAX_MIDI = 127;
 const VALID_DENOMINATORS = [1, 2, 4, 8, 16];
@@ -23,20 +22,10 @@ const INSTRUMENT_IDS: readonly InstrumentId[] = [
   'sine', 'triangle', 'square', 'sawtooth',
 ];
 const STAFF_DISPLAYS: readonly StaffDisplay[] = ['notation', 'tab', 'both'];
-const TRACK_KINDS: readonly TrackKind[] = ['fretted', 'pitched'];
 
 // Technique flags are copied only when explicitly true, so a stored `false`
-// or a stray non-boolean never survives into the model.
-const TECHNIQUE_KEYS = [
-  'harmonic',
-  'palmMute',
-  'letRing',
-  'vibrato',
-  'ghostNote',
-  'slur',
-  'legatoSlide',
-  'bend',
-] as const;
+// or a stray non-boolean never survives into the model. TECHNIQUE_KEYS lives
+// in songUtils because note conversion needs the same list.
 
 // Canonical object guard for this validation boundary: it proves an object, so
 // every field below is still checked with typeof / Array.isArray.
@@ -171,9 +160,9 @@ const parseTrack = (value: unknown, index: number): TabTrack | string => {
   const instrument = INSTRUMENT_IDS.includes(value.instrument as InstrumentId)
     ? (value.instrument as InstrumentId)
     : 'guitar';
-  const kind = TRACK_KINDS.includes(value.kind as TrackKind)
-    ? (value.kind as TrackKind)
-    : 'fretted';
+  // The instrument decides the kind; a stored `kind` is ignored so a file can
+  // never describe a guitar track that renders without TAB.
+  const kind = trackKind(instrument);
   const display = STAFF_DISPLAYS.includes(value.display as StaffDisplay)
     ? (value.display as StaffDisplay)
     : (kind === 'fretted' ? 'both' : 'notation');
@@ -182,8 +171,7 @@ const parseTrack = (value: unknown, index: number): TabTrack | string => {
     id: parseId(value.id),
     name: typeof value.name === 'string' && value.name.trim().length > 0
       ? value.name
-      : createTrack(kind, instrument).name,
-    kind,
+      : createTrack(instrument).name,
     // A pitched staff has no TAB to draw, whatever the file claims.
     display: kind === 'pitched' ? 'notation' : display,
     instrument,
@@ -242,7 +230,7 @@ export const parseSong = (value: unknown): ParseSongResult => {
     const measures = parseMeasureList(value.measures, 'Song', 'Measure ');
     if (typeof measures === 'string') return { ok: false, error: measures };
     tracks = [{
-      ...createTrack('fretted', 'guitar'),
+      ...createTrack('guitar'),
       tuning: getStringPitches(requiredStringCount(measures, 6)),
       measures,
     }];

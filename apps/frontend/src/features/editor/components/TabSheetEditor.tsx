@@ -4,7 +4,7 @@ import './TabSheetEditor.css';
 
 import type {
   Duration, FrettedNote, InstrumentId, NoteTechniques, PitchedNote, StaffDisplay,
-  TabNote, TabBeat, TabMeasure, TabSong, TabTrack, TrackKind, BeamGroup, MLayout,
+  TabNote, TabBeat, TabMeasure, TabSong, TabTrack, BeamGroup, MLayout,
 } from './types';
 import {
 
@@ -12,14 +12,15 @@ import {
   getDurationVal,
   computeBeamGroups,
   createTrack,
-
+  isFretted,
   isFrettedNote,
   midiToNoteName,
   midiToNoteOctave,
   noteOctaveToMidi,
   normalizeTrackLengths,
-  DEFAULT_TRANSPOSE,
   resolveNoteMidi,
+  retuneTrack,
+  trackKind,
   GUITAR_NOTE_OPTIONS,
   midiToDiatonicAndAccidental,
   staffStepToSoundingMidi,
@@ -125,7 +126,7 @@ export const TabSheetEditor: React.FC = () => {
   const tuning = activeTrack.tuning ?? [];
   const stringCount = tuning.length;
   const transpose = activeTrack.transpose;
-  const isFrettedTrack = activeTrack.kind === 'fretted';
+  const isFrettedTrack = isFretted(activeTrack);
   const showTab = isFrettedTrack && activeTrack.display !== 'notation';
   const showNotation = activeTrack.display !== 'tab';
 
@@ -179,13 +180,12 @@ export const TabSheetEditor: React.FC = () => {
     if (!target) return;
     const beats = target.measures[activeMeasureIndex]?.beats.length ?? 0;
     if (activeBeatIndex >= beats) setActiveBeatIndex(Math.max(0, beats - 1));
-    const slots = target.kind === 'fretted' ? (target.tuning?.length ?? 6) : 1;
+    const slots = isFretted(target) ? (target.tuning?.length ?? 6) : 1;
     setActiveStringIndex(prev => Math.min(prev, slots - 1));
   };
 
   const addTrack = () => {
-    const kind: TrackKind = 'pitched';
-    const track = createTrack(kind, 'piano', measures.length);
+    const track = createTrack('guitar', measures.length);
     setSong(prev => ({ ...prev, tracks: normalizeTrackLengths([...prev.tracks, track]) }));
     setActiveTrackIndex(song.tracks.length);
     setActiveBeatIndex(0);
@@ -1375,9 +1375,13 @@ export const TabSheetEditor: React.FC = () => {
                 value={activeTrack.instrument}
                 onChange={(e) => {
                   const instrument = e.target.value as InstrumentId;
-                  // Retuning the staff to the new instrument keeps written
-                  // pitch matching what is heard.
-                  updateActiveTrack({ instrument, transpose: DEFAULT_TRANSPOSE[instrument] });
+                  // The instrument decides whether this is a TAB staff, so
+                  // switching it can add or remove strings and rewrites the
+                  // notes through their sounding pitch.
+                  const patch = retuneTrack(activeTrack, instrument);
+                  updateActiveTrack(patch);
+                  const slots = patch.tuning?.length ?? (trackKind(instrument) === 'fretted' ? stringCount : 1);
+                  setActiveStringIndex(prev => Math.min(prev, Math.max(slots, 1) - 1));
                 }}
               >
                 {INSTRUMENT_OPTIONS.map(opt => (

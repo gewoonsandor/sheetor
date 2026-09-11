@@ -37,7 +37,7 @@ const song = (title: string): TabSong => ({
   artist: 'Band',
   bpm: 120,
   timeSignature: { numerator: 4, denominator: 4 },
-  tracks: [{ ...createTrack('fretted', 'guitar'), measures: [{ id: 'm1', beats: [{ id: 'b1', duration: '4', notes: [{ stringIndex: 0, fret: 3 }] }] }] }],
+  tracks: [{ ...createTrack('guitar'), measures: [{ id: 'm1', beats: [{ id: 'b1', duration: '4', notes: [{ stringIndex: 0, fret: 3 }] }] }] }],
 });
 
 const entry = (id: string, title: string): Record<string, unknown> => ({

@@ -6,6 +6,7 @@ import type {
   TabBeat,
   TabMeasure,
   TabNote,
+  NoteTechniques,
   TabSong,
   TabTrack,
   TrackKind,
@@ -17,6 +18,24 @@ import type {
 // Strings 1-6: standard guitar  [E4, B3, G3, D3, A2, E2]
 // Strings 7-12: extended range   [B1, F#1, C#1, G#0, Eb0, Bb-1]
 export const allStringPitches = [64, 59, 55, 50, 45, 40, 35, 30, 25, 20, 15, 10];
+
+/** Highest fret the model accepts on any string. */
+export const MAX_FRET = 24;
+
+/**
+ * Every technique flag a note can carry. Both the parse boundary and note
+ * conversion copy flags one by one, so the list has to live in one place.
+ */
+export const TECHNIQUE_KEYS = [
+  'harmonic',
+  'palmMute',
+  'letRing',
+  'vibrato',
+  'ghostNote',
+  'slur',
+  'legatoSlide',
+  'bend',
+] as const;
 
 export const getStringPitches = (count: number): number[] => {
   return allStringPitches.slice(0, count);
@@ -204,21 +223,101 @@ const DEFAULT_TRACK_NAME: Record<InstrumentId, string> = {
   sine: 'Sine', triangle: 'Triangle', square: 'Square', sawtooth: 'Saw',
 };
 
+/**
+ * A track's kind follows from its sound: guitar and bass are played on
+ * strings, everything else is a pitched staff. Storing the kind separately is
+ * what used to let a track claim one thing and render another.
+ */
+const INSTRUMENT_KIND: Record<InstrumentId, TrackKind> = {
+  guitar: 'fretted', bass: 'fretted',
+  piano: 'pitched', trumpet: 'pitched', strings: 'pitched', organ: 'pitched',
+  sine: 'pitched', triangle: 'pitched', square: 'pitched', sawtooth: 'pitched',
+};
+
+export const trackKind = (instrument: InstrumentId): TrackKind => INSTRUMENT_KIND[instrument];
+
+export const isFretted = (track: TabTrack): boolean => trackKind(track.instrument) === 'fretted';
+
 export const createTrack = (
-  kind: TrackKind,
   instrument: InstrumentId,
   barCount: number = 1,
-): TabTrack => ({
-  id: createId(),
-  name: DEFAULT_TRACK_NAME[instrument],
-  kind,
-  display: kind === 'fretted' ? 'both' : 'notation',
-  instrument,
-  ...(kind === 'fretted' ? { tuning: getStringPitches(6) } : {}),
-  transpose: DEFAULT_TRANSPOSE[instrument],
-  volume: 1,
-  measures: Array.from({ length: Math.max(1, barCount) }, () => createEmptyMeasure()),
-});
+): TabTrack => {
+  const fretted = trackKind(instrument) === 'fretted';
+  return {
+    id: createId(),
+    name: DEFAULT_TRACK_NAME[instrument],
+    display: fretted ? 'both' : 'notation',
+    instrument,
+    ...(fretted ? { tuning: getStringPitches(6) } : {}),
+    transpose: DEFAULT_TRANSPOSE[instrument],
+    volume: 1,
+    measures: Array.from({ length: Math.max(1, barCount) }, () => createEmptyMeasure()),
+  };
+};
+
+/**
+ * Nearest playable position for a sounding pitch. Out-of-range pitches clamp
+ * to the closest fret rather than vanishing — the cost term keeps any
+ * genuinely playable string ahead of a clamped one.
+ */
+export const placeMidiOnStrings = (midi: number, tuning: number[]): FrettedNote => {
+  let best = { stringIndex: 0, fret: 0 };
+  let bestCost = Infinity;
+  tuning.forEach((openPitch, stringIndex) => {
+    const wanted = midi - openPitch;
+    const fret = Math.min(Math.max(wanted, 0), MAX_FRET);
+    const cost = Math.abs(wanted - fret) * 100 + Math.abs(fret - 3);
+    if (cost < bestCost) {
+      bestCost = cost;
+      best = { stringIndex, fret };
+    }
+  });
+  return best;
+};
+
+/**
+ * Everything that must change when a track's instrument changes. Crossing the
+ * fretted/pitched boundary rewrites every note through its sounding pitch, so
+ * the switch can never strand a note the new staff cannot resolve.
+ */
+export const retuneTrack = (track: TabTrack, instrument: InstrumentId): Partial<TabTrack> => {
+  const patch: Partial<TabTrack> = { instrument, transpose: DEFAULT_TRANSPOSE[instrument] };
+  const fretted = trackKind(instrument) === 'fretted';
+  if (fretted === isFretted(track)) return patch;
+
+  const tuning = fretted ? (track.tuning ?? getStringPitches(6)) : undefined;
+  patch.display = fretted ? 'both' : 'notation';
+  patch.tuning = tuning;
+  patch.measures = track.measures.map(measure => ({
+    ...measure,
+    beats: measure.beats.map(beat => ({
+      ...beat,
+      notes: beat.notes.flatMap(note => convertNote(note, track, tuning)),
+    })),
+  }));
+  return patch;
+};
+
+/** One note across the fretted/pitched boundary; dropped only if unresolvable. */
+const convertNote = (note: TabNote, track: TabTrack, tuning?: number[]): TabNote[] => {
+  if (tuning) {
+    if (isFrettedNote(note)) return [note];
+    return [{ ...techniquesOf(note), ...placeMidiOnStrings(note.midi, tuning) }];
+  }
+  if (!isFrettedNote(note)) return [note];
+  const midi = resolveNoteMidi(note, track);
+  if (midi === undefined) return [];
+  return [{ ...techniquesOf(note), midi }];
+};
+
+/** The technique flags only — the two note shapes share nothing else. */
+const techniquesOf = (note: TabNote): NoteTechniques => {
+  const flags: NoteTechniques = {};
+  for (const key of TECHNIQUE_KEYS) {
+    if (note[key]) flags[key] = true;
+  }
+  return flags;
+};
 
 /** A track is heard unless it is muted, or unless some other track is soloed. */
 export const isAudible = (track: TabTrack, tracks: TabTrack[]): boolean => {
@@ -242,7 +341,7 @@ export const createEmptySong = (): TabSong => ({
   artist: 'Unknown Artist',
   bpm: 120,
   timeSignature: { numerator: 4, denominator: 4 },
-  tracks: [createTrack('fretted', 'guitar', 1)],
+  tracks: [createTrack('guitar', 1)],
 });
 
 // Measure-level bpm / time signature overrides carry forward until the next

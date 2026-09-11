@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 
-import type { TabBeat, TabMeasure, TabSong } from '../../../../src/features/editor/components/types';
+import type { TabBeat, TabMeasure, TabSong, TabTrack } from '../../../../src/features/editor/components/types';
 import {
   computeBeamGroups,
   createEmptyMeasure,
@@ -11,6 +11,7 @@ import {
   getEffectiveTimeSignature,
   getStringPitches,
   isAudible,
+  isFretted,
   isFrettedNote,
   createTrack,
   midiToDiatonicAndAccidental,
@@ -20,6 +21,8 @@ import {
   requiredStringCount,
   resolveNoteMidi,
   noteOctaveToMidi,
+  retuneTrack,
+  trackKind,
   pruneNotesToStringCount,
   staffStepToSoundingMidi,
 } from '../../../../src/features/editor/components/songUtils';
@@ -41,7 +44,7 @@ const song = (measures: TabMeasure[], extra: Partial<TabSong> = {}): TabSong => 
   artist: 'A',
   bpm: 120,
   timeSignature: { numerator: 4, denominator: 4 },
-  tracks: [{ ...createTrack('fretted', 'guitar'), measures }],
+  tracks: [{ ...createTrack('guitar'), measures }],
   ...extra,
 });
 
@@ -233,8 +236,8 @@ describe('beat positions', () => {
 
 
 describe('note pitch resolution', () => {
-  const guitar = createTrack('fretted', 'guitar');
-  const piano = createTrack('pitched', 'piano');
+  const guitar = createTrack('guitar');
+  const piano = createTrack('piano');
 
   it('distinguishes the two note shapes', () => {
     expect(isFrettedNote({ stringIndex: 0, fret: 3 })).toBe(true);
@@ -257,18 +260,78 @@ describe('note pitch resolution', () => {
 
 describe('track defaults', () => {
   it('notates guitar an octave above concert pitch and piano at it', () => {
-    expect(createTrack('fretted', 'guitar').transpose).toBe(12);
-    expect(createTrack('pitched', 'piano').transpose).toBe(0);
+    expect(createTrack('guitar').transpose).toBe(12);
+    expect(createTrack('piano').transpose).toBe(0);
   });
 
   it('gives fretted tracks a tuning and pitched tracks none', () => {
-    expect(createTrack('fretted', 'guitar').tuning).toEqual([64, 59, 55, 50, 45, 40]);
-    expect(createTrack('pitched', 'trumpet').tuning).toBeUndefined();
+    expect(createTrack('guitar').tuning).toEqual([64, 59, 55, 50, 45, 40]);
+    expect(createTrack('trumpet').tuning).toBeUndefined();
   });
 
   it('never shows a TAB staff for a pitched track', () => {
-    expect(createTrack('pitched', 'piano').display).toBe('notation');
-    expect(createTrack('fretted', 'guitar').display).toBe('both');
+    expect(createTrack('piano').display).toBe('notation');
+    expect(createTrack('guitar').display).toBe('both');
+  });
+});
+
+describe('switching a track instrument', () => {
+  const withNotes = (track: TabTrack, notes: TabBeat['notes']): TabTrack => ({
+    ...track,
+    measures: [{ id: 'm', beats: [{ id: 'b', duration: '4', notes }] }],
+  });
+  const notesOf = (patch: Partial<TabTrack>) => patch.measures?.[0].beats[0].notes ?? [];
+
+  it('derives the kind from the instrument, never from a stored flag', () => {
+    expect(trackKind('guitar')).toBe('fretted');
+    expect(trackKind('bass')).toBe('fretted');
+    expect(trackKind('piano')).toBe('pitched');
+    expect(isFretted(createTrack('guitar'))).toBe(true);
+    expect(isFretted(createTrack('sawtooth'))).toBe(false);
+  });
+
+  it('gives a piano track a TAB staff and strings when it becomes a guitar', () => {
+    const patch = retuneTrack(createTrack('piano'), 'guitar');
+    expect(patch.display).toBe('both');
+    expect(patch.tuning).toEqual([64, 59, 55, 50, 45, 40]);
+    expect(patch.transpose).toBe(12);
+  });
+
+  it('drops the TAB staff and the strings on the way back', () => {
+    const patch = retuneTrack(createTrack('guitar'), 'piano');
+    expect(patch.display).toBe('notation');
+    expect(patch.tuning).toBeUndefined();
+  });
+
+  it('leaves the staff alone when the kind does not change', () => {
+    const patch = retuneTrack(createTrack('piano'), 'organ');
+    expect(patch).toEqual({ instrument: 'organ', transpose: 0 });
+  });
+
+  it('rewrites pitched notes onto strings at the same sounding pitch', () => {
+    const piano = withNotes(createTrack('piano'), [{ midi: 67 }, { midi: 40 }]);
+    const notes = notesOf(retuneTrack(piano, 'guitar'));
+    const guitar = { ...createTrack('guitar'), measures: [] };
+    expect(notes.map(n => resolveNoteMidi(n, guitar))).toEqual([67, 40]);
+  });
+
+  it('rewrites fretted notes back to absolute pitch', () => {
+    const guitar = withNotes(createTrack('guitar'), [{ stringIndex: 0, fret: 3 }]);
+    expect(notesOf(retuneTrack(guitar, 'piano'))).toEqual([{ midi: 67 }]);
+  });
+
+  it('carries technique flags across the boundary and leaves no stale shape', () => {
+    const guitar = withNotes(createTrack('guitar'), [{ stringIndex: 0, fret: 3, vibrato: true }]);
+    const [note] = notesOf(retuneTrack(guitar, 'piano'));
+    expect(note).toEqual({ midi: 67, vibrato: true });
+    expect(isFrettedNote(note)).toBe(false);
+  });
+
+  it('clamps a pitch no string can reach instead of losing the note', () => {
+    const piano = withNotes(createTrack('piano'), [{ midi: 120 }]);
+    const [note] = notesOf(retuneTrack(piano, 'guitar'));
+    expect(isFrettedNote(note)).toBe(true);
+    expect(note).toEqual({ stringIndex: 0, fret: 24 });
   });
 });
 
@@ -294,9 +357,9 @@ describe('transposition', () => {
 });
 
 describe('isAudible', () => {
-  const plain = createTrack('fretted', 'guitar');
-  const muted = { ...createTrack('fretted', 'bass'), muted: true };
-  const soloed = { ...createTrack('pitched', 'piano'), soloed: true };
+  const plain = createTrack('guitar');
+  const muted = { ...createTrack('bass'), muted: true };
+  const soloed = { ...createTrack('piano'), soloed: true };
 
   it('hears every unmuted track when nothing is soloed', () => {
     const tracks = [plain, muted];
@@ -318,15 +381,15 @@ describe('isAudible', () => {
 
 describe('normalizeTrackLengths', () => {
   it('pads short tracks so every track shares one bar count', () => {
-    const long = { ...createTrack('fretted', 'guitar'), measures: [createEmptyMeasure(), createEmptyMeasure(), createEmptyMeasure()] };
-    const short = { ...createTrack('pitched', 'piano'), measures: [createEmptyMeasure()] };
+    const long = { ...createTrack('guitar'), measures: [createEmptyMeasure(), createEmptyMeasure(), createEmptyMeasure()] };
+    const short = { ...createTrack('piano'), measures: [createEmptyMeasure()] };
     const [a, b] = normalizeTrackLengths([long, short]);
     expect(a.measures).toHaveLength(3);
     expect(b.measures).toHaveLength(3);
   });
 
   it('returns untouched tracks when they already match', () => {
-    const track = createTrack('fretted', 'guitar');
+    const track = createTrack('guitar');
     expect(normalizeTrackLengths([track])[0]).toBe(track);
   });
 });

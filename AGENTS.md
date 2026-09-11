@@ -145,6 +145,8 @@ curl -s localhost:4000/api/v1/health            # smoke
 ### Domain invariants (`features/editor/components/types.ts`)
 
 - `TabNote.stringIndex` is **0 = highest string**, matching `tuning[]` high→low. Every Y coordinate depends on this.
+- A track's **kind is derived from its instrument**, never stored: `trackKind(instrument)` in `songUtils.ts` maps guitar/bass → `'fretted'` and everything else → `'pitched'`, and `isFretted(track)` is the read. `TabTrack` has no `kind` field and `parseSong` ignores one in a file. This used to be a stored field the UI never wrote, so a new track was permanently pitched with no way to get a TAB staff.
+- Changing a track's instrument must go through `retuneTrack(track, instrument)`, which returns the whole patch — `instrument`, `transpose`, and when the kind flips also `display`, `tuning`, and every note rewritten through its **sounding** MIDI (`resolveNoteMidi` out, `placeMidiOnStrings` back in, technique flags copied via `TECHNIQUE_KEYS`). Patch only `instrument` and you strand notes in the other shape, which renders as `NaN`.
 - `duration` is a string union `'1'|'2'|'4'|'8'|'16'|'32'` — convert with `getDurationVal` (quarter = 1.0, dot = ×1.5), never arithmetic on the literal. The union is re-spelled inline in ~12 signatures instead of a named alias; changing durations touches all of them.
 - `TabMeasure.bpm`/`timeSignature` are optional overrides resolved by backward scan (`getEffectiveBpm`, `getEffectiveTimeSignature`) falling back to the `TabSong` values.
 - IDs are the inline expression `Math.random().toString(36).substring(2, 9)`, duplicated in 15+ places across `TabSheetEditor.tsx` and `songUtils.ts`; no helper exists.
@@ -207,7 +209,7 @@ No `.env` file exists, nothing loads one (no `dotenvy`), and `.gitignore` does *
 
 ## Testing & QA
 
-Vitest 3 is installed in the **frontend workspace only** (`vitest run`, config at `apps/frontend/vitest.config.ts`). Tests live in `apps/frontend/test/`, a shadow tree mirroring `src/`, and cover the pure modules — `songUtils`, `songSchema`, `audioEngine`, `libraryStore`, `settingsStore`, `userStore`, `theme` (180 tests). `tsconfig.app.json` includes both `src` and `test`, so `tsc -b` type-checks the tests too. There is no jsdom, no component/DOM testing library, and no coverage gate: anything needing a browser is verified by hand. The backend has **no tests yet** — `cargo test` runs zero; add integration tests under `apps/backend/tests/` and drive `app::build` with `tower::ServiceExt::oneshot`.
+Vitest 3 is installed in the **frontend workspace only** (`vitest run`, config at `apps/frontend/vitest.config.ts`). Tests live in `apps/frontend/test/`, a shadow tree mirroring `src/`, and cover the pure modules — `songUtils`, `songSchema`, `audioEngine`, `libraryStore`, `settingsStore`, `userStore`, `theme` (188 tests). `tsconfig.app.json` includes both `src` and `test`, so `tsc -b` type-checks the tests too. There is no jsdom, no component/DOM testing library, and no coverage gate: anything needing a browser is verified by hand. The backend has **no tests yet** — `cargo test` runs zero; add integration tests under `apps/backend/tests/` and drive `app::build` with `tower::ServiceExt::oneshot`.
 
 Conventions for new tests:
 
