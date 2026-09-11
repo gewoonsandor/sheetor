@@ -236,6 +236,21 @@
   font-variant-numeric: tabular-nums;
 }
 
+/* `.control-input` is 64px at its widest, and the native spinner reserves a
+   column out of that: the arrows land on the digits and the centred text sits
+   off-centre even when they are hidden. This rule covers the settings page's
+   tempo field too, which shares the class. Arrow keys still step; the
+   transport pairs its field with explicit buttons. */
+.control-input[type="number"] {
+  appearance: textfield;
+}
+
+.control-input[type="number"]::-webkit-outer-spin-button,
+.control-input[type="number"]::-webkit-inner-spin-button {
+  appearance: none;
+  margin: 0;
+}
+
 .control-select {
   padding-right: var(--sp-1);
   cursor: pointer;
@@ -319,6 +334,40 @@ input[type="range"] {
   fill: var(--text);
   font-family: var(--font);
   font-weight: 700;
+}
+
+/* The tempo mark is the only score text you can edit, so it is the only one
+   that reacts to a pointer. */
+.tempo-mark {
+  cursor: pointer;
+  transition: fill var(--t-fast) var(--ease);
+}
+
+.tempo-mark:hover {
+  fill: var(--accent);
+}
+
+/* The in-score tempo box, inside a foreignObject. It borrows the control
+   chrome but keeps the staff's own type so it reads as part of the score.
+   `.music-svg` sets user-select: none, which would make the text unselectable. */
+.tempo-input {
+  width: 100%;
+  height: 100%;
+  padding: 0 var(--sp-hair);
+  background: var(--surface-2);
+  border: 1px solid var(--accent);
+  border-radius: var(--r-sm);
+  color: var(--text);
+  font-family: var(--font);
+  font-size: 0.625rem;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  user-select: text;
+}
+
+.tempo-input:focus {
+  outline: none;
+  box-shadow: 0 0 0 2px var(--accent-soft);
 }
 
 .staff-label {
@@ -960,9 +1009,47 @@ input[type="range"] {
   border-radius: var(--r-md);
 }
 
+/* A minus/plus pair instead of the browser's spinner, which overlapped the
+   digits at this width. Nudges by one; type into the box for a bigger jump. */
+.stepper {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-hair);
+}
+
+.stepper-btn {
+  display: grid;
+  place-items: center;
+  width: var(--ctl-h-sm);
+  height: var(--ctl-h-sm);
+  padding: 0;
+  background: var(--surface-3);
+  border: 1px solid var(--border);
+  border-radius: var(--r-sm);
+  color: var(--text-dim);
+  cursor: pointer;
+  transition: background var(--t-fast) var(--ease), color var(--t-fast) var(--ease);
+}
+
+.stepper-btn svg {
+  width: 14px;
+  height: 14px;
+  flex: none;
+}
+
+.stepper-btn:hover:not(:disabled) {
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+
+.stepper-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
 .transport-field .control-input {
   height: var(--ctl-h-sm);
-  width: 52px;
+  width: 46px;
 }
 
 .bottom-menu {

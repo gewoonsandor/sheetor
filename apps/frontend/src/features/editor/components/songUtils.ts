@@ -23,6 +23,13 @@ export const allStringPitches = [64, 59, 55, 50, 45, 40, 35, 30, 25, 20, 15, 10]
 export const MAX_FRET = 24;
 
 /**
+ * Tempo range the model accepts. The parse boundary and the editor's controls
+ * read the same pair, so a tempo you can type is always a tempo that reloads.
+ */
+export const MIN_BPM = 20;
+export const MAX_BPM = 400;
+
+/**
  * Every technique flag a note can carry. Both the parse boundary and note
  * conversion copy flags one by one, so the list has to live in one place.
  */

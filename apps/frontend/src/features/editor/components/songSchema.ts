@@ -3,16 +3,14 @@ import type {
   TabTrack, TimeSignature,
 } from './types';
 import {
-  DEFAULT_TRANSPOSE, DURATIONS, MAX_FRET, TECHNIQUE_KEYS, allStringPitches, createId,
-  createTrack, getStringPitches, normalizeTrackLengths, requiredStringCount, trackKind,
+  DEFAULT_TRANSPOSE, DURATIONS, MAX_BPM, MAX_FRET, MIN_BPM, TECHNIQUE_KEYS, allStringPitches,
+  createId, createTrack, getStringPitches, normalizeTrackLengths, requiredStringCount, trackKind,
 } from './songUtils';
 
 export type ParseSongResult =
   | { ok: true; song: TabSong }
   | { ok: false; error: string };
 
-const MIN_BPM = 20;
-const MAX_BPM = 400;
 const MIN_MIDI = 0;
 const MAX_MIDI = 127;
 const VALID_DENOMINATORS = [1, 2, 4, 8, 16];

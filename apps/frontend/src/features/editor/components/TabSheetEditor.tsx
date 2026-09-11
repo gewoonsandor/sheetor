@@ -18,6 +18,8 @@ import {
   midiToNoteOctave,
   noteOctaveToMidi,
   normalizeTrackLengths,
+  MAX_BPM,
+  MIN_BPM,
   resolveNoteMidi,
   retuneTrack,
   trackKind,
@@ -118,6 +120,11 @@ export const TabSheetEditor: React.FC = () => {
   const [activeMeasureIndex, setActiveMeasureIndex] = useState<number>(0);
   const [activeBeatIndex, setActiveBeatIndex] = useState<number>(0);
   const [activeStringIndex, setActiveStringIndex] = useState<number>(0);
+  // Which bar's tempo mark is open for editing in the score, if any. The
+  // transport field keeps its own draft, so the two never fight over one value.
+  const [bpmEditIndex, setBpmEditIndex] = useState<number | null>(null);
+  // While a tempo box is being typed in, the draft wins; null shows the song.
+  const [bpmDraft, setBpmDraft] = useState<string | null>(null);
 
   // Everything the score and the input panels read comes from the active
   // track, so the rest of the component works one track at a time.
@@ -271,26 +278,43 @@ export const TabSheetEditor: React.FC = () => {
   };
 
   /** Tempo and metre are song-wide, so the overrides live on track 0. */
-  const setConductorMeasure = (patch: (measure: TabMeasure) => TabMeasure) => {
+  const setConductorMeasure = (index: number, patch: (measure: TabMeasure) => TabMeasure) => {
     setSong(prev => ({
       ...prev,
       tracks: prev.tracks.map((t, i) => (i === 0
-        ? { ...t, measures: t.measures.map((m, idx) => (idx === activeMeasureIndex ? patch(m) : m)) }
+        ? { ...t, measures: t.measures.map((m, idx) => (idx === index ? patch(m) : m)) }
         : t)),
     }));
   };
 
-  const setActiveMeasureBpm = (bpm: number) => {
-    if (activeMeasureIndex === 0) {
-      setSong(prev => ({ ...prev, bpm }));
-      setConductorMeasure(measure => {
+  /**
+   * Bar 1 sets the song tempo; every later bar stores an override. The score
+   * tempo marks edit an arbitrary bar, so the index is a parameter rather than
+   * the cursor - clicking bar 9 must never retune whichever bar is selected.
+   */
+  const setMeasureBpm = (index: number, bpm: number) => {
+    const clamped = Math.max(MIN_BPM, Math.min(MAX_BPM, Math.round(bpm)));
+    if (index === 0) {
+      setSong(prev => ({ ...prev, bpm: clamped }));
+      setConductorMeasure(0, measure => {
         const normalized = { ...measure };
         delete normalized.bpm;
         return normalized;
       });
       return;
     }
-    setConductorMeasure(measure => ({ ...measure, bpm }));
+    setConductorMeasure(index, measure => ({ ...measure, bpm: clamped }));
+  };
+
+  /**
+   * Tempo boxes hold a text draft while you type, so a half-typed "3" on the
+   * way to "300" is never clamped up to the minimum. Blank or junk reverts.
+   */
+  const commitBpmDraft = (index: number) => {
+    // Number() over parseInt(): "90bpm" reverts instead of committing as 90.
+    const parsed = Number((bpmDraft ?? '').trim() || NaN);
+    if (Number.isFinite(parsed)) setMeasureBpm(index, parsed);
+    setBpmDraft(null);
   };
 
   const setActiveMeasureTimeSignature = (field: 'numerator' | 'denominator', value: number) => {
@@ -298,14 +322,14 @@ export const TabSheetEditor: React.FC = () => {
     const nextTimeSignature = { ...effective, [field]: value };
     if (activeMeasureIndex === 0) {
       setSong(prev => ({ ...prev, timeSignature: nextTimeSignature }));
-      setConductorMeasure(measure => {
+      setConductorMeasure(activeMeasureIndex, measure => {
         const normalized = { ...measure };
         delete normalized.timeSignature;
         return normalized;
       });
       return;
     }
-    setConductorMeasure(measure => ({ ...measure, timeSignature: nextTimeSignature }));
+    setConductorMeasure(activeMeasureIndex, measure => ({ ...measure, timeSignature: nextTimeSignature }));
   };
 
   const updateActiveBeatNotes = (updateFn: (notes: TabNote[]) => TabNote[]) => {
@@ -1150,6 +1174,11 @@ export const TabSheetEditor: React.FC = () => {
   const selectedNotes = activeBeat?.notes ?? [];
   const activeNote = getCursorNote();
   const activeMeasureBpm = getEffectiveBpm(song, activeMeasureIndex);
+  // Only one tempo box can have focus, so one draft serves both. The score box
+  // owns it whenever it is open; otherwise it belongs to the transport field.
+  const transportBpmText = bpmEditIndex === null && bpmDraft !== null
+    ? bpmDraft
+    : String(activeMeasureBpm);
   const activeMeasureTimeSignature = getEffectiveTimeSignature(song, activeMeasureIndex);
 
   // Piano keyboard geometry & highlighting. A fretted track's keyboard spans
@@ -1583,17 +1612,43 @@ export const TabSheetEditor: React.FC = () => {
                   className={isLast ? "bar-line-end" : "bar-line"}
                 />
 
-                {showTimingChange && (
+                {showTimingChange && (bpmEditIndex === mIdx ? (
+                  // An HTML input inside the SVG: foreignObject coordinates are
+                  // user units, so the box tracks the tempo mark at any zoom
+                  // without mapping screen pixels back into the viewBox.
+                  <foreignObject x={measureX + 14} y={rowY - 18} width="62" height="18">
+                    <input
+                      className="tempo-input"
+                      type="text"
+                      inputMode="numeric"
+                      autoFocus
+                      aria-label={`Tempo for bar ${mIdx + 1}`}
+                      value={bpmDraft ?? String(effectiveBpm)}
+                      onChange={(e) => setBpmDraft(e.target.value)}
+                      onFocus={(e) => e.target.select()}
+                      onBlur={() => { commitBpmDraft(mIdx); setBpmEditIndex(null); }}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') e.currentTarget.blur();
+                        if (e.key === 'Escape') { setBpmDraft(null); setBpmEditIndex(null); }
+                      }}
+                    />
+                  </foreignObject>
+                ) : (
                   <text
                     x={measureX + 18}
                     y={rowY - 6}
-                    className="music-text"
+                    className="music-text tempo-mark"
                     fontSize="10"
-                    style={{ pointerEvents: 'none' }}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setBpmDraft(null);
+                      setBpmEditIndex(mIdx);
+                    }}
                   >
+                    <title>Click to set the tempo for bar {mIdx + 1}</title>
                     {`♩=${effectiveBpm}`}
                   </text>
-                )}
+                ))}
 
                 {/* Measure number */}
                 <text
@@ -2691,15 +2746,47 @@ export const TabSheetEditor: React.FC = () => {
               Play
             </button>
           )}
-          <label className="transport-field">
-            <span>BPM</span>
-            <input
-              type="number"
-              className="control-input"
-              value={activeMeasureBpm}
-              onChange={(e) => setActiveMeasureBpm(Math.max(20, Math.min(300, parseInt(e.target.value) || 120)))}
-            />
-          </label>
+          <div className="transport-field">
+            <label htmlFor="transport-bpm">BPM</label>
+            <div className="stepper">
+              <button
+                type="button"
+                className="stepper-btn"
+                onClick={() => setMeasureBpm(activeMeasureIndex, activeMeasureBpm - 1)}
+                disabled={activeMeasureBpm <= MIN_BPM}
+                aria-label="Slower by one"
+              >
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
+                  <path d="M5 12h14" />
+                </svg>
+              </button>
+              <input
+                id="transport-bpm"
+                type="text"
+                inputMode="numeric"
+                className="control-input stepper-input"
+                value={transportBpmText}
+                onChange={(e) => setBpmDraft(e.target.value)}
+                onFocus={(e) => e.target.select()}
+                onBlur={() => commitBpmDraft(activeMeasureIndex)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') e.currentTarget.blur();
+                  if (e.key === 'Escape') { setBpmDraft(null); e.currentTarget.blur(); }
+                }}
+              />
+              <button
+                type="button"
+                className="stepper-btn"
+                onClick={() => setMeasureBpm(activeMeasureIndex, activeMeasureBpm + 1)}
+                disabled={activeMeasureBpm >= MAX_BPM}
+                aria-label="Faster by one"
+              >
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
+                  <path d="M12 5v14M5 12h14" />
+                </svg>
+              </button>
+            </div>
+          </div>
           <div className="bottom-menu">
             <button
               className={`bottom-menu-trigger ${openBottomMenu === 'output' ? 'active' : ''}`}
