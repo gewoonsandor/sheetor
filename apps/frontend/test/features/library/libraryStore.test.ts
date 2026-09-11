@@ -1,13 +1,13 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 
-import type { TabSong } from '../editor/components/types';
-import { createTrack } from '../editor/components/songUtils';
-import type { Library, LibraryFolder } from './libraryStore';
+import type { TabSong } from '../../../src/features/editor/components/types';
+import { createTrack } from '../../../src/features/editor/components/songUtils';
+import type { Library, LibraryFolder } from '../../../src/features/library/libraryStore';
 import {
   addSong, childFolders, countSongsIn, createFolder, deleteFolder, deleteSong, duplicateSong,
   folderChoices, folderPath, getCurrentEntry, loadLibrary, moveFolder, moveSong, renameFolder,
   replaceSong, saveLibrary, setCurrentSong, songsIn,
-} from './libraryStore';
+} from '../../../src/features/library/libraryStore';
 
 interface MemoryStorage {
   getItem: (key: string) => string | null;

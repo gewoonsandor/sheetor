@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 
-import { applyTheme, resolveTheme, watchSystemTheme } from './theme';
+import { applyTheme, resolveTheme, watchSystemTheme } from '../../../src/features/user/theme';
 
 interface FakeQuery {
   matches: boolean;

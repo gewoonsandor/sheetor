@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 
-import type { TabBeat, TabMeasure, TabSong } from './types';
+import type { TabBeat, TabMeasure, TabSong } from '../../../../src/features/editor/components/types';
 import {
   computeBeamGroups,
   createEmptyMeasure,
@@ -22,7 +22,7 @@ import {
   noteOctaveToMidi,
   pruneNotesToStringCount,
   staffStepToSoundingMidi,
-} from './songUtils';
+} from '../../../../src/features/editor/components/songUtils';
 
 const beat = (duration: TabBeat['duration'], notes: TabBeat['notes'] = [{ stringIndex: 0, fret: 3 }]): TabBeat => ({
   id: `b-${duration}-${notes.length}-${Math.random()}`,

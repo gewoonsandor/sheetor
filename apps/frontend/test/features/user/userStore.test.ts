@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 
-import type * as UserStore from './userStore';
-import type { User } from './userStore';
+import type * as UserStore from '../../../src/features/user/userStore';
+import type { User } from '../../../src/features/user/userStore';
 
 interface MemoryStorage {
   getItem: (key: string) => string | null;
@@ -47,7 +47,7 @@ const stored = (): User => {
 // after vi.resetModules() can give us.
 const freshStore = async (): Promise<typeof UserStore> => {
   vi.resetModules();
-  return import('./userStore');
+  return import('../../../src/features/user/userStore');
 };
 
 beforeEach(async () => {

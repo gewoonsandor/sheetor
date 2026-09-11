@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 
-import { parseSong } from './songSchema';
+import { parseSong } from '../../../../src/features/editor/components/songSchema';
 
 const valid = () => ({
   title: 'Song',

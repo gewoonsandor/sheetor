@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 
-import type { AppSettings } from './settingsStore';
-import { DEFAULT_SETTINGS, PLAYBACK_SPEEDS, loadSettings, saveSettings, updateSettings } from './settingsStore';
+import type { AppSettings } from '../../../src/features/settings/settingsStore';
+import { DEFAULT_SETTINGS, PLAYBACK_SPEEDS, loadSettings, saveSettings, updateSettings } from '../../../src/features/settings/settingsStore';
 
 interface MemoryStorage {
   getItem: (key: string) => string | null;

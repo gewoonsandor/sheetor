@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 
-import type { InstrumentId } from './types';
-import { INSTRUMENTS, createGuitarBuffer, getVoice } from './audioEngine';
+import type { InstrumentId } from '../../../../src/features/editor/components/types';
+import { INSTRUMENTS, createGuitarBuffer, getVoice } from '../../../../src/features/editor/components/audioEngine';
 
 const stubContext = (): AudioContext => ({
   sampleRate: 44100,

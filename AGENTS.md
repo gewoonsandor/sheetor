@@ -63,13 +63,16 @@ Mount chain: `index.html#root` → `src/main.tsx` (`createRoot` + `StrictMode`) 
 | `apps/backend/src/api/` | `mod.rs` (`/api/v1` nesting, `ApiDoc` tags, `not_found`) plus one file per feature |
 | `apps/backend/src/` | `main.rs`, `app.rs` (router assembly), `config.rs`, `state.rs`, `frontend.rs` |
 | `apps/frontend/src/app/layout/` | `AppLayout` + `AppHeader` (logo and the three `NavLink`s), presentational only |
-| `apps/frontend/src/features/editor/components/` | The editor **and** its pure modules (`types.ts`, `layout.ts`, `songUtils.ts`, `songSchema.ts`, `audioEngine.ts`, `usePlayback.ts`) plus their `*.test.ts` files |
+| `apps/frontend/src/features/editor/components/` | The editor **and** its pure modules (`types.ts`, `layout.ts`, `songUtils.ts`, `songSchema.ts`, `audioEngine.ts`, `usePlayback.ts`) |
 | `apps/frontend/src/features/editor/pages/` | `EditorPage.tsx` (5 lines of indirection) |
-| `apps/frontend/src/features/library/` | `libraryStore.ts` + test, `LibraryPage.css`, `pages/LibraryPage.tsx` |
-| `apps/frontend/src/features/settings/` | `settingsStore.ts` + test, `SettingsPage.css`, `pages/SettingsPage.tsx` |
-| `apps/frontend/src/features/user/` | `userStore.ts` + test, `theme.ts` + test — the local profile and the only DOM-writing theme code; no page of its own |
+| `apps/frontend/src/features/library/` | `libraryStore.ts`, `LibraryPage.css`, `pages/LibraryPage.tsx` |
+| `apps/frontend/src/features/settings/` | `settingsStore.ts`, `SettingsPage.css`, `pages/SettingsPage.tsx` |
+| `apps/frontend/src/features/user/` | `userStore.ts`, `theme.ts` — the local profile and the only DOM-writing theme code; no page of its own |
+| `apps/frontend/test/` | Every test, in a **shadow tree mirroring `src/`**: `test/features/user/userStore.test.ts` covers `src/features/user/userStore.ts` |
 
 Note the shape gotcha: the editor's non-component modules sit under `components/`, not at `features/editor/`. The two newer features do **not** copy that — their stores sit at the feature root (`features/library/libraryStore.ts`) with only the page under `pages/`. Prefer the newer shape. There is no `shared/`, `lib/`, or `utils/` directory.
+
+Tests are **not** colocated. `test/` mirrors `src/` path for path, so a test imports its subject with a `../`-prefixed hop back through `src/` (`../../../src/features/user/userStore`). Add a module and its test lands at the same relative path under `test/`. There are no tsconfig path aliases — if the `../../../` prefixes ever become the problem, add a `resolve.alias` to `vitest.config.ts` **and** a matching `paths` to `tsconfig.app.json`, or the two resolvers will disagree.
 
 ## Development Commands
 
@@ -167,7 +170,7 @@ curl -s localhost:4000/api/v1/health            # smoke
 | `apps/frontend/src/features/editor/components/layout.ts` | Pure layout geometry |
 | `apps/frontend/src/features/editor/components/songUtils.ts` | Music theory, beaming, MIDI ↔ note names, `createId`/`createEmptySong`, beat-position walking |
 | `apps/frontend/vite.config.ts` | `port: 5173, strictPort: true` + the dev proxy of `/api` and `/docs` to `:4000` |
-| `apps/frontend/vitest.config.ts` | `include: ['src/**/*.test.ts']`, `environment: 'node'` |
+| `apps/frontend/vitest.config.ts` | `include: ['test/**/*.test.ts']`, `environment: 'node'` |
 | `apps/frontend/eslint.config.js` | ESLint 9 flat config (frontend only) |
 
 ### Environment variables (all backend, all optional)
@@ -204,7 +207,7 @@ No `.env` file exists, nothing loads one (no `dotenvy`), and `.gitignore` does *
 
 ## Testing & QA
 
-Vitest 3 is installed in the **frontend workspace only** (`vitest run`, config at `apps/frontend/vitest.config.ts`). Tests are colocated as `src/**/*.test.ts` and cover the pure modules — `songUtils`, `songSchema`, `audioEngine`, `libraryStore`, `settingsStore`, `userStore`, `theme` (180 tests). There is no jsdom, no component/DOM testing library, and no coverage gate: anything needing a browser is verified by hand. The backend has **no tests yet** — `cargo test` runs zero; add integration tests under `apps/backend/tests/` and drive `app::build` with `tower::ServiceExt::oneshot`.
+Vitest 3 is installed in the **frontend workspace only** (`vitest run`, config at `apps/frontend/vitest.config.ts`). Tests live in `apps/frontend/test/`, a shadow tree mirroring `src/`, and cover the pure modules — `songUtils`, `songSchema`, `audioEngine`, `libraryStore`, `settingsStore`, `userStore`, `theme` (180 tests). `tsconfig.app.json` includes both `src` and `test`, so `tsc -b` type-checks the tests too. There is no jsdom, no component/DOM testing library, and no coverage gate: anything needing a browser is verified by hand. The backend has **no tests yet** — `cargo test` runs zero; add integration tests under `apps/backend/tests/` and drive `app::build` with `tower::ServiceExt::oneshot`.
 
 Conventions for new tests:
 
