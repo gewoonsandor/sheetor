@@ -30,6 +30,10 @@
               pkgs.rustfmt
               pkgs.rust-analyzer
               pkgs.cargo-watch
+              # sqlx-cli for migrations. nixpkgs builds it with the postgres
+              # backend already; it uses native-tls rather than rustls, which
+              # only changes which TLS stack gets linked, not what works.
+              pkgs.sqlx-cli
             ];
 
             env.RUST_SRC_PATH = "${pkgs.rustPlatform.rustLibSrc}";

@@ -6,7 +6,7 @@
 ## Quick start
 
 ```bash
-nix develop        # or direnv allow — provides node, cargo, clippy, rustfmt, rust-analyzer, cargo-watch
+nix develop        # or direnv allow — provides node, cargo, clippy, rustfmt, rust-analyzer, cargo-watch, sqlx-cli
 npm install
 npm run dev
 ```
