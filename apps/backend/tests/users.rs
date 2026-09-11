@@ -10,7 +10,8 @@
 
 use std::time::{SystemTime, UNIX_EPOCH};
 
-use sheetor_backend::database::schemas::users::{CreateUserError, NewUser, create_user};
+use sheetor_backend::database::queries::users::{InsertUserError, insert_user};
+use sheetor_backend::database::schemas::users::NewUser;
 use sqlx::PgPool;
 use sqlx::postgres::PgPoolOptions;
 
@@ -50,7 +51,7 @@ async fn creates_a_user() {
     let name = unique("ada");
     let email = format!("{name}@example.com");
 
-    let user = create_user(
+    let user = insert_user(
         &pool,
         NewUser {
             username: &name,
@@ -82,10 +83,10 @@ async fn rejects_a_duplicate_email() {
         email: &email,
         password_hash: None,
     };
-    create_user(&pool, first).await.expect("first insert");
+    insert_user(&pool, first).await.expect("first insert");
 
     let second_name = unique("user-b");
-    let result = create_user(
+    let result = insert_user(
         &pool,
         NewUser {
             username: &second_name,
@@ -95,21 +96,29 @@ async fn rejects_a_duplicate_email() {
     )
     .await;
 
+    let Err(error) = result else {
+        panic!("the second insert should have been refused");
+    };
     assert!(
-        matches!(result, Err(CreateUserError::EmailTaken)),
-        "expected EmailTaken, got {result:?}"
+        matches!(error, InsertUserError::EmailTaken),
+        "expected EmailTaken, got {error:?}"
     );
 }
 
+/// Usernames are deliberately not unique - the migration puts `UNIQUE` on
+/// `email` alone, so a username is a display name and the address is the
+/// identity. If someone adds the constraint, this fails and reminds them to
+/// add the matching `InsertUserError` variant, without which a duplicate
+/// username becomes a 500.
 #[tokio::test]
-async fn rejects_a_duplicate_username() {
+async fn allows_a_repeated_username() {
     let Some(pool) = pool().await else {
         eprintln!("skipped: TEST_DATABASE_URL unset");
         return;
     };
 
-    let name = unique("dup-name");
-    create_user(
+    let name = unique("shared-name");
+    let first = insert_user(
         &pool,
         NewUser {
             username: &name,
@@ -120,7 +129,7 @@ async fn rejects_a_duplicate_username() {
     .await
     .expect("first insert");
 
-    let result = create_user(
+    let second = insert_user(
         &pool,
         NewUser {
             username: &name,
@@ -128,12 +137,11 @@ async fn rejects_a_duplicate_username() {
             password_hash: None,
         },
     )
-    .await;
+    .await
+    .expect("a second user may share a username");
 
-    assert!(
-        matches!(result, Err(CreateUserError::UsernameTaken)),
-        "expected UsernameTaken, got {result:?}"
-    );
+    assert_eq!(first.username, second.username);
+    assert_ne!(first.id, second.id);
 }
 
 /// The reason there is no "is this email free?" query before the insert. Eight
@@ -153,7 +161,7 @@ async fn only_one_of_many_racing_signups_wins() {
         let email = email.clone();
         let username = unique(&format!("racer-{i}"));
         tokio::spawn(async move {
-            create_user(
+            insert_user(
                 &pool,
                 NewUser {
                     username: &username,
@@ -170,7 +178,7 @@ async fn only_one_of_many_racing_signups_wins() {
     for attempt in attempts.collect::<Vec<_>>() {
         match attempt.await.expect("task panicked") {
             Ok(_) => created += 1,
-            Err(CreateUserError::EmailTaken) => taken += 1,
+            Err(InsertUserError::EmailTaken) => taken += 1,
             Err(other) => panic!("expected EmailTaken, got {other:?}"),
         }
     }

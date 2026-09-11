@@ -1,3 +1,4 @@
+pub mod queries;
 pub mod schemas;
 
 use sqlx::{PgPool, postgres::PgPoolOptions};
