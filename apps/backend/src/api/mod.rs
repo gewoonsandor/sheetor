@@ -1,18 +1,21 @@
-mod health;
+mod system;
+mod users;
 
 use axum::Json;
 use axum::http::StatusCode;
 use serde::Serialize;
 use utoipa::{OpenApi, ToSchema};
 use utoipa_axum::router::OpenApiRouter;
-use utoipa_axum::routes;
 
 use crate::state::AppState;
 
 #[derive(OpenApi)]
 #[openapi(
     info(title = "Sheetor API", description = "Backend API for the Sheetor editor"),
-    tags((name = "system", description = "Service health and metadata"))
+    tags(
+        (name = "system", description = "Service health and metadata"),
+        (name = "users", description = "User accounts"),
+    )
 )]
 struct ApiDoc;
 
@@ -24,7 +27,8 @@ pub fn router(state: AppState) -> (axum::Router, utoipa::openapi::OpenApi) {
 
 fn v1(state: AppState) -> OpenApiRouter {
     OpenApiRouter::new()
-        .routes(routes!(health::health))
+        .nest("/system", system::router())
+        .nest("/users", users::router())
         .with_state(state)
 }
 

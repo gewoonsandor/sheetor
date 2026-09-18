@@ -7,7 +7,7 @@ Sheetor is an interactive guitar TAB + sheet-music editor with in-browser playba
 - `apps/frontend` — React 19 SPA (Vite), the entire product surface.
 - `apps/backend` — Rust axum API + Swagger (utoipa), and in production the single user-facing HTTP entry point (it serves the built SPA).
 
-The editor is currently **offline-first**: no frontend code calls the backend. Songs live in `localStorage`. The backend exists as an API scaffold (`GET /api/v1/health`) plus prod SPA host.
+The editor is currently **offline-first**: no frontend code calls the backend. Songs live in `localStorage`. The backend is a signup/session API (`/api/v1/system/health`, `/api/v1/users/{create,login,logout,me}`) plus prod SPA host — nothing in the SPA calls it yet.
 
 ## Architecture & Data Flow
 
@@ -31,15 +31,18 @@ Static serving is **presence-based, not env-based**: `frontend::serve` mounts `S
 
 The crate is a **library plus a thin binary**. `src/lib.rs` declares every module; `src/main.rs` only reads config, opens the pool and serves. That split exists so `apps/backend/tests/` can `use sheetor_backend::…` — an integration test cannot import a bin-only crate — and so `pub` items are public API rather than dead code under `clippy -D warnings`.
 
-`src/main.rs` (config, tracing, `database::init_pool`, `TcpListener`, `axum::serve`) → `src/app.rs` `build(&Config, PgPool)`. The pool is opened **before** the listener: a process that cannot reach its database should fail at boot, not on the first request. The order inside `build` is **load-bearing**:
+`src/main.rs` (config, tracing, `database::init_pool`, `TcpListener`, `axum::serve`) → `src/app.rs` `build(&Config, PgPool).await`, async because the session store creates its own table on the way up. The pool is opened **before** the listener: a process that cannot reach its database should fail at boot, not on the first request. The order inside `build` is **load-bearing**:
 
-1. `api::router(AppState::new(db))` → the `/api/v1`-nested router plus the collected `OpenApi`.
-2. `/api` and `/api/{*path}` catch-alls → JSON `{"message":"Not Found"}`, so an unknown API path never falls through to the SPA.
-3. `SwaggerUi::new("/docs").url("/docs/openapi.json", openapi)`.
-4. `frontend::serve` — installs the SPA `fallback_service`; it must stay last because it claims everything unmatched.
-5. `TraceLayer` wraps the finished router.
+1. `PostgresStore::new(db.clone())` then `.migrate()` — creates `tower_sessions.session`.
+2. `SessionManagerLayer` (`HttpOnly`, `SameSite=Strict`, `Secure` from `config.cookie_secure`) wrapped by `AuthManagerLayerBuilder` around `auth_service::Backend`.
+3. `api::router(AppState::new(db))` → the `/api/v1`-nested router plus the collected `OpenApi`.
+4. `/api` and `/api/{*path}` catch-alls → JSON `{"message":"Not Found"}`, so an unknown API path never falls through to the SPA.
+5. `SwaggerUi::new("/docs").url("/docs/openapi.json", openapi)`.
+6. `.layer(auth_layer)` — above `frontend::serve` on purpose, so the SPA's static assets never touch the session store.
+7. `frontend::serve` — installs the SPA `fallback_service`; it must stay last because it claims everything unmatched.
+8. `TraceLayer` wraps the finished router.
 
-There is no plugin system: `src/api/<feature>.rs` holds handlers with their `#[utoipa::path]`, and `src/api/mod.rs` is the only place `/api/v1` and the tag list exist.
+There is no plugin system: `src/api/<feature>/mod.rs` builds that feature's `OpenApiRouter`, and each endpoint gets its own file beside it (`users/create.rs`, `users/login.rs`) holding the handler with its `#[utoipa::path]`. `src/api/mod.rs` is the only place `/api/v1` and the tag list exist. `route_layer` applies to the routes registered **before** it, so a guarded route goes above `login_required!` and the public ones below — invert it and you need a session to obtain a session.
 
 ### Frontend data flow
 
@@ -62,10 +65,13 @@ Mount chain: `index.html#root` → `src/main.tsx` (`createRoot` + `StrictMode`) 
 
 | Path | Purpose |
 |---|---|
-| `apps/backend/src/api/` | `mod.rs` (`/api/v1` nesting, `ApiDoc` tags, `not_found`) plus one file per feature |
+| `apps/backend/src/api/` | `mod.rs` (`/api/v1` nesting, `ApiDoc` tags, `not_found`) plus one directory per feature (`system/`, `users/`), each a `mod.rs` router and one file per endpoint |
 | `apps/backend/src/` | `lib.rs` (module list), `main.rs` (process entry only), `app.rs` (router assembly), `config.rs`, `state.rs`, `frontend.rs` |
-| `apps/backend/src/database/` | `mod.rs` (`init_pool`: connect + run migrations), `schemas/<table>.rs` (row + input types only), `queries/<table>.rs` (the SQL, and the only place constraint names appear) |
-| `apps/backend/migrations/` | sqlx migrations, applied at boot by `init_pool` and compiled in by `sqlx::migrate!`. Append-only: edit one that has run and the checksum no longer matches |
+| `apps/backend/src/services/` | Business logic: `user_service.rs` (signup), `auth_service.rs` (the `axum-login` `Backend`, `Credentials`, the `AuthSession` alias) |
+| `apps/backend/src/error/` | One module per feature; the enum's `#[derive(ApiError)]` *is* the HTTP mapping |
+| `apps/backend/src/helpers/` | Leaf pure functions — `users/password.rs` (argon2 hash/verify plus the complexity rule) |
+| `apps/backend/src/database/` | `mod.rs` (`init_pool`: connect + run migrations), `schemas/<table>.rs` (row types only), `queries/<table>.rs` (the SQL, and the only place constraint names appear) |
+| `apps/backend/migrations/` | sqlx migrations, applied at boot by `init_pool` and compiled in by `sqlx::migrate!`. Append-only: edit one that has run and the checksum no longer matches. The session table is **not** here — `PostgresStore::migrate()` owns `tower_sessions.session` |
 | `apps/backend/tests/` | Integration tests, gated on `TEST_DATABASE_URL` |
 | `apps/frontend/src/app/layout/` | `AppLayout` + `AppHeader` (logo and the three `NavLink`s), presentational only |
 | `apps/frontend/src/features/editor/components/` | The editor **and** its pure modules (`types.ts`, `layout.ts`, `songUtils.ts`, `songSchema.ts`, `audioEngine.ts`, `usePlayback.ts`) |
@@ -101,7 +107,7 @@ Verification gates, exactly:
 ```bash
 npm run check                                   # vitest + tsc -b + cargo check + eslint + clippy
 npm run build && npm run start:backend          # axum serves dist on :4000
-curl -s localhost:4000/api/v1/health            # smoke
+curl -s localhost:4000/api/v1/system/health     # smoke
 ```
 
 `npm run lint` currently emits one pre-existing `react-hooks/exhaustive-deps` warning (the auto-scroll effect) and exits 0.
@@ -126,12 +132,14 @@ curl -s localhost:4000/api/v1/health            # smoke
   Then `mod songs;` and `.routes(routes!(songs::list))` in `src/api/mod.rs`, and add the tag to `ApiDoc`'s `tags(…)`. `path` is prefix-relative — never hardcode `/api/v1` in a handler; `api::router`'s `nest` applies it once, to both the routes and the spec.
 - Handlers return `Json<T>`/`impl IntoResponse`; the `#[utoipa::path]` attribute sits on the handler so `routes!` can collect method, path, and schema together. utoipa validates nothing at runtime — the return type is the contract.
 - Shared runtime values live in `AppState` (`src/state.rs`) and are reached with the `State` extractor. It is `Clone`, **not** `Copy`, because it holds a `PgPool`; the pool is an `Arc` internally, so cloning per request is a refcount bump and wrapping the state in another `Arc` would be redundant.
-- Database access uses the **runtime** query API — `sqlx::query_as::<_, T>("… $1 …").bind(…)` — not the `query!` macros. The macros type-check against a live database at compile time, which would make `cargo check` require `DATABASE_URL` or a committed `.sqlx` directory. In sqlx 0.9 those functions take `impl SqlSafeStr`, implemented only for `&'static str`: a literal query just works, anything built with `format!` must be wrapped in `AssertSqlSafe` and audited.
+- Database access uses the **`query_as!` macro**, so `cargo check`, `clippy` and rust-analyzer all need a reachable `DATABASE_URL` at compile time — the dev shell exports one and autostarts the cluster it points at. The macro builds the struct by field name and does **not** use `FromRow`, so the `SELECT`/`RETURNING` column list must match the struct's fields exactly; nullability is inferred from the schema, overridable with `col as "col!"`, `col as "col?"` or `col as "col: T"`. To build without a database, `cargo sqlx prepare` writes `.sqlx/` and `SQLX_OFFLINE=true` reads it — re-run it after every query edit or the build fails on stale data.
+- sqlx is pinned to **0.8, not 0.9**, because every release of `tower-sessions-sqlx-store` depends on `sqlx ^0.8.0`. Bump it and cargo compiles sqlx twice: `PgPool` from 0.9 is a different type from `PgPool` from 0.8, so the session store cannot take `state.db` and you run a second pool for nothing.
 - **Never check-then-insert.** Asking "is this email free?" before an insert is a time-of-check/time-of-use race: two concurrent requests both see a free name and both proceed. Let the `UNIQUE` constraint arbitrate, then classify the failure — `error.as_database_error()`, `db.is_unique_violation()`, and `db.constraint()` to learn which one collided. Prefer `is_unique_violation()` to comparing SQLSTATE strings, and note that `sqlx::Error` is `#[non_exhaustive]`, so a `match` needs a `_` arm.
 - Constraint names are the contract between the migration and the error mapping: `UNIQUE` on `users.email` yields `users_email_key` (`{table}_{column}_key`). Rename a column, or name a constraint explicitly, and the match arms in `database/queries/users.rs` must follow or a duplicate becomes a 500. The reverse holds too — an error variant with no constraint behind it can never fire, so the enum and the migration change together. `username` is deliberately **not** unique; `tests/users.rs` pins that.
-- Three layers, one direction: `database/schemas/` holds types only (`User`, `NewUser`), `database/queries/` holds the SQL and is the only place that knows about SQLSTATE or constraint names, and `services/` holds the business logic — hashing a password, orchestrating several queries — returning domain errors the HTTP layer can map. A handler calls a service, never a query.
+- Four layers, one direction: `database/schemas/` holds row types only (`User`), `database/queries/` holds the SQL and is the only place that knows about SQLSTATE or constraint names, `services/` holds the business logic — hashing a password, verifying one, orchestrating several queries — and `error/` holds the domain error each service returns. A handler calls a service, never a query. argon2 is ~50 ms of CPU, so both hashing (`user_service::create`) and verification (`auth_service::authenticate`) run inside `spawn_blocking`; calling them directly would stall the runtime under a burst of logins.
 - Config: extend `Config` in `src/config.rs` instead of reading `std::env` inline. It is built once, in `main`, and passed by reference.
-- Errors are hand-rolled and minimal: `api::not_found` is the only one. No error type, no CORS layer, no auth, no graceful shutdown.
+- Errors are enums in `src/error/`, one module per feature, and the HTTP mapping *is* the derive: `#[derive(ApiError)]` from `api-error`, with `#[api_error(status_code = 409, message(inherit))]` per variant. Omit the attribute and the variant is a 500 whose message is the status reason phrase — the right default for anything a client should not see. Note that `api_error::ApiError` is a **trait**: there is no `ApiError::BadRequest` to construct and `impl From<MyError> for ApiError` does not compile. The crate's `axum` feature is enabled, so an error type is returnable straight out of a handler. `api::not_found` is the one hand-rolled response. Still no CORS layer and no graceful shutdown.
+- Auth is `axum-login` over `tower-sessions` with the Postgres store. `auth_service` implements `AuthUser for User` (id = `i32`, `session_auth_hash` = the stored argon2 hash, so changing a password invalidates every issued session) and `AuthnBackend for Backend`. Login returns the same 401 for an unknown address and a wrong password; a row with `password_hash IS NULL` is a provider-only account and no password authenticates it, including an empty one.
 
 ### Frontend
 
@@ -170,7 +178,10 @@ curl -s localhost:4000/api/v1/health            # smoke
 | `apps/backend/src/config.rs` | `Config::from_env` — the whole runtime config surface |
 | `apps/backend/src/frontend.rs` | `ServeDir` + SPA fallback, mounted only when `dist` exists |
 | `apps/backend/src/api/mod.rs` | Sole `/api/v1` prefix site, `ApiDoc` tags, JSON `not_found` |
-| `apps/backend/src/api/health.rs` | Canonical route template |
+| `apps/backend/src/api/system/health.rs` | Canonical route template |
+| `apps/backend/src/api/users/login.rs` | Canonical session route: `AuthSession` extractor, `authenticate` then `login` |
+| `apps/backend/src/services/auth_service.rs` | `AuthUser for User` and `AuthnBackend for Backend` — the whole auth contract |
+| `apps/backend/src/error/auth.rs`, `error/users.rs` | The status codes; `#[api_error(status_code = …)]` is the mapping |
 | `Cargo.toml` (root) | Cargo workspace, `members = ["apps/backend"]`, shared `target/` |
 | `apps/frontend/src/App.tsx` | `BrowserRouter` and the three routes |
 | `apps/frontend/src/features/library/libraryStore.ts` | The song library: pure mutators, validation, legacy migration |
@@ -191,13 +202,14 @@ curl -s localhost:4000/api/v1/health            # smoke
 | Var | Default | Notes |
 |---|---|---|
 | `PORT` | `4000` | Parsed as `u16`; unparsable or `0` falls back |
-| `DATABASE_URL` | **none — required** | `database::init_pool` panics without it, so the process will not boot. Read with `std::env` inside `init_pool`, not through `Config` |
+| `DATABASE_URL` | exported by the dev shell | Required at **runtime** (`init_pool` panics without it) *and* at **compile time**, because `queries/users.rs` uses `query_as!`. `flake.nix` sets it; read with `std::env` inside `init_pool`, not through `Config` |
 | `HOST` | `0.0.0.0` | |
 | `LOG_LEVEL` | `info` | Used as the `EnvFilter` directive; `RUST_LOG` overrides it entirely |
 | `FRONTEND_DIST_DIR` | `<crate>/../frontend/dist` | Compile-time default from `CARGO_MANIFEST_DIR`; set it when the binary is deployed elsewhere |
 | `TEST_DATABASE_URL` | none | Tests only. Unset, every test in `apps/backend/tests/` logs `skipped` and passes, which keeps `npm run check` green without a database |
+| `COOKIE_SECURE` | `true` | Anything but the literal `false` keeps `Secure` on the session cookie. Set `false` only to drive the API over plain http with curl, which refuses to send a `Secure` cookie — a browser sends one to `localhost` regardless |
 
-No `.env` file exists, nothing loads one (no `dotenvy`), and `.gitignore` does **not** ignore `.env*` — do not commit one without adding the pattern. `DATABASE_URL` therefore has to come from the shell or direnv today.
+`DATABASE_URL` has two sources and the later one wins: `flake.nix`'s `env` sets a default that both direnv and a bare `nix develop --command` see, then `.envrc`'s `dotenv_if_exists .env` overrides it under direnv only. `.env` is gitignored (as `.env` and `.env.*`, spelled out so the pattern does not swallow the tracked `.envrc`) — keep credentials there, never in the flake.
 
 ## Runtime/Tooling Preferences
 
@@ -206,7 +218,8 @@ No `.env` file exists, nothing loads one (no `dotenvy`), and `.gitignore` does *
 - `vite` is aliased to **`npm:rolldown-vite@7.2.5`**, not upstream Vite. Plugin/version advice must account for the Rolldown build.
 - Frontend runtime dependencies are exactly `react`, `react-dom` and `react-router-dom`. There is no UI kit, icon package, date library or state library — icons are hand-inlined SVG and relative timestamps are a local helper in `LibraryPage.tsx`.
 - Backend dev is `cargo watch -x run`: a debug rebuild per save, no separate dev runtime. Prod is `cargo build --release` → `target/release/sheetor-backend`.
-- The Rust toolchain comes from `flake.nix` (nixpkgs stable: `rustc`, `cargo`, `clippy`, `rustfmt`, `rust-analyzer`, `cargo-watch`, `sqlx-cli`) — no `rustup`, no `rust-toolchain.toml`. Edition 2024, workspace `resolver = "3"`, one `Cargo.lock` and one `target/` at the repo root. Install CLI tooling by adding it to the flake, never with `cargo install` — that writes outside the store and drifts per machine.
+- The Rust toolchain comes from `flake.nix` (nixpkgs stable: `rustc`, `cargo`, `clippy`, `rustfmt`, `rust-analyzer`, `cargo-watch`, `sqlx-cli`, `postgresql`) — no `rustup`, no `rust-toolchain.toml`. Edition 2024, workspace `resolver = "3"`, one `Cargo.lock` and one `target/` at the repo root. Install CLI tooling by adding it to the flake, never with `cargo install` — that writes outside the store and drifts per machine.
+- The dev shell **is** the database: its `shellHook` runs `initdb` into the gitignored `.direnv/pgdata` on first entry, starts the cluster on `:5432` if it is not already up, and creates `sheetor` and `sheetor_test`. It is left running when you leave the shell; `pg_ctl stop` ends it. There is no docker, no systemd unit and no services-flake.
 - `utoipa-swagger-ui` is built with the `vendored` feature, so the build never downloads the Swagger UI bundle (also makes it sandbox-safe).
 - Frontend tsconfig is solution-style (`tsconfig.json` → `tsconfig.app.json` for `src`, `tsconfig.node.json` for `vite.config.ts`), driven by `tsc -b`, with `strict`, `noUnusedLocals`, `noUnusedParameters`, `erasableSyntaxOnly`, `noFallthroughCasesInSwitch`, `verbatimModuleSyntax`.
 - `cargo fmt` is the repo's only formatter; TS/CSS have none (no Prettier, no `.editorconfig`) — match surrounding style by hand. **No CI, no git hooks.**
@@ -224,7 +237,7 @@ No `.env` file exists, nothing loads one (no `dotenvy`), and `.gitignore` does *
 
 Vitest 3 is installed in the **frontend workspace only** (`vitest run`, config at `apps/frontend/vitest.config.ts`). Tests live in `apps/frontend/test/`, a shadow tree mirroring `src/`, and cover the pure modules — `songUtils`, `songSchema`, `audioEngine`, `libraryStore`, `settingsStore`, `userStore`, `theme` (188 tests). `tsconfig.app.json` includes both `src` and `test`, so `tsc -b` type-checks the tests too. There is no jsdom, no component/DOM testing library, and no coverage gate: anything needing a browser is verified by hand.
 
-The backend's tests live in `apps/backend/tests/` and talk to a **real Postgres** — there is no mock layer, because what is being tested is what the database does under concurrency. Each one starts `let Some(pool) = pool().await else { return }`, so with `TEST_DATABASE_URL` unset they log `skipped` and pass and the default gate needs no database. Run them with one:
+The backend's tests live in `apps/backend/tests/` and talk to a **real Postgres** — there is no mock layer, because what is being tested is what the database does under concurrency. The dev shell already provides the cluster and the `sheetor_test` database. Each test starts `let Some(pool) = pool().await else { return }`, so with `TEST_DATABASE_URL` unset they log `skipped` and pass and the default gate needs no database. Run them with one:
 
 ```bash
 TEST_DATABASE_URL=postgres://postgres@127.0.0.1/sheetor_test cargo test

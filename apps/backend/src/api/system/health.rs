@@ -20,7 +20,7 @@ pub struct Health {
     summary = "Health check",
     responses((status = 200, description = "Service is healthy", body = Health)),
 )]
-pub async fn health(State(state): State<AppState>) -> Json<Health> {
+pub async fn handler(State(state): State<AppState>) -> Json<Health> {
     Json(Health {
         status: "ok".to_owned(),
         uptime: state.started_at.elapsed().as_secs_f64(),

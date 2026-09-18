@@ -8,5 +8,8 @@ pub mod api;
 pub mod app;
 pub mod config;
 pub mod database;
+pub mod error;
 pub mod frontend;
+pub mod helpers;
+pub mod services;
 pub mod state;

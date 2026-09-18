@@ -1,17 +1,17 @@
 //! User-creation tests. These need a real Postgres:
 //!
 //! ```bash
-//! createdb -h 127.0.0.1 -U postgres sheetor_test
 //! TEST_DATABASE_URL=postgres://postgres@127.0.0.1/sheetor_test cargo test
 //! ```
 //!
-//! With `TEST_DATABASE_URL` unset every test logs and passes, so `npm run
-//! check` stays green on a machine with no database.
+//! The dev shell starts a cluster and creates `sheetor_test`, so only the
+//! variable has to be set. With `TEST_DATABASE_URL` unset every test logs and
+//! passes, so `npm run check` stays green on a machine with no database.
 
 use std::time::{SystemTime, UNIX_EPOCH};
 
-use sheetor_backend::database::queries::users::{InsertUserError, insert_user};
-use sheetor_backend::database::schemas::users::NewUser;
+use sheetor_backend::database::queries::users::insert_user;
+use sheetor_backend::error::users::InsertUserError;
 use sqlx::PgPool;
 use sqlx::postgres::PgPoolOptions;
 
@@ -51,16 +51,9 @@ async fn creates_a_user() {
     let name = unique("ada");
     let email = format!("{name}@example.com");
 
-    let user = insert_user(
-        &pool,
-        NewUser {
-            username: &name,
-            email: &email,
-            password_hash: Some("not-a-real-hash"),
-        },
-    )
-    .await
-    .expect("create");
+    let user = insert_user(&pool, &name, &email, "not-a-real-hash")
+        .await
+        .expect("create");
 
     assert!(user.id > 0);
     assert_eq!(user.username, name);
@@ -78,23 +71,11 @@ async fn rejects_a_duplicate_email() {
     };
 
     let email = format!("{}@example.com", unique("dup-email"));
-    let first = NewUser {
-        username: &unique("user-a"),
-        email: &email,
-        password_hash: None,
-    };
-    insert_user(&pool, first).await.expect("first insert");
+    insert_user(&pool, &unique("user-a"), &email, "hash")
+        .await
+        .expect("first insert");
 
-    let second_name = unique("user-b");
-    let result = insert_user(
-        &pool,
-        NewUser {
-            username: &second_name,
-            email: &email,
-            password_hash: None,
-        },
-    )
-    .await;
+    let result = insert_user(&pool, &unique("user-b"), &email, "hash").await;
 
     let Err(error) = result else {
         panic!("the second insert should have been refused");
@@ -120,22 +101,18 @@ async fn allows_a_repeated_username() {
     let name = unique("shared-name");
     let first = insert_user(
         &pool,
-        NewUser {
-            username: &name,
-            email: &format!("{}@example.com", unique("a")),
-            password_hash: None,
-        },
+        &name,
+        &format!("{}@example.com", unique("a")),
+        "hash",
     )
     .await
     .expect("first insert");
 
     let second = insert_user(
         &pool,
-        NewUser {
-            username: &name,
-            email: &format!("{}@example.com", unique("b")),
-            password_hash: None,
-        },
+        &name,
+        &format!("{}@example.com", unique("b")),
+        "hash",
     )
     .await
     .expect("a second user may share a username");
@@ -160,17 +137,7 @@ async fn only_one_of_many_racing_signups_wins() {
         let pool = pool.clone();
         let email = email.clone();
         let username = unique(&format!("racer-{i}"));
-        tokio::spawn(async move {
-            insert_user(
-                &pool,
-                NewUser {
-                    username: &username,
-                    email: &email,
-                    password_hash: None,
-                },
-            )
-            .await
-        })
+        tokio::spawn(async move { insert_user(&pool, &username, &email, "hash").await })
     });
 
     let mut created = 0;

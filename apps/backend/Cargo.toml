@@ -5,9 +5,23 @@ edition = "2024"
 publish = false
 
 [dependencies]
+sqlx = { version = "0.8", default-features = false, features = [
+  "runtime-tokio",
+  "tls-rustls",
+  "postgres",
+  "macros",
+  "migrate",
+  "chrono",
+] }
+api-error = { version = "0.1", features = ["axum"] }
+axum-login = "0.18"
+tower-sessions = "0.14"
+tower-sessions-sqlx-store = { version = "0.15", features = ["postgres"] }
+argon2 = "0.6"
 axum = "0.8"
 chrono = { version = "0.4", default-features = false, features = ["clock"] }
 serde = { version = "1", features = ["derive"] }
+thiserror = "2"
 tokio = { version = "1", features = ["macros", "net", "rt-multi-thread"] }
 tower-http = { version = "0.6", features = ["fs", "trace"] }
 tracing = "0.1"

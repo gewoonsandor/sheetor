@@ -25,5 +25,5 @@ async fn main() -> io::Result<()> {
     tracing::info!("listening on http://{}", listener.local_addr()?);
     tracing::info!("swagger ui on http://{}/docs", listener.local_addr()?);
 
-    axum::serve(listener, app::build(&config, db)).await
+    axum::serve(listener, app::build(&config, db).await).await
 }

@@ -1,21 +1,40 @@
 use axum::Router;
 use axum::routing::any;
+use axum_login::AuthManagerLayerBuilder;
 use sqlx::PgPool;
 use tower_http::trace::TraceLayer;
+use tower_sessions::SessionManagerLayer;
+use tower_sessions_sqlx_store::PostgresStore;
 use utoipa_swagger_ui::SwaggerUi;
 
 use crate::config::Config;
+use crate::services::auth_service::Backend;
 use crate::state::AppState;
 use crate::{api, frontend};
 
-pub fn build(config: &Config, db: PgPool) -> Router {
+pub async fn build(config: &Config, db: PgPool) -> Router {
+    // The store owns its own table, so it migrates itself rather than
+    // appearing in `migrations/`.
+    let session_store = PostgresStore::new(db.clone());
+    session_store
+        .migrate()
+        .await
+        .expect("create the session table");
+
+    let session_layer = SessionManagerLayer::new(session_store).with_secure(config.cookie_secure);
+    let auth_layer = AuthManagerLayerBuilder::new(Backend::new(db.clone()), session_layer).build();
+
     let (api_router, openapi) = api::router(AppState::new(db));
 
     let router = Router::new()
         .merge(api_router)
         .route("/api", any(api::not_found))
         .route("/api/{*path}", any(api::not_found))
-        .merge(SwaggerUi::new("/docs").url("/docs/openapi.json", openapi));
+        .merge(SwaggerUi::new("/docs").url("/docs/openapi.json", openapi))
+        // Above `frontend::serve` on purpose: the SPA's static assets have no
+        // use for a session, and wrapping them would touch the store on every
+        // file request.
+        .layer(auth_layer);
 
     frontend::serve(router, config).layer(TraceLayer::new_for_http())
 }
