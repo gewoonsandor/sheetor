@@ -17,6 +17,9 @@ dist-ssr
 
 # Nix / direnv
 .direnv
+# Spelled out rather than `.env*`, which would also swallow the tracked .envrc
+.env
+.env.*
 
 # Editor directories and files
 .vscode/*
