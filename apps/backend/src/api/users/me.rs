@@ -15,9 +15,6 @@ use crate::services::auth_service::AuthSession;
     ),
 )]
 pub async fn handler(auth_session: AuthSession) -> Result<Json<User>, AuthError> {
-    // `login_required!` has already rejected an anonymous request, so the
-    // `None` arm is unreachable in practice - it exists so the guard is not
-    // the only thing standing between an anonymous caller and a panic.
     auth_session
         .user
         .map(Json)

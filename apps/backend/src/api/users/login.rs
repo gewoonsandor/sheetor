@@ -34,9 +34,6 @@ pub async fn handler(
     Ok(Json(user))
 }
 
-/// `axum_login` wraps either a session-store failure or our own backend error.
-/// Unwrapping keeps a database failure reported as one instead of flattening
-/// every login problem into the same 500.
 fn unwrap_session_error(
     error: AuthSessionError<crate::services::auth_service::Backend>,
 ) -> AuthError {

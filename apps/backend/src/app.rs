@@ -13,8 +13,6 @@ use crate::state::AppState;
 use crate::{api, frontend};
 
 pub async fn build(config: &Config, db: PgPool) -> Router {
-    // The store owns its own table, so it migrates itself rather than
-    // appearing in `migrations/`.
     let session_store = PostgresStore::new(db.clone());
     session_store
         .migrate()
@@ -31,9 +29,6 @@ pub async fn build(config: &Config, db: PgPool) -> Router {
         .route("/api", any(api::not_found))
         .route("/api/{*path}", any(api::not_found))
         .merge(SwaggerUi::new("/docs").url("/docs/openapi.json", openapi))
-        // Above `frontend::serve` on purpose: the SPA's static assets have no
-        // use for a session, and wrapping them would touch the store on every
-        // file request.
         .layer(auth_layer);
 
     frontend::serve(router, config).layer(TraceLayer::new_for_http())

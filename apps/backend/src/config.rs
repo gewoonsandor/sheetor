@@ -9,9 +9,6 @@ pub struct Config {
     pub port: u16,
     pub log_level: String,
     pub frontend_dist_dir: PathBuf,
-    /// `Secure` on the session cookie. Defaults to on, so a deployment is
-    /// safe by default; set `COOKIE_SECURE=false` to test over plain http,
-    /// where curl (unlike a browser on localhost) refuses to send it.
     pub cookie_secure: bool,
 }
 
