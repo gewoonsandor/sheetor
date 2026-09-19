@@ -50,6 +50,8 @@ Mount chain: `index.html#root` → `src/main.tsx` (`createRoot` + `StrictMode`) 
 
 **There is deliberately no `/login` route.** `AuthGate` sits *inside* `BrowserRouter` and *above* `AppLayout`, and while there is no session it renders `features/user/pages/LoginPage.tsx` in place of the entire application — header included. Because the URL is never touched, whatever deep link the visitor arrived on renders the moment they sign in, with no `?next=` to thread through. It renders nothing but a splash until `GET /users/me` answers, so the application is never briefly visible to an anonymous visitor and a returning one never sees the form flash.
 
+**`/settings` is user settings only** — Account (name, email, sign out) and Appearance (theme, accent). It is reached solely from the header's user chip; there is no `Settings` nav item, because the chip already went there and two entry points to one page read as two pages. Everything in `AppSettings` (volume, speed, loop, fretboard panel, read-only) is edited in the editor's own command bar instead: the Output popover and the View menu. The settings page no longer imports `settingsStore` at all.
+
 - **State**: ~20 `useState` hooks inside `TabSheetEditor.tsx` — the whole app, minus playback. No `useReducer`, no store library. `usePlayback` is the only custom hook.
 - **Mutation**: every edit is a named closure using `setSong(prev => …)` with immutable `map`/spread rebuilds. `updateActiveBeatNotes` is the shared primitive behind fret entry, technique toggles, and note removal.
 - **Persistence**: three `localStorage` stores (library, settings, user), all validating at the boundary. The two other `features/user/` modules are not persistence: `session.ts` is deliberately in-memory and `authApi.ts` is the network.
@@ -77,11 +79,11 @@ Mount chain: `index.html#root` → `src/main.tsx` (`createRoot` + `StrictMode`) 
 | `apps/backend/src/database/` | `mod.rs` (`init_pool`: connect + run migrations), `schemas/<table>.rs` (row types only), `queries/<table>.rs` (the SQL, and the only place constraint names appear) |
 | `apps/backend/migrations/` | sqlx migrations, applied at boot by `init_pool` and compiled in by `sqlx::migrate!`. Append-only: edit one that has run and the checksum no longer matches. The session table is **not** here — `PostgresStore::migrate()` owns `tower_sessions.session` |
 | `apps/backend/tests/` | Integration tests, gated on `TEST_DATABASE_URL` |
-| `apps/frontend/src/app/layout/` | `AppLayout` + `AppHeader` (logo and the three `NavLink`s), presentational only |
+| `apps/frontend/src/app/layout/` | `AppLayout` + `AppHeader` (logo, the two `NavLink`s, and the user chip that opens `/settings`), presentational only |
 | `apps/frontend/src/features/editor/components/` | The editor **and** its pure modules (`types.ts`, `layout.ts`, `songUtils.ts`, `songSchema.ts`, `audioEngine.ts`, `usePlayback.ts`) |
 | `apps/frontend/src/features/editor/pages/` | `EditorPage.tsx` (5 lines of indirection) |
 | `apps/frontend/src/features/library/` | `libraryStore.ts`, `LibraryPage.css`, `pages/LibraryPage.tsx` |
-| `apps/frontend/src/features/settings/` | `settingsStore.ts`, `SettingsPage.css`, `pages/SettingsPage.tsx` |
+| `apps/frontend/src/features/settings/` | `settingsStore.ts` (editor/playback prefs, written by the editor), `SettingsPage.css`, `pages/SettingsPage.tsx` (user settings only — it does not read the store beside it) |
 | `apps/frontend/src/features/user/` | `userStore.ts` (profile), `session.ts` (transient status), `authApi.ts` (the SPA's only backend calls), `theme.ts` (the only DOM-writing theme code), `LoginPage.css`, `pages/LoginPage.tsx` |
 | `apps/frontend/test/` | Every test, in a **shadow tree mirroring `src/`**: `test/features/user/userStore.test.ts` covers `src/features/user/userStore.ts` |
 
@@ -189,7 +191,7 @@ curl -s localhost:4000/api/v1/system/health     # smoke
 | `Cargo.toml` (root) | Cargo workspace, `members = ["apps/backend"]`, shared `target/` |
 | `apps/frontend/src/App.tsx` | `BrowserRouter` and the three routes |
 | `apps/frontend/src/features/library/libraryStore.ts` | The song library: pure mutators, validation, legacy migration |
-| `apps/frontend/src/features/settings/settingsStore.ts` | `AppSettings` with field-by-field validation |
+| `apps/frontend/src/features/settings/settingsStore.ts` | `AppSettings` with field-by-field validation; the editor is now its only writer |
 | `apps/frontend/src/app/AuthGate.tsx` | The gate: splash, sign-in screen, or the app |
 | `apps/frontend/src/features/user/authApi.ts` | `login`/`register`/`logout`/`fetchSession` — every backend call the SPA makes |
 | `apps/frontend/src/features/user/session.ts` | `'checking' \| 'in' \| 'out'`, deliberately not persisted |
@@ -278,7 +280,8 @@ Verify a change by:
 - `libraryStore.ts` quarantines an unusable `sheetor-library` to `sheetor-library.invalid` and drops individual entries whose song fails `parseSong`. Neither store has a schema *version*, so shape migrations are repair rules at parse time — in `parseSong` for songs, in `parseEntry`/`parseFolders`/`readSettings` for the wrappers. The pre-library `sheetor-song` key is migrated once and then deleted; `sheetor-song.invalid` is left alone.
 - Folder repair is deliberately minimal and happens only in `parseFolders`: a duplicate folder id is dropped, a missing parent or a folder that *closes* a cycle is reparented to the root, and a folder merely hanging below one keeps its parent (it becomes rooted once its ancestor is cut). A song pointing at a folder that no longer exists goes back to the root. Nothing is deleted, so `folderId`/`parentId` can never strand a song.
 - Drag targets are the folder tiles and every breadcrumb step, including `Library`. `dragenter` arms the highlight but `dragover` must keep calling `preventDefault()` or Chrome refuses the drop — both point at the same handler in `dropProps`. The `<select>` in each card is the keyboard equivalent; keep the two in sync when adding a move site.
-- Editor state that is also a setting (`volume`, `playbackSpeed`, `loopPlayback`, `showFretboard`, `viewMode`) is written back through `updateSettings` by one effect. Add a sixth and you must extend both `AppSettings` and that effect, or the settings page will silently disagree with the transport.
+- Editor state that is also a setting (`volume`, `playbackSpeed`, `loopPlayback`, `showFretboard`, `viewMode`) is written back through `updateSettings` by one effect. Add a sixth and you must extend both `AppSettings` and that effect, or it will not survive a reload. Since the settings page stopped mirroring these, the editor is the **only** surface for them — a field with no control in the command bar has no UI at all.
+- `defaultBpm` is exactly that case: it is read at `TabSheetEditor.tsx:110`/`:607` and `LibraryPage.tsx:94` to seed a new song, but nothing edits it any more — the "New songs" section went with the rest of the non-user settings. A stored value still applies; a fresh profile is stuck at 120 until a control is added to the editor's Song menu.
 - Theming has two code paths that must agree: the inline pre-paint script in `apps/frontend/index.html` and `applyTheme` in `features/user/theme.ts`. Rename the `'sheetor-user'` key or the `theme`/`accent` fields and the script silently stops working — the only symptom is a dark flash on a light-mode reload.
 - The session cookie is `Secure` by default (`COOKIE_SECURE`), and a **browser accepts and returns a `Secure` cookie over `http://localhost`** because localhost is a secure context — so dev needs no override. `curl` does not, which is the only reason `COOKIE_SECURE=false` exists. In dev the cookie is attributed to `:5173` because Vite proxies `/api`, so it is same-origin and `SameSite=Strict` never fights it.
 - `AuthGate` must stay inside `BrowserRouter` (`LoginPage` is rendered instead of `AppLayout`, and anything rendering a `<Link>` needs the router above it) and outside `AppLayout` (otherwise the header renders for signed-out visitors). Moving it below `AppLayout` is the easy mistake and it leaks the nav.

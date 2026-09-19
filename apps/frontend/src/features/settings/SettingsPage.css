@@ -67,31 +67,6 @@
   gap: var(--sp-2);
 }
 
-.settings-slider {
-  width: min(200px, 40vw);
-}
-
-.settings-readout {
-  min-width: 4ch;
-  text-align: right;
-  font-size: 0.8125rem;
-  font-weight: 600;
-  font-variant-numeric: tabular-nums;
-  color: var(--accent);
-}
-
-.settings-speeds {
-  display: grid;
-  grid-auto-flow: column;
-  grid-auto-columns: 1fr;
-  gap: var(--sp-1);
-}
-
-.settings-speeds .btn {
-  padding: 0 var(--sp-2);
-  font-variant-numeric: tabular-nums;
-}
-
 .settings-row-control .settings-text-input {
   width: min(260px, 46vw);
   text-align: left;
@@ -137,9 +112,5 @@
     flex-direction: column;
     align-items: stretch;
     gap: var(--sp-3);
-  }
-
-  .settings-slider {
-    width: 100%;
   }
 }
