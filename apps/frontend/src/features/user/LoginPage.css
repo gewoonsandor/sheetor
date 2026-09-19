@@ -1,0 +1,107 @@
+/* The sign-in screen stands in for the whole application, so it owns its
+   viewport rather than sitting inside .app-main / .page-shell. */
+.login-screen {
+  display: grid;
+  place-items: center;
+  min-height: 100dvh;
+  padding: var(--sp-5);
+}
+
+.login-card {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-4);
+  width: min(380px, 100%);
+  padding: var(--sp-5);
+  border: 1px solid var(--border);
+  border-radius: var(--r-lg);
+  background: var(--surface-1);
+  box-shadow: var(--shadow-2);
+}
+
+.login-brand {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+}
+
+.login-title {
+  margin: 0;
+  font-size: 1.25rem;
+  font-weight: 650;
+  color: var(--text);
+}
+
+.login-field {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-1);
+}
+
+.login-label {
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--text-dim);
+}
+
+/* .control-input is the 64px centred numeric field; a credential field wants
+   the full width and normal text alignment. */
+.login-input {
+  width: 100%;
+  text-align: left;
+  font-variant-numeric: normal;
+}
+
+.login-hint {
+  margin: 0;
+  font-size: 0.75rem;
+  line-height: 1.5;
+  color: var(--text-dim);
+}
+
+.login-error {
+  margin: 0;
+  padding: var(--sp-2) var(--sp-3);
+  border: 1px solid var(--danger-border);
+  border-radius: var(--r-md);
+  background: var(--danger-soft);
+  color: var(--danger);
+  font-size: 0.8125rem;
+  line-height: 1.5;
+}
+
+.login-submit {
+  justify-content: center;
+  width: 100%;
+}
+
+.login-swap {
+  align-self: center;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--text-dim);
+  font: inherit;
+  font-size: 0.8125rem;
+  cursor: pointer;
+}
+
+.login-swap:hover:not(:disabled) {
+  color: var(--text);
+  text-decoration: underline;
+}
+
+.login-swap:disabled {
+  cursor: default;
+  opacity: 0.6;
+}
+
+/* Shown while the session is still being resolved, so a returning visitor
+   never sees the form flash before their cookie is checked. */
+.login-splash {
+  display: grid;
+  place-items: center;
+  min-height: 100dvh;
+  color: var(--text-faint, var(--text-dim));
+  font-size: 0.8125rem;
+}

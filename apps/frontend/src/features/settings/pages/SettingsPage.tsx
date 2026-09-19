@@ -18,6 +18,7 @@ import {
   subscribeUser,
   updateUser,
 } from '../../user/userStore';
+import { logout } from '../../user/authApi';
 import '../SettingsPage.css';
 
 type SettingsRowProps = {
@@ -77,20 +78,26 @@ export const SettingsPage = () => {
     setEmailDraft(updateUser({ email: emailDraft }).email);
   };
 
+  const signOut = (): void => {
+    // The gate is subscribed to the session, so clearing it is all that is
+    // needed - there is nothing to navigate to.
+    void logout();
+  };
+
   return (
     <div className="page-shell">
       <header className="page-header">
         <h1 className="page-title">User settings</h1>
         <p className="page-subtitle">
-          Signed in locally as {user.name}. Preferences are kept in this browser only — nothing
-          leaves your machine, and clearing site data restores the defaults.
+          Signed in as {user.name}. Everything below is kept in this browser only — nothing but
+          your account leaves your machine, and clearing site data restores the defaults.
         </p>
       </header>
 
       <div className="settings-sections">
         <section className="settings-section">
           <h2 className="settings-section-title">Account</h2>
-          <p className="settings-section-note">Who you are in this browser. There is no sign-in yet.</p>
+          <p className="settings-section-note">Your account, and how it appears in this browser.</p>
           <div className="settings-card">
             <SettingsRow name="Avatar" description="Initials are taken from your display name.">
               <span className="app-user-avatar app-user-avatar-lg">{deriveInitials(user.name)}</span>
@@ -98,7 +105,7 @@ export const SettingsPage = () => {
 
             <SettingsRow
               name="Display name"
-              description="Shown in the app header. This profile lives in this browser; there is no account to sign in to."
+              description="Shown in the app header. Taken from your account at sign-in; editing it here only changes this browser."
               htmlFor="settings-user-name"
             >
               <input
@@ -116,7 +123,7 @@ export const SettingsPage = () => {
 
             <SettingsRow
               name="Email"
-              description="Optional label for this profile. Nothing is sent anywhere."
+              description="The address you sign in with. Editing it here only relabels this browser's profile."
               htmlFor="settings-user-email"
             >
               <input
@@ -131,6 +138,15 @@ export const SettingsPage = () => {
                   if (e.key === 'Enter') commitEmail();
                 }}
               />
+            </SettingsRow>
+
+            <SettingsRow
+              name="Session"
+              description="Signing out clears the session cookie and returns you to the sign-in screen. Your songs stay in this browser either way."
+            >
+              <button className="btn" type="button" onClick={signOut}>
+                Sign out
+              </button>
             </SettingsRow>
           </div>
         </section>
