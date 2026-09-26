@@ -21,11 +21,12 @@
   display: flex;
   align-items: center;
   gap: var(--sp-3);
-  height: 46px;
+  height: 56px;
   padding: 0 max(var(--sp-4), calc((100% - var(--page-max)) / 2 + var(--sp-5)));
   background: var(--bar-surface);
-  backdrop-filter: blur(12px);
+  backdrop-filter: blur(18px) saturate(1.4);
   border-bottom: 1px solid var(--border);
+  box-shadow: 0 1px 0 var(--edge-hi) inset;
   flex: none;
 }
 
@@ -38,16 +39,18 @@
 .logo-mark {
   display: grid;
   place-items: center;
-  width: 22px;
-  height: 22px;
-  border-radius: var(--r-sm);
+  width: 28px;
+  height: 28px;
+  border-radius: var(--r-md);
   background: linear-gradient(150deg, var(--accent-hover), var(--accent));
   color: var(--accent-ink);
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.35), 0 4px 14px -4px var(--accent-glow);
 }
 
 .logo-text {
-  font-size: 0.95rem;
-  font-weight: 700;
+  font-family: var(--font-display);
+  font-size: 1.25rem;
+  font-weight: 600;
   letter-spacing: -0.01em;
   color: var(--text);
 }
@@ -55,10 +58,12 @@
 .app-nav {
   display: flex;
   align-items: center;
-  gap: var(--sp-1);
-  margin-left: var(--sp-3);
-  padding-left: var(--sp-3);
-  border-left: 1px solid var(--border);
+  gap: var(--sp-hair);
+  margin-left: var(--sp-4);
+  padding: 3px;
+  background: var(--surface-1);
+  border: 1px solid var(--border);
+  border-radius: var(--r-pill);
 }
 
 .app-nav-link {
@@ -67,7 +72,7 @@
   gap: var(--sp-2);
   height: var(--ctl-h-sm);
   padding: 0 var(--sp-3);
-  border-radius: var(--r-md);
+  border-radius: var(--r-pill);
   color: var(--text-dim);
   font-size: 0.8125rem;
   font-weight: 600;
@@ -83,16 +88,17 @@
 }
 
 .app-nav-link:hover {
-  background: var(--surface-2);
   color: var(--text);
 }
 
 .app-nav-link.is-active {
-  background: var(--accent-soft);
-  color: var(--accent);
+  background: var(--sheen), var(--surface-3);
+  box-shadow: inset 0 1px 0 var(--edge-hi), var(--shadow-1);
+  color: var(--text);
 }
 
 .app-nav-link.is-active svg {
+  color: var(--accent);
   opacity: 1;
 }
 
@@ -119,14 +125,14 @@
 .app-user-avatar {
   display: grid;
   place-items: center;
-  width: 22px;
-  height: 22px;
+  width: 26px;
+  height: 26px;
   flex: none;
   border-radius: var(--r-pill);
-  background: var(--accent-soft);
-  border: 1px solid var(--border-focus);
+  background: linear-gradient(150deg, rgb(var(--accent-rgb) / 0.3), rgb(var(--accent-rgb) / 0.12));
+  box-shadow: inset 0 0 0 1px var(--border-focus);
   color: var(--accent);
-  font-size: 0.625rem;
+  font-size: 0.6875rem;
   font-weight: 700;
   letter-spacing: 0.02em;
 }

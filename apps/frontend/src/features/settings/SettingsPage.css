@@ -22,10 +22,10 @@
 
 .settings-card {
   width: min(760px, 100%);
-  background: var(--surface-1);
+  background: var(--sheen), var(--surface-1);
   border: 1px solid var(--border);
   border-radius: var(--r-lg);
-  box-shadow: var(--shadow-1);
+  box-shadow: inset 0 1px 0 var(--edge-hi), var(--shadow-1);
 }
 
 .settings-row {

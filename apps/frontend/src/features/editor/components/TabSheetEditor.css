@@ -39,23 +39,25 @@
 .sheetor-artist-input {
   background: transparent;
   border: 1px solid transparent;
-  border-radius: var(--r-sm);
+  border-radius: var(--r-md);
   color: var(--text);
   font-family: inherit;
   padding: 2px var(--sp-2);
   margin-left: calc(var(--sp-2) * -1);
   width: min(30ch, 100%);
-  transition: background var(--t) var(--ease), border-color var(--t) var(--ease);
+  transition: background var(--t) var(--ease), border-color var(--t) var(--ease), box-shadow var(--t) var(--ease);
 }
 
 .sheetor-title-input {
-  font-size: 1.5rem;
-  font-weight: 700;
+  font-family: var(--font-display);
+  font-size: 2.125rem;
+  font-weight: 600;
   letter-spacing: -0.02em;
+  line-height: 1.15;
 }
 
 .sheetor-artist-input {
-  font-size: 0.875rem;
+  font-size: 0.9375rem;
   font-weight: 500;
   color: var(--text-dim);
 }
@@ -87,7 +89,8 @@
   margin: 0;
   background: var(--border);
   border: 1px solid var(--border);
-  border-radius: var(--r-md);
+  border-radius: var(--r-lg);
+  box-shadow: var(--shadow-1);
   overflow: hidden;
   flex: none;
 }
@@ -96,9 +99,9 @@
   display: flex;
   flex-direction: column;
   gap: var(--sp-hair);
-  padding: var(--sp-2) var(--sp-3);
-  background: var(--surface-1);
-  min-width: 66px;
+  padding: var(--sp-2) var(--sp-4);
+  background: var(--sheen), var(--surface-1);
+  min-width: 72px;
 }
 
 .readout-chip dd {
@@ -126,9 +129,10 @@
   flex: none;
   height: var(--ctl-h);
   padding: 0 var(--sp-3);
-  background: var(--surface-2);
+  background: var(--sheen), var(--surface-2);
   border: 1px solid var(--border);
   border-radius: var(--r-md);
+  box-shadow: inset 0 1px 0 var(--edge-hi), var(--shadow-1);
   color: var(--text);
   font-family: inherit;
   font-size: 0.8125rem;
@@ -136,7 +140,7 @@
   white-space: nowrap;
   cursor: pointer;
   user-select: none;
-  transition: background var(--t) var(--ease), border-color var(--t) var(--ease), color var(--t) var(--ease), transform var(--t-fast) var(--ease);
+  transition: background var(--t) var(--ease), border-color var(--t) var(--ease), color var(--t) var(--ease), box-shadow var(--t) var(--ease), transform var(--t-fast) var(--ease);
 }
 
 .btn svg,
@@ -148,31 +152,39 @@
 
 .btn:hover,
 .bottom-menu-trigger:hover {
-  background: var(--surface-3);
+  background: var(--sheen), var(--surface-3);
   border-color: var(--border-strong);
 }
 
 .btn:active,
 .bottom-menu-trigger:active {
-  background: var(--surface-4);
-  transform: translateY(1px);
+  background: var(--surface-3);
+  box-shadow: inset 0 1px 2px rgb(0 0 0 / 0.2);
+  transform: scale(0.98);
 }
 
 .btn-primary {
-  background: var(--accent);
-  border-color: var(--accent);
+  background: linear-gradient(180deg, var(--accent-hover), var(--accent));
+  border-color: rgb(var(--accent-rgb) / 0.9);
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.28), 0 1px 1px rgb(0 0 0 / 0.2), 0 8px 20px -8px var(--accent-glow);
   color: var(--accent-ink);
   padding: 0 var(--sp-4);
 }
 
 .btn-primary:hover {
-  background: var(--accent-hover);
+  background: linear-gradient(180deg, var(--accent-hover), var(--accent-hover));
   border-color: var(--accent-hover);
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.32), 0 1px 1px rgb(0 0 0 / 0.2), 0 10px 26px -8px var(--accent-glow);
+}
+
+.btn-primary:active {
+  background: var(--accent);
 }
 
 .btn-danger {
   background: var(--danger-soft);
   border-color: var(--danger-border);
+  box-shadow: none;
   color: var(--danger);
 }
 
@@ -188,6 +200,7 @@
 .bottom-menu-trigger.active {
   background: var(--accent-soft);
   border-color: var(--border-focus);
+  box-shadow: inset 0 0 12px -4px var(--accent-glow);
   color: var(--accent);
 }
 
@@ -223,6 +236,7 @@
   background: var(--bg);
   border: 1px solid var(--border);
   border-radius: var(--r-sm);
+  box-shadow: inset 0 1px 2px rgb(0 0 0 / 0.15);
   color: var(--text);
   font-family: inherit;
   font-size: 0.8125rem;
@@ -290,7 +304,7 @@ input[type="range"] {
   background: var(--paper);
   border: 1px solid var(--border);
   border-radius: var(--r-lg);
-  box-shadow: var(--shadow-1), inset 0 1px 0 rgb(var(--ink-rgb) / 0.04);
+  box-shadow: var(--shadow-2), inset 0 1px 0 var(--edge-hi);
 }
 
 .sheetor-canvas-container:focus-visible {
@@ -540,10 +554,10 @@ input[type="range"] {
   flex-direction: column;
   gap: var(--sp-3);
   padding: var(--sp-4);
-  background: var(--surface-1);
+  background: var(--sheen), var(--surface-1);
   border: 1px solid var(--border);
   border-radius: var(--r-lg);
-  box-shadow: var(--shadow-1);
+  box-shadow: inset 0 1px 0 var(--edge-hi), var(--shadow-1);
   overflow-x: auto;
   overscroll-behavior-x: contain;
 }
@@ -712,10 +726,10 @@ input[type="range"] {
   align-items: stretch;
   gap: var(--sp-3);
   padding: var(--sp-2) var(--sp-3);
-  background: var(--surface-1);
+  background: var(--sheen), var(--surface-1);
   border: 1px solid var(--border);
   border-radius: var(--r-lg);
-  box-shadow: var(--shadow-1);
+  box-shadow: inset 0 1px 0 var(--edge-hi), var(--shadow-1);
 }
 
 .track-list {
@@ -732,7 +746,7 @@ input[type="range"] {
   align-items: center;
   gap: var(--sp-1);
   padding: var(--sp-1) var(--sp-1) var(--sp-1) var(--sp-2);
-  background: var(--surface-2);
+  background: var(--sheen), var(--surface-2);
   border: 1px solid var(--border);
   border-radius: var(--r-md);
   transition: border-color var(--t-fast) var(--ease), background var(--t-fast) var(--ease), opacity var(--t-fast) var(--ease);
@@ -960,19 +974,21 @@ input[type="range"] {
 
 .bottom-command-bar {
   position: fixed;
-  left: 0;
-  right: 0;
-  bottom: 0;
+  /* A floating dock, edge-aligned with the page column above it. */
+  left: max(var(--sp-3), calc((100% - var(--page-max)) / 2 + var(--sp-5)));
+  right: max(var(--sp-3), calc((100% - var(--page-max)) / 2 + var(--sp-5)));
+  bottom: var(--sp-3);
   z-index: var(--z-bar);
   display: flex;
   align-items: center;
   gap: var(--sp-2);
   min-height: calc(var(--ctl-h) + var(--sp-4));
-  /* Line the transport up with the page column instead of the window edge. */
-  padding: var(--sp-2) max(var(--sp-4), calc((100% - var(--page-max)) / 2 + var(--sp-5)));
+  padding: var(--sp-2) var(--sp-2) var(--sp-2) var(--sp-3);
   background: var(--bar-surface);
-  backdrop-filter: blur(12px);
-  border-top: 1px solid var(--border);
+  backdrop-filter: blur(20px) saturate(1.5);
+  border: 1px solid var(--border-strong);
+  border-radius: calc(var(--r-lg) + 2px);
+  box-shadow: inset 0 1px 0 var(--edge-hi), var(--shadow-3);
 }
 
 .bottom-cluster {
@@ -1067,10 +1083,10 @@ input[type="range"] {
   gap: var(--sp-2);
   min-width: 200px;
   padding: var(--sp-3);
-  background: var(--surface-2);
+  background: var(--sheen), var(--surface-2);
   border: 1px solid var(--border-strong);
   border-radius: var(--r-lg);
-  box-shadow: var(--shadow-3);
+  box-shadow: inset 0 1px 0 var(--edge-hi), var(--shadow-3);
   transform-origin: bottom right;
   animation: popoverSlideUp 0.14s var(--ease);
   /* Never grow past the viewport — the tuning list used to run off-screen. */
@@ -1142,10 +1158,10 @@ input[type="range"] {
   gap: var(--sp-2);
   max-width: calc(100vw - var(--sp-4));
   padding: var(--sp-2) var(--sp-3);
-  background: var(--surface-2);
+  background: var(--sheen), var(--surface-2);
   border: 1px solid var(--border-strong);
   border-radius: var(--r-lg);
-  box-shadow: var(--shadow-3);
+  box-shadow: inset 0 1px 0 var(--edge-hi), var(--shadow-3);
   animation: popoverSlideUp 0.15s var(--ease);
 }
 
@@ -1248,7 +1264,7 @@ input[type="range"] {
   place-items: center;
   padding: var(--sp-4);
   background: var(--scrim);
-  backdrop-filter: blur(3px);
+  backdrop-filter: blur(6px) saturate(1.2);
 }
 
 .shortcut-overlay {
@@ -1258,10 +1274,10 @@ input[type="range"] {
 .shortcut-panel,
 .sheetor-modal {
   padding: var(--sp-5);
-  background: var(--surface-1);
+  background: var(--sheen), var(--surface-1);
   border: 1px solid var(--border-strong);
   border-radius: var(--r-lg);
-  box-shadow: var(--shadow-3);
+  box-shadow: inset 0 1px 0 var(--edge-hi), var(--shadow-3);
   animation: popoverSlideUp var(--t-slow) var(--ease);
 }
 
@@ -1396,7 +1412,7 @@ kbd {
    clearance token moves with it, so nothing below the fold has to be retuned. */
 @media (max-width: 620px) {
   :root {
-    --cmdbar-h: 104px;
+    --cmdbar-h: 116px;
   }
 
   .bottom-command-bar {

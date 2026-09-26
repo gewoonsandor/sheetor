@@ -13,9 +13,10 @@
 .page-title {
   grid-column: 1;
   margin: 0;
-  font-size: 1.5rem;
+  font-family: var(--font-display);
+  font-size: 2.125rem;
   font-weight: 600;
-  letter-spacing: -0.01em;
+  letter-spacing: -0.02em;
   line-height: 1.2;
 }
 
@@ -103,10 +104,10 @@
   display: flex;
   flex-direction: column;
   padding: var(--sp-4);
-  background: var(--surface-1);
+  background: var(--sheen), var(--surface-1);
   border: 1px solid var(--border);
   border-radius: var(--r-lg);
-  box-shadow: var(--shadow-1);
+  box-shadow: inset 0 1px 0 var(--edge-hi), var(--shadow-1);
   /* Every card is a drag source: songs and folders both move by dropping. */
   cursor: grab;
   transition: background var(--t) var(--ease), border-color var(--t) var(--ease),
@@ -125,7 +126,7 @@
 
 /* A folder is a shelf, not a document: raised surface, amber mark, no artist. */
 .library-folder {
-  background: var(--surface-2);
+  background: var(--sheen), var(--surface-2);
 }
 
 /* One count line, so it does not need a song card's breathing room. */

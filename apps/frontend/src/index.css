@@ -23,12 +23,18 @@
   --accent-hover-rgb: 231 154 79;
   --accent-ink: hsl(26 30% 8%);
 
-  /* Surfaces: warm near-black, each step lighter as it lifts */
-  --bg: hsl(var(--tint-h) var(--tint-s) 6%);
-  --surface-1: hsl(var(--tint-h) var(--tint-s) 9.5%);
-  --surface-2: hsl(var(--tint-h) var(--tint-s) 12%);
+  /* Surfaces: deep tinted near-black, each step lighter as it lifts */
+  --bg: hsl(var(--tint-h) var(--tint-s) 5%);
+  --surface-1: hsl(var(--tint-h) var(--tint-s) 8.5%);
+  --surface-2: hsl(var(--tint-h) var(--tint-s) 11.5%);
   --surface-3: hsl(var(--tint-h) var(--tint-s) 15%);
-  --surface-4: hsl(var(--tint-h) var(--tint-s) 19%);
+  --surface-4: hsl(var(--tint-h) var(--tint-s) 19.5%);
+
+  /* Material: a lit top edge and a faint top-down sheen give every raised
+     surface a physical, machined feel instead of a flat fill. */
+  --edge-hi: rgb(255 255 255 / 0.06);
+  --sheen: linear-gradient(180deg, rgb(255 255 255 / 0.035), rgb(255 255 255 / 0) 55%);
+  --ambient: radial-gradient(1100px 520px at 50% -140px, rgb(var(--accent-rgb) / 0.08), transparent 70%);
 
   /* Score paper and ink. --ink-rgb is the polarity that flips with the theme;
      every staff element and glyph derives from it, so the notation follows. */
@@ -115,8 +121,8 @@
 
   /* Radii */
   --r-sm: 6px;
-  --r-md: 9px;
-  --r-lg: 14px;
+  --r-md: 10px;
+  --r-lg: 16px;
   --r-pill: 999px;
 
   /* Control heights — one row rhythm for every button and field */
@@ -124,15 +130,16 @@
   --ctl-h-sm: 28px;
   --ctl-h-xs: 22px;
 
-  /* Command bar height — every clearance below the fold derives from it */
-  --cmdbar-h: 54px;
+  /* Command bar height — every clearance below the fold derives from it.
+     The bar floats as a dock, so this includes its gap to the window edge. */
+  --cmdbar-h: 68px;
 
-  /* Elevation and layering */
-  --shadow-1: 0 1px 2px rgba(0, 0, 0, 0.4);
-  --shadow-2: 0 8px 24px -6px rgba(0, 0, 0, 0.6);
-  --shadow-3: 0 18px 48px -12px rgba(0, 0, 0, 0.7);
-  --scrim: rgba(10, 9, 8, 0.72);
-  --bar-surface: hsl(var(--tint-h) var(--tint-s) 6% / 0.92);
+  /* Elevation: a tight contact shadow plus a soft ambient one per step */
+  --shadow-1: 0 1px 1px rgb(0 0 0 / 0.3), 0 2px 6px -2px rgb(0 0 0 / 0.35);
+  --shadow-2: 0 2px 4px -1px rgb(0 0 0 / 0.3), 0 14px 32px -10px rgb(0 0 0 / 0.6);
+  --shadow-3: 0 4px 10px -2px rgb(0 0 0 / 0.35), 0 28px 64px -18px rgb(0 0 0 / 0.8);
+  --scrim: rgba(8, 7, 6, 0.6);
+  --bar-surface: hsl(var(--tint-h) var(--tint-s) 9% / 0.78);
 
   --z-bar: 40;
   --z-popover: 45;
@@ -140,10 +147,11 @@
   --z-sheet: 70;
   --z-modal: 80;
 
-  --font: 'Outfit', 'Inter', system-ui, -apple-system, sans-serif;
-  --font-mono: ui-monospace, 'SF Mono', 'JetBrains Mono', monospace;
+  --font: 'Inter', system-ui, -apple-system, sans-serif;
+  --font-display: 'Fraunces', Georgia, serif;
+  --font-mono: 'JetBrains Mono', ui-monospace, 'SF Mono', monospace;
 
-  --ease: cubic-bezier(0.2, 0.8, 0.3, 1);
+  --ease: cubic-bezier(0.16, 1, 0.3, 1);
 
   --t-fast: 0.12s;
   --t: 0.15s;
@@ -184,11 +192,15 @@
   --ok-rgb: 20 122 88;
   --danger-hover-text: rgb(var(--danger-rgb));
 
-  --shadow-1: 0 1px 2px hsl(var(--tint-h) 30% 20% / 0.08);
-  --shadow-2: 0 8px 24px -6px hsl(var(--tint-h) 30% 20% / 0.16);
-  --shadow-3: 0 18px 48px -12px hsl(var(--tint-h) 30% 20% / 0.22);
-  --scrim: hsl(var(--tint-h) 20% 25% / 0.32);
-  --bar-surface: hsl(var(--tint-h) 40% 99% / 0.9);
+  --edge-hi: rgb(255 255 255 / 0.85);
+  --sheen: linear-gradient(180deg, rgb(255 255 255 / 0.6), rgb(255 255 255 / 0) 60%);
+  --ambient: radial-gradient(1100px 520px at 50% -140px, rgb(var(--accent-rgb) / 0.07), transparent 70%);
+
+  --shadow-1: 0 1px 1px hsl(var(--tint-h) 30% 20% / 0.06), 0 2px 6px -2px hsl(var(--tint-h) 30% 20% / 0.1);
+  --shadow-2: 0 2px 4px -1px hsl(var(--tint-h) 30% 20% / 0.08), 0 14px 32px -10px hsl(var(--tint-h) 30% 20% / 0.2);
+  --shadow-3: 0 4px 10px -2px hsl(var(--tint-h) 30% 20% / 0.1), 0 28px 64px -18px hsl(var(--tint-h) 30% 20% / 0.3);
+  --scrim: hsl(var(--tint-h) 20% 25% / 0.28);
+  --bar-surface: hsl(var(--tint-h) 40% 99% / 0.8);
 }
 
 /* Colour styles. Each re-points the neutral tint and the accent triplet; the
@@ -216,10 +228,13 @@ body {
   margin: 0;
   min-width: 320px;
   min-height: 100vh;
-  background-color: var(--bg);
+  background: var(--ambient) no-repeat, var(--bg);
   color: var(--text);
   font-family: var(--font);
+  font-feature-settings: 'cv11', 'ss01', 'ss03';
   -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
 }
 
 /* Thin scrollbars everywhere. color-scheme above hands native bars, selects and
