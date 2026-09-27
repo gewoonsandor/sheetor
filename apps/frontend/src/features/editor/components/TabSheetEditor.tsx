@@ -62,7 +62,7 @@ import {
   FRET_COUNT as fretCount,
   MAX_ROW_WIDTH,
   STEM_TOP_PAD,
-  TAB_STAFF_TOP,
+  getTabStaffTop,
   TAB_STAFF_HEIGHT_PX,
   TAB_FRET_FONT_SIZE,
 } from './layout';
@@ -880,14 +880,15 @@ export const TabSheetEditor: React.FC = () => {
 
   // --- SVG MEASUREMENT & LAYOUT CALCULATION ---
 
-  const ROW_HEIGHT = computeRowHeight(stringCount, showTab);
+  const ROW_HEIGHT = computeRowHeight(stringCount, showTab, showNotation);
+  const tabTop = getTabStaffTop(showNotation);
 
   const measureLayouts: MLayout[] = computeMeasureLayouts(measures);
 
-  // Compute TAB shift per measure: extra gap to avoid stems overlapping TAB.
-  // Irrelevant when the TAB staff isn't rendered at all.
+  // Per-measure shift for notes below the notation staff: pushes the TAB down,
+  // or with the TAB hidden grows the row. Irrelevant with no notation staff.
   const measureTabOffsets: number[] = measures.map((measure) => {
-    if (!showTab) return 0;
+    if (!showNotation) return 0;
     let minStep = 4;
     for (const beat of measure.beats) {
       if (beat.isRest) continue;
@@ -913,6 +914,7 @@ export const TabSheetEditor: React.FC = () => {
   measures.forEach((measure, mIdx) => {
     const r = measureLayouts[mIdx]?.row ?? 0;
     let minNoteY = 0;
+    if (!showNotation) return;
     for (const beat of measure.beats) {
       if (beat.isRest || beat.notes.length === 0) continue;
       for (const note of beat.notes) {
@@ -959,10 +961,10 @@ export const TabSheetEditor: React.FC = () => {
   // and the playback cursor. With the TAB staff hidden this is just below the
   // standard staff instead of the bottom TAB line.
   const getStaffBottom = (ts: number): number =>
-    showTab ? TAB_STAFF_TOP + ts + stringCount * TAB_STAFF_HEIGHT_PX - 10 : 50;
+    showTab ? tabTop + ts + stringCount * TAB_STAFF_HEIGHT_PX - 10 : 50;
 
   /** Top boundary of the drawn staff block, for bar lines and the cursor. */
-  const getStaffTop = (ts: number): number => (showNotation ? 10 : TAB_STAFF_TOP + ts);
+  const getStaffTop = (ts: number): number => (showNotation ? 10 : tabTop + ts);
 
   const fretboardNeckHeight = computeFretboardNeckHeight(stringCount);
 
@@ -1581,7 +1583,7 @@ export const TabSheetEditor: React.FC = () => {
 
                 {/* TAB lines (TAB staff) */}
                 {showTab && Array.from({ length: stringCount }).map((_, lineIdx) => {
-                  const y = rowY + TAB_STAFF_TOP + ts + lineIdx * 10;
+                  const y = rowY + tabTop + ts + lineIdx * 10;
                   return (
                     <line
                       key={`tl-${lineIdx}`}
@@ -1687,9 +1689,9 @@ export const TabSheetEditor: React.FC = () => {
                     {/* Stacked TAB text */}
                     {showTab && (
                       <>
-                        <text x="18" y={TAB_STAFF_TOP + ts + stringCount * TAB_STAFF_HEIGHT_PX / 2 - 14} className="music-text" fontSize="13" letterSpacing="0">T</text>
-                        <text x="18" y={TAB_STAFF_TOP + ts + stringCount * TAB_STAFF_HEIGHT_PX / 2 + 2} className="music-text" fontSize="13" letterSpacing="0">A</text>
-                        <text x="18" y={TAB_STAFF_TOP + ts + stringCount * TAB_STAFF_HEIGHT_PX / 2 + 18} className="music-text" fontSize="13" letterSpacing="0">B</text>
+                        <text x="18" y={tabTop + ts + stringCount * TAB_STAFF_HEIGHT_PX / 2 - 14} className="music-text" fontSize="13" letterSpacing="0">T</text>
+                        <text x="18" y={tabTop + ts + stringCount * TAB_STAFF_HEIGHT_PX / 2 + 2} className="music-text" fontSize="13" letterSpacing="0">A</text>
+                        <text x="18" y={tabTop + ts + stringCount * TAB_STAFF_HEIGHT_PX / 2 + 18} className="music-text" fontSize="13" letterSpacing="0">B</text>
                       </>
                     )}
 
@@ -1701,10 +1703,10 @@ export const TabSheetEditor: React.FC = () => {
                         <text
                           key={i}
                           x="-8"
-                          y={TAB_STAFF_TOP + ts + i * TAB_STAFF_HEIGHT_PX}
+                          y={tabTop + ts + i * TAB_STAFF_HEIGHT_PX}
                           dominantBaseline="central"
                           className="glyph-label"
-                          fontFamily="'Outfit', 'Inter', sans-serif"
+                          fontFamily="'Inter', sans-serif"
                           fontSize="7"
                           fontWeight="600"
                           textAnchor="end"
@@ -1727,8 +1729,8 @@ export const TabSheetEditor: React.FC = () => {
 
                         {showTab && (
                           <>
-                            <text x="50" y={TAB_STAFF_TOP + ts + stringCount * TAB_STAFF_HEIGHT_PX / 2 - 8} className="music-text" fontSize="16" textAnchor="middle">{effectiveTimeSignature.numerator}</text>
-                            <text x="50" y={TAB_STAFF_TOP + ts + stringCount * TAB_STAFF_HEIGHT_PX / 2 + 12} className="music-text" fontSize="16" textAnchor="middle">{effectiveTimeSignature.denominator}</text>
+                            <text x="50" y={tabTop + ts + stringCount * TAB_STAFF_HEIGHT_PX / 2 - 8} className="music-text" fontSize="16" textAnchor="middle">{effectiveTimeSignature.numerator}</text>
+                            <text x="50" y={tabTop + ts + stringCount * TAB_STAFF_HEIGHT_PX / 2 + 12} className="music-text" fontSize="16" textAnchor="middle">{effectiveTimeSignature.denominator}</text>
                           </>
                         )}
                       </g>
@@ -1747,8 +1749,8 @@ export const TabSheetEditor: React.FC = () => {
                     )}
                     {showTab && (
                       <>
-                        <text x={measureX + 12} y={rowY + TAB_STAFF_TOP + ts + stringCount * TAB_STAFF_HEIGHT_PX / 2 - 8} className="music-text" fontSize="16" textAnchor="middle">{effectiveTimeSignature.numerator}</text>
-                        <text x={measureX + 12} y={rowY + TAB_STAFF_TOP + ts + stringCount * TAB_STAFF_HEIGHT_PX / 2 + 12} className="music-text" fontSize="16" textAnchor="middle">{effectiveTimeSignature.denominator}</text>
+                        <text x={measureX + 12} y={rowY + tabTop + ts + stringCount * TAB_STAFF_HEIGHT_PX / 2 - 8} className="music-text" fontSize="16" textAnchor="middle">{effectiveTimeSignature.numerator}</text>
+                        <text x={measureX + 12} y={rowY + tabTop + ts + stringCount * TAB_STAFF_HEIGHT_PX / 2 + 12} className="music-text" fontSize="16" textAnchor="middle">{effectiveTimeSignature.denominator}</text>
                       </>
                     )}
                   </g>
@@ -1780,7 +1782,7 @@ export const TabSheetEditor: React.FC = () => {
 
                       {/* Clicking TAB staff region changes active beat/string */}
                       {showTab && Array.from({ length: stringCount }).map((_, stringIdx) => {
-                        const y = rowY + TAB_STAFF_TOP + ts + stringIdx * 10;
+                        const y = rowY + tabTop + ts + stringIdx * 10;
                         return (
                           <rect
                             key={`click-string-${stringIdx}`}
@@ -1836,7 +1838,7 @@ export const TabSheetEditor: React.FC = () => {
                       {showTab && (
                         <circle
                           cx={beatX}
-                          cy={rowY + TAB_STAFF_TOP + ts + activeStringIndex * 10}
+                          cy={rowY + tabTop + ts + activeStringIndex * 10}
                           r="5.5"
                           fill="transparent"
                           className="cursor-ring"
@@ -1974,8 +1976,8 @@ export const TabSheetEditor: React.FC = () => {
 
                     // Skip notes that would render below the TAB staff area (or,
                     // with the TAB hidden, below the row's reserved space)
-                    if (showTab && n.y > rowY + TAB_STAFF_TOP + ts - 8) return null;
-                    if (!showTab && n.y > rowY + ROW_HEIGHT - 10) return null;
+                    if (showTab && n.y > rowY + tabTop + ts - 8) return null;
+                    if (!showTab && n.y > rowY + ROW_HEIGHT + ts - 10) return null;
 
                     return (
                       <g key={`note-${mIdx}-${bIdx}-${n.noteIndex}`}>
@@ -2107,7 +2109,7 @@ export const TabSheetEditor: React.FC = () => {
                   {showTab && b.notes.map((rawNote, noteIndex) => {
                     if (!isFrettedNote(rawNote)) return null;
                     const n = rawNote;
-                    const stringY = rowY + TAB_STAFF_TOP + ts + n.stringIndex * 10;
+                    const stringY = rowY + tabTop + ts + n.stringIndex * 10;
                     const isSelected = isCursorNote(mIdx, bIdx, noteIndex, b.notes);
 
                     const fretDisplay = (note: FrettedNote): string => {
@@ -2156,7 +2158,7 @@ export const TabSheetEditor: React.FC = () => {
                             if (prevNote) {
                               prevPos = {
                                 x: getBeatCoordinates(mIdx, i),
-                                y: getRowY(mIdx) + TAB_STAFF_TOP + ts + n.stringIndex * 10,
+                                y: getRowY(mIdx) + tabTop + ts + n.stringIndex * 10,
                               };
                               break;
                             }
@@ -2198,9 +2200,9 @@ export const TabSheetEditor: React.FC = () => {
                   {showTab && hasStem && (
                     <line
                       x1={stemUp ? beatX + 4 : beatX - 4}
-                      y1={rowY + TAB_STAFF_TOP + ts + stringCount * 10 + 2}
+                      y1={rowY + tabTop + ts + stringCount * 10 + 2}
                       x2={stemUp ? beatX + 4 : beatX - 4}
-                      y2={rowY + TAB_STAFF_TOP + ts + stringCount * 10 + 2 + (beamInfo ? 11.5 : 10)}
+                      y2={rowY + tabTop + ts + stringCount * 10 + 2 + (beamInfo ? 11.5 : 10)}
                       className="tab-stem"
                       strokeWidth="1.2"
                       style={{ pointerEvents: 'none' }}
@@ -2209,12 +2211,12 @@ export const TabSheetEditor: React.FC = () => {
 
                   {/* Palm mute / let ring indicators */}
                   {showTab && b.notes.some(n => n.palmMute) && (
-                    <text x={beatX - 12} y={rowY + TAB_STAFF_TOP + ts - 4} className="music-text technique-pm" fontSize="8" style={{ pointerEvents: 'none' }}>
+                    <text x={beatX - 12} y={rowY + tabTop + ts - 4} className="music-text technique-pm" fontSize="8" style={{ pointerEvents: 'none' }}>
                       P.M.
                     </text>
                   )}
                   {showTab && b.notes.some(n => n.letRing) && (
-                    <text x={beatX - 12} y={rowY + TAB_STAFF_TOP + ts - 14} className="music-text technique-ring" fontSize="8" style={{ pointerEvents: 'none' }}>
+                    <text x={beatX - 12} y={rowY + tabTop + ts - 14} className="music-text technique-ring" fontSize="8" style={{ pointerEvents: 'none' }}>
                       let ring
                     </text>
                   )}
@@ -2323,7 +2325,7 @@ export const TabSheetEditor: React.FC = () => {
                 const firstX = getBeatCoordinates(mIdx, g.startIdx);
                 const lastX = getBeatCoordinates(mIdx, g.endIdx);
                 const mainStemUp = getBeamStemUp(measure, g);
-                const rhythmY = rowY + TAB_STAFF_TOP + ts + stringCount * 10 + 2 + 10;
+                const rhythmY = rowY + tabTop + ts + stringCount * 10 + 2 + 10;
                 const firstSX = mainStemUp ? firstX + 4 - 0.6 : firstX - 4 - 0.6;
                 const lastSX = mainStemUp ? lastX + 4 + 0.6 : lastX - 4 + 0.6;
 

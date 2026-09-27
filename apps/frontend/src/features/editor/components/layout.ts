@@ -14,6 +14,11 @@ export const MAX_JUSTIFY_STRETCH = 1.5;
 export const MIN_JUSTIFY_FILL = 0.62;
 
 export const TAB_STAFF_TOP = 90;
+// With the notation staff hidden the TAB takes its place at the top of the row,
+// keeping just enough room above it for the P.M. / let ring marks.
+export const TAB_ONLY_STAFF_TOP = 20;
+export const getTabStaffTop = (includeNotation: boolean): number =>
+  includeNotation ? TAB_STAFF_TOP : TAB_ONLY_STAFF_TOP;
 export const TAB_STAFF_HEIGHT_PX = 10; // pixels per string line
 export const TAB_FRET_FONT_SIZE = TAB_STAFF_HEIGHT_PX * 0.9;
 
@@ -34,15 +39,20 @@ export const FRETBOARD_STRING_GAP = 24;
 export const STEM_TOP_PAD = 25;
 
 // With the TAB staff hidden there's no fret-number block to reserve room for —
-// just the standard staff plus clearance below it for stems and ledger lines.
-const SHEET_ONLY_STAFF_CLEARANCE = 85;
+// just the standard staff (bottom line at y=50) plus clearance for ledger lines.
+// Lower notes grow the row through the same per-row shift that pushes the TAB down.
+const NOTATION_ONLY_CLEARANCE = 30;
 
-export const computeRowHeight = (stringCount: number, includeTab: boolean = true): number => {
+export const computeRowHeight = (
+  stringCount: number,
+  includeTab: boolean = true,
+  includeNotation: boolean = true,
+): number => {
   if (!includeTab) {
-    return STEM_TOP_PAD + SHEET_ONLY_STAFF_CLEARANCE + 20;
+    return STEM_TOP_PAD + 50 + NOTATION_ONLY_CLEARANCE;
   }
   const tabStaffHeight = stringCount * 10;
-  return STEM_TOP_PAD + TAB_STAFF_TOP + tabStaffHeight + 30;
+  return STEM_TOP_PAD + getTabStaffTop(includeNotation) + tabStaffHeight + 30;
 };
 
 export const computeFretboardStringSpan = (stringCount: number): number =>
