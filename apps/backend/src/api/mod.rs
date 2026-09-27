@@ -1,3 +1,7 @@
+pub mod current_user;
+mod folders;
+mod library;
+mod songs;
 mod system;
 mod users;
 
@@ -15,6 +19,9 @@ use crate::state::AppState;
     tags(
         (name = "system", description = "Service health and metadata"),
         (name = "users", description = "User accounts"),
+        (name = "library", description = "Folders and songs visible to the signed-in user"),
+        (name = "folders", description = "Folder management and sharing"),
+        (name = "songs", description = "Songs and live collaboration"),
     )
 )]
 struct ApiDoc;
@@ -29,6 +36,9 @@ fn v1(state: AppState) -> OpenApiRouter {
     OpenApiRouter::new()
         .nest("/system", system::router())
         .nest("/users", users::router())
+        .nest("/folders", folders::router())
+        .nest("/songs", songs::router())
+        .merge(library::router())
         .with_state(state)
 }
 

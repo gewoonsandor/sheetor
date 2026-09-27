@@ -3,6 +3,7 @@ use std::time::Instant;
 use openidconnect::reqwest;
 use sqlx::PgPool;
 
+use crate::collab::hub::Hub;
 use crate::config::{Config, SsoConfig};
 
 /// Handed to every handler by the `State` extractor.
@@ -16,6 +17,7 @@ pub struct AppState {
     pub db: PgPool,
     pub public_url: String,
     pub auth: AuthSettings,
+    pub collab: Hub,
 }
 
 impl AppState {
@@ -25,6 +27,7 @@ impl AppState {
             db,
             public_url,
             auth,
+            collab: Hub::default(),
         }
     }
 }
