@@ -1,0 +1,10 @@
+.git
+.direnv
+.claude
+**/node_modules
+target
+dist
+apps/frontend/dist
+.env
+.env.*
+docs
