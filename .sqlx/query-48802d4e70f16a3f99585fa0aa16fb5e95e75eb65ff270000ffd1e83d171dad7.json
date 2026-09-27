@@ -1,0 +1,23 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT folder_role($1, $2) AS \"role?: Role\"",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "role?: Role",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Int4",
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "48802d4e70f16a3f99585fa0aa16fb5e95e75eb65ff270000ffd1e83d171dad7"
+}

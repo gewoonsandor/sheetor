@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE users SET password_hash = NULL, provider = 'github' WHERE email = $1",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "4acdcdb8e7dcab252511c2b116ce948397e797831c62d12e34bf189a3ad18185"
+}

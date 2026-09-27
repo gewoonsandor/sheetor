@@ -1,0 +1,23 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT CASE WHEN owner_id = $1 THEN 'owner' ELSE folder_role($1, folder_id) END\n               AS \"role?: Role\"\n           FROM songs WHERE id = $2",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "role?: Role",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Int4",
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "bb22e43fcf3d4fbb94dec117b0f513e40310fc0a54002ae799eee96829ca701d"
+}

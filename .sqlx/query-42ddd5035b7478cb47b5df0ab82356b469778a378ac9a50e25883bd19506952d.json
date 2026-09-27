@@ -1,0 +1,23 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "WITH RECURSIVE up AS (\n               SELECT id, parent_id FROM folders WHERE id = $1\n             UNION ALL\n               SELECT f.id, f.parent_id FROM folders f JOIN up ON f.id = up.parent_id\n           )\n           SELECT EXISTS (SELECT 1 FROM up WHERE id = $2) AS \"found!\"",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "found!",
+        "type_info": "Bool"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "42ddd5035b7478cb47b5df0ab82356b469778a378ac9a50e25883bd19506952d"
+}

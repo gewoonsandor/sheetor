@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE folders SET parent_id = (SELECT parent_id FROM folders WHERE id = $1)\n         WHERE parent_id = $1",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "283db87944d443f6d9b5ddae2781827a411bbdd73823abe34335a51857fa42c2"
+}

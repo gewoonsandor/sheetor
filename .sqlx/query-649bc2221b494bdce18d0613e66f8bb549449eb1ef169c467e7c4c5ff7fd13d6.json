@@ -1,0 +1,21 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE songs\n         SET state = $2, title = $3, artist = $4, bpm = $5, track_count = $6, bar_count = $7,\n             updated_by = COALESCE($8, updated_by), updated_at = now()\n         WHERE id = $1",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Bytea",
+        "Varchar",
+        "Varchar",
+        "Int4",
+        "Int4",
+        "Int4",
+        "Int4"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "649bc2221b494bdce18d0613e66f8bb549449eb1ef169c467e7c4c5ff7fd13d6"
+}

@@ -1,0 +1,42 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "WITH saved AS (\n               INSERT INTO folder_shares (folder_id, user_id, role) VALUES ($1, $2, $3)\n               ON CONFLICT (folder_id, user_id) DO UPDATE SET role = EXCLUDED.role\n               RETURNING user_id, role\n           )\n           SELECT u.id AS user_id, u.username, u.email, saved.role AS \"role!: Role\"\n           FROM saved JOIN users u ON u.id = saved.user_id",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "user_id",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 1,
+        "name": "username",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 2,
+        "name": "email",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 3,
+        "name": "role!: Role",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Int4",
+        "Text"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "220981d82775fc324f0d68c80d95da9495858558e39b6ce1bdca64f9d2d7b9a3"
+}

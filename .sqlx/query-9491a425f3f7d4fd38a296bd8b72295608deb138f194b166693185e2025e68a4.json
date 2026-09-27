@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE songs SET folder_id = (SELECT parent_id FROM folders WHERE id = $1)\n         WHERE folder_id = $1",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "9491a425f3f7d4fd38a296bd8b72295608deb138f194b166693185e2025e68a4"
+}

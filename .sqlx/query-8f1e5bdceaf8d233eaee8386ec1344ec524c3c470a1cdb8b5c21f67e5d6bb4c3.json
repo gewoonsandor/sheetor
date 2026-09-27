@@ -1,0 +1,83 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT s.id, s.folder_id, s.owner_id, s.title, s.artist, s.bpm, s.track_count,\n                  s.bar_count,\n                  CASE WHEN s.owner_id = $1 THEN 'owner' ELSE folder_role($1, s.folder_id) END\n                      AS \"role!: Role\",\n                  (EXTRACT(EPOCH FROM s.updated_at) * 1000)::BIGINT AS \"updated_at!\",\n                  u.username AS \"updated_by_name?\"\n           FROM songs s LEFT JOIN users u ON u.id = s.updated_by\n           WHERE s.owner_id = $1 OR s.folder_id = ANY($2)\n           ORDER BY s.updated_at DESC",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "folder_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 2,
+        "name": "owner_id",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 3,
+        "name": "title",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 4,
+        "name": "artist",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 5,
+        "name": "bpm",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 6,
+        "name": "track_count",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 7,
+        "name": "bar_count",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 8,
+        "name": "role!: Role",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 9,
+        "name": "updated_at!",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 10,
+        "name": "updated_by_name?",
+        "type_info": "Varchar"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Int4",
+        "UuidArray"
+      ]
+    },
+    "nullable": [
+      false,
+      true,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      null,
+      null,
+      false
+    ]
+  },
+  "hash": "8f1e5bdceaf8d233eaee8386ec1344ec524c3c470a1cdb8b5c21f67e5d6bb4c3"
+}
