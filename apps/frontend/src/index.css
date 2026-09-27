@@ -66,15 +66,13 @@
   --accent-wash: rgb(var(--accent-rgb) / 0.12);
 
   /* Semantic, derived the same way */
-  --danger-rgb: 226 99 92;
+  --danger-rgb: 219 118 108;
   --warn-rgb: 224 168 63;
   --ok-rgb: 63 185 138;
   --danger: rgb(var(--danger-rgb));
-  --danger-soft: rgb(var(--danger-rgb) / 0.14);
-  --danger-border: rgb(var(--danger-rgb) / 0.32);
-  --danger-hover: rgb(var(--danger-rgb) / 0.22);
-  --danger-hover-border: rgb(var(--danger-rgb) / 0.5);
-  --danger-hover-text: hsl(4 78% 72%);
+  --danger-soft: rgb(var(--danger-rgb) / 0.12);
+  --danger-border: rgb(var(--danger-rgb) / 0.28);
+  --danger-hover-text: hsl(5 62% 74%);
   --warn: rgb(var(--warn-rgb));
   --warn-wash: rgb(var(--warn-rgb) / 0.035);
   --ok: rgb(var(--ok-rgb));
@@ -138,7 +136,7 @@
   --shadow-1: 0 1px 1px rgb(0 0 0 / 0.3), 0 2px 6px -2px rgb(0 0 0 / 0.35);
   --shadow-2: 0 2px 4px -1px rgb(0 0 0 / 0.3), 0 14px 32px -10px rgb(0 0 0 / 0.6);
   --shadow-3: 0 4px 10px -2px rgb(0 0 0 / 0.35), 0 28px 64px -18px rgb(0 0 0 / 0.8);
-  --scrim: rgba(8, 7, 6, 0.6);
+  --scrim: rgba(8, 7, 6, 0.45);
   --bar-surface: hsl(var(--tint-h) var(--tint-s) 9% / 0.78);
 
   --z-bar: 40;
@@ -187,7 +185,7 @@
   --text-dim: hsl(var(--tint-h) 12% 38%);
   --text-faint: hsl(var(--tint-h) 10% 55%);
 
-  --danger-rgb: 190 48 42;
+  --danger-rgb: 176 62 54;
   --warn-rgb: 158 108 16;
   --ok-rgb: 20 122 88;
   --danger-hover-text: rgb(var(--danger-rgb));
