@@ -4,12 +4,13 @@ use axum_login::AuthManagerLayerBuilder;
 use sqlx::PgPool;
 use tower_http::trace::TraceLayer;
 use tower_sessions::SessionManagerLayer;
+use tower_sessions::cookie::SameSite;
 use tower_sessions_sqlx_store::PostgresStore;
 use utoipa_swagger_ui::SwaggerUi;
 
 use crate::config::Config;
 use crate::services::auth_service::Backend;
-use crate::state::AppState;
+use crate::state::{AppState, AuthSettings};
 use crate::{api, frontend};
 
 pub async fn build(config: &Config, db: PgPool) -> Router {
@@ -19,10 +20,19 @@ pub async fn build(config: &Config, db: PgPool) -> Router {
         .await
         .expect("create the session table");
 
-    let session_layer = SessionManagerLayer::new(session_store).with_secure(config.cookie_secure);
+    // Lax, not Strict: the identity provider's redirect back to the SSO callback is a
+    // cross-site navigation, and a Strict cookie would not carry the pending login.
+    let session_layer = SessionManagerLayer::new(session_store)
+        .with_secure(config.cookie_secure)
+        .with_same_site(SameSite::Lax);
     let auth_layer = AuthManagerLayerBuilder::new(Backend::new(db.clone()), session_layer).build();
 
-    let (api_router, openapi) = api::router(AppState::new(db));
+    let state = AppState::new(
+        db,
+        config.public_url.clone(),
+        AuthSettings::from_config(config),
+    );
+    let (api_router, openapi) = api::router(state);
 
     let router = Router::new()
         .merge(api_router)

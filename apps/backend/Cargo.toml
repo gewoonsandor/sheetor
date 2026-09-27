@@ -12,20 +12,27 @@ sqlx = { version = "0.8", default-features = false, features = [
   "macros",
   "migrate",
   "chrono",
+  "uuid",
 ] }
 api-error = { version = "0.1", features = ["axum"] }
 axum-login = "0.18"
 tower-sessions = "0.14"
 tower-sessions-sqlx-store = { version = "0.15", features = ["postgres"] }
 argon2 = "0.6"
-axum = "0.8"
+axum = { version = "0.8", features = ["ws"] }
 chrono = { version = "0.4", default-features = false, features = ["clock"] }
+futures-util = { version = "0.3", default-features = false, features = ["sink", "std"] }
+openidconnect = { version = "4", features = ["timing-resistant-secret-traits"] }
 serde = { version = "1", features = ["derive"] }
+serde_json = "1"
 thiserror = "2"
-tokio = { version = "1", features = ["macros", "net", "rt-multi-thread"] }
+tokio = { version = "1", features = ["macros", "net", "rt-multi-thread", "sync", "time"] }
 tower-http = { version = "0.6", features = ["fs", "trace"] }
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
-utoipa = "5"
+utoipa = { version = "5", features = ["uuid"] }
 utoipa-axum = "0.2"
 utoipa-swagger-ui = { version = "9", features = ["axum", "vendored"] }
+uuid = { version = "1", features = ["v4", "serde"] }
+# Yjs 13 in the browser only understands 32-bit client ids.
+yrs = { version = "0.28", features = ["small-client"] }

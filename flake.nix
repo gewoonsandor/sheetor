@@ -41,6 +41,9 @@
             # Local dev database. sqlx needs this at runtime (init_pool) and,
             # if the query_as! macros are used, at compile time too.
             env.DATABASE_URL = "postgres://postgres@127.0.0.1/sheetor";
+            # The browser's origin in dev: SSO redirects and the WebSocket
+            # Origin check both need Vite's port, not axum's.
+            env.PUBLIC_URL = "http://localhost:5173";
 
             # ponytail: repo-local cluster in the gitignored .direnv/, trust
             # auth, autostarted on shell entry and left running on exit. Fine
