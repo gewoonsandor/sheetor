@@ -233,3 +233,12 @@
   gap: var(--sp-2);
   margin-top: var(--sp-1);
 }
+
+/* A page waiting on the server, inside the layout. */
+.page-loading {
+  display: grid;
+  place-items: center;
+  min-height: 40dvh;
+  color: var(--text-faint);
+  font-size: 0.8125rem;
+}

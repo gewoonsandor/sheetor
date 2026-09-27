@@ -1,14 +1,6 @@
 import { Component } from 'react';
 import type { ErrorInfo, PropsWithChildren, ReactNode } from 'react';
 
-import { deleteSong, loadLibrary, saveLibrary } from '../features/library/libraryStore';
-
-const dropOpenSong = (): void => {
-  const library = loadLibrary();
-  if (library.currentId !== null) saveLibrary(deleteSong(library, library.currentId));
-  window.location.reload();
-};
-
 interface ErrorBoundaryState {
   error: Error | null;
 }
@@ -35,15 +27,15 @@ export class ErrorBoundary extends Component<PropsWithChildren, ErrorBoundarySta
         <h2>The editor crashed</h2>
         <p className="app-error-message">{error.message}</p>
         <p>
-          If this happens again right after reloading, the song you had open is likely at fault.
-          Discarding it removes that one song from your library and leaves the rest untouched.
+          If this happens again right after reloading, open a different song from the library
+          and tell the owner which one fails.
         </p>
         <div className="app-error-actions">
           <button className="btn btn-primary" onClick={() => window.location.reload()}>
             Reload
           </button>
-          <button className="btn btn-danger" onClick={dropOpenSong}>
-            Discard the open song
+          <button className="btn" onClick={() => window.location.assign('/library')}>
+            Back to library
           </button>
         </div>
       </div>

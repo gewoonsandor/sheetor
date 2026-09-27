@@ -81,6 +81,77 @@
   color: var(--text-faint);
 }
 
+
+.editor-notice {
+  margin: var(--sp-1) 0 0;
+  color: var(--danger);
+  font-size: 0.8125rem;
+}
+
+/* ------------------------------------------------------------- Collaboration */
+
+.peer-0 { --peer: var(--peer-0); }
+.peer-1 { --peer: var(--peer-1); }
+.peer-2 { --peer: var(--peer-2); }
+.peer-3 { --peer: var(--peer-3); }
+.peer-4 { --peer: var(--peer-4); }
+.peer-5 { --peer: var(--peer-5); }
+
+/* Sits with the readout on the right; the title keeps the left edge. */
+.presence {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-1);
+  margin-left: auto;
+}
+
+.presence-status {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sp-2);
+  margin-right: var(--sp-2);
+  font-size: 0.75rem;
+  color: var(--text-dim);
+  white-space: nowrap;
+}
+
+.presence-status::before {
+  content: '';
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--ok);
+}
+
+.presence-status.is-connecting::before,
+.presence-status.is-reconnecting::before {
+  background: var(--warn);
+}
+
+.presence-chip {
+  display: inline-grid;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  margin-left: calc(-1 * var(--sp-1));
+  border-radius: 50%;
+  background: var(--peer);
+  color: var(--bg);
+  font-size: 0.625rem;
+  font-weight: 700;
+  box-shadow: 0 0 0 2px var(--bg);
+  cursor: default;
+}
+
+.peer-cursor rect {
+  stroke: var(--peer);
+}
+
+.peer-label {
+  fill: var(--peer);
+  font-family: var(--font);
+  font-weight: 600;
+}
 /* Cursor readout — labelled chips instead of cryptic M1/B1/S1 codes */
 .selection-readout {
   display: flex;

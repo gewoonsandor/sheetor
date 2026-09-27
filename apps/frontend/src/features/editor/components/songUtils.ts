@@ -423,3 +423,38 @@ export const nextBeatPosition = (measures: TabMeasure[], from: BeatPosition, loo
   }
   return loop ? firstBeatPosition(measures) : null;
 };
+
+/** A cursor named by the song's stable ids; null where it sits on nothing yet. */
+export interface CursorIds {
+  trackId: string;
+  measureId: string | null;
+  beatId: string | null;
+}
+
+export interface CursorIndices {
+  trackIndex: number;
+  measureIndex: number;
+  beatIndex: number;
+}
+
+const clampIndex = (index: number, length: number): number =>
+  Math.max(0, Math.min(index, length - 1));
+
+/**
+ * Where a cursor lands after the song changed underneath it: on the same track,
+ * bar and beat by id, so a collaborator inserting a bar before it does not move
+ * it. Whatever vanished falls back to the old index, clamped into range.
+ */
+export const locateCursor = (song: TabSong, ids: CursorIds, fallback: CursorIndices): CursorIndices => {
+  const foundTrack = song.tracks.findIndex(t => t.id === ids.trackId);
+  const trackIndex = foundTrack !== -1 ? foundTrack : clampIndex(fallback.trackIndex, song.tracks.length);
+  const measures = song.tracks[trackIndex]?.measures ?? [];
+
+  const foundMeasure = measures.findIndex(m => m.id === ids.measureId);
+  const measureIndex = foundMeasure !== -1 ? foundMeasure : clampIndex(fallback.measureIndex, measures.length);
+  const beats = measures[measureIndex]?.beats ?? [];
+
+  const foundBeat = beats.findIndex(b => b.id === ids.beatId);
+  const beatIndex = foundBeat !== -1 ? foundBeat : clampIndex(fallback.beatIndex, beats.length);
+  return { trackIndex, measureIndex, beatIndex };
+};

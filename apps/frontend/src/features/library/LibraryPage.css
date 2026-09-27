@@ -323,3 +323,64 @@
   color: var(--text-dim);
   line-height: 1.55;
 }
+
+.library-error,
+.share-error {
+  margin: 0 0 var(--sp-4);
+  color: var(--danger);
+  font-size: 0.8125rem;
+}
+
+/* ----------------------------------------------------------------- Sharing */
+
+.share-form {
+  display: flex;
+  gap: var(--sp-2);
+  margin-bottom: var(--sp-4);
+}
+
+/* .control-input is the narrow centred numeric field; an address wants room. */
+.share-form .control-input {
+  flex: 1;
+  width: auto;
+  text-align: left;
+}
+
+.share-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.share-row {
+  display: grid;
+  grid-template-columns: auto 1fr auto auto;
+  align-items: center;
+  gap: var(--sp-3);
+  padding: var(--sp-3) 0;
+  border-top: 1px solid var(--border);
+}
+
+.share-who {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.share-name {
+  font-size: 0.875rem;
+  font-weight: 600;
+}
+
+.share-email {
+  overflow: hidden;
+  font-size: 0.75rem;
+  color: var(--text-dim);
+  text-overflow: ellipsis;
+}
+
+.share-empty {
+  margin: 0;
+  font-size: 0.8125rem;
+  color: var(--text-dim);
+}

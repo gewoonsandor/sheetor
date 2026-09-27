@@ -1,5 +1,5 @@
-import React, { useState, useEffect, useRef } from 'react';
-import { Link } from 'react-router-dom';
+import React, { useState, useEffect, useRef, useSyncExternalStore } from 'react';
+import { Link, useNavigate } from 'react-router-dom';
 import './TabSheetEditor.css';
 
 import type {
@@ -33,19 +33,17 @@ import {
   getEffectiveBpm,
   getEffectiveTimeSignature,
   pruneNotesToStringCount,
-
+  locateCursor,
 } from './songUtils';
+import type { CursorIds, CursorIndices } from './songUtils';
 import { INSTRUMENTS } from './audioEngine';
 import { TrackStrip } from './TrackStrip';
 import { parseSong } from './songSchema';
-import {
-  addSong,
-  getCurrentEntry,
-  loadLibrary,
-  replaceSong,
-  saveLibrary,
-} from '../../library/libraryStore';
-import type { Library } from '../../library/libraryStore';
+import { canEdit } from '../../library/libraryStore';
+import type { LibraryEntry } from '../../library/libraryStore';
+import { createSong } from '../../library/libraryApi';
+import type { SongChannel } from '../songChannel';
+import { deriveInitials } from '../../user/userStore';
 import { loadSettings, updateSettings } from '../../settings/settingsStore';
 import { usePlayback } from './usePlayback';
 import {
@@ -97,25 +95,22 @@ const INSTRUMENT_OPTIONS = Object.entries(INSTRUMENTS).map(([id, voice]) => ({
   label: voice.label,
 }));
 
-export const TabSheetEditor: React.FC = () => {
+interface TabSheetEditorProps {
+  /** The song's listing entry: its folder, and the caller's role before the socket says. */
+  meta: LibraryEntry;
+  channel: SongChannel;
+}
+
+export const TabSheetEditor: React.FC<TabSheetEditorProps> = ({ meta, channel }) => {
   // --- STATE ---
 
-  // One snapshot per editor session: the library entry this editor writes into,
-  // and the settings its playback and panel state start from.
-  const [session] = useState(() => {
-    const settings = loadSettings();
-    const library = loadLibrary();
-    const existing = getCurrentEntry(library);
-    if (existing) return { settings, library, entry: existing };
-    const created = addSong(library, { ...createEmptySong(), bpm: settings.defaultBpm });
-    saveLibrary(created.library);
-    return { settings, library: created.library, entry: created.entry };
-  });
-  const settings = session.settings;
-  const librarySlot = useRef<Library>(session.library);
+  // The settings playback and panel state start from, read once per session.
+  const [settings] = useState(loadSettings);
+  const navigate = useNavigate();
+  const live = useSyncExternalStore(channel.subscribe, channel.getState);
+  const role = live.role ?? meta.role;
 
-  const [songId, setSongId] = useState<string>(session.entry.id);
-  const [song, setSong] = useState<TabSong>(session.entry.song);
+  const [song, setSong] = useState<TabSong>(() => channel.snapshot() ?? createEmptySong());
   const [activeTrackIndex, setActiveTrackIndex] = useState<number>(0);
   const [activeMeasureIndex, setActiveMeasureIndex] = useState<number>(0);
   const [activeBeatIndex, setActiveBeatIndex] = useState<number>(0);
@@ -168,10 +163,59 @@ export const TabSheetEditor: React.FC = () => {
     },
   );
 
+  const [notice, setNotice] = useState<string | null>(null);
+  const readOnly = viewMode || role === 'viewer';
+
+  /** Every local edit goes through here, so a read-only session never changes the song. */
+  const editSong = (update: React.SetStateAction<TabSong>): void => {
+    if (!readOnly) setSong(update);
+  };
+
+  // --- LIVE SYNC ---
+
+  // The song as last received, so publishing never echoes a remote change back.
+  const lastRemote = useRef<TabSong | null>(null);
+  const activeMeasureId = measures[activeMeasureIndex]?.id ?? null;
+  const activeBeatId = measures[activeMeasureIndex]?.beats[activeBeatIndex]?.id ?? null;
+  const cursor: CursorIds & CursorIndices = {
+    trackId: activeTrack.id,
+    measureId: activeMeasureId,
+    beatId: activeBeatId,
+    trackIndex: activeTrackIndex,
+    measureIndex: activeMeasureIndex,
+    beatIndex: activeBeatIndex,
+  };
+  // Read by the remote-song listener, which outlives any one render.
+  const cursorRef = useRef(cursor);
+  useEffect(() => {
+    cursorRef.current = cursor;
+  });
+
+  // A collaborator's change replaces the song, and the cursor follows its bar and
+  // beat by id, so bars inserted above it do not shift what you are editing.
+  useEffect(() => channel.onRemoteSong((fresh) => {
+    lastRemote.current = fresh;
+    setSong(fresh);
+    const at = locateCursor(fresh, cursorRef.current, cursorRef.current);
+    setActiveTrackIndex(at.trackIndex);
+    setActiveMeasureIndex(at.measureIndex);
+    setActiveBeatIndex(at.beatIndex);
+  }), [channel]);
+
+  useEffect(() => {
+    if (song !== lastRemote.current) channel.publish(song);
+  }, [channel, song]);
+
+  useEffect(() => {
+    if (activeMeasureId !== null && activeBeatId !== null) {
+      channel.sendCursor({ trackId: activeTrack.id, measureId: activeMeasureId, beatId: activeBeatId });
+    }
+  }, [channel, activeTrack.id, activeMeasureId, activeBeatId]);
+
   // --- TRACK EDITORS ---
 
   const updateTrack = (trackIndex: number, patch: Partial<TabTrack>) => {
-    setSong(prev => ({
+    editSong(prev => ({
       ...prev,
       tracks: prev.tracks.map((t, i) => (i === trackIndex ? { ...t, ...patch } : t)),
     }));
@@ -192,8 +236,9 @@ export const TabSheetEditor: React.FC = () => {
   };
 
   const addTrack = () => {
+    if (readOnly) return;
     const track = createTrack('guitar', measures.length);
-    setSong(prev => ({ ...prev, tracks: normalizeTrackLengths([...prev.tracks, track]) }));
+    editSong(prev => ({ ...prev, tracks: normalizeTrackLengths([...prev.tracks, track]) }));
     setActiveTrackIndex(song.tracks.length);
     setActiveBeatIndex(0);
     setActiveStringIndex(0);
@@ -201,7 +246,7 @@ export const TabSheetEditor: React.FC = () => {
   };
 
   const duplicateActiveTrack = () => {
-    setSong(prev => {
+    editSong(prev => {
       const source = prev.tracks[activeTrackIndex];
       if (!source) return prev;
       const copy: TabTrack = {
@@ -224,7 +269,7 @@ export const TabSheetEditor: React.FC = () => {
 
   const deleteActiveTrack = () => {
     if (song.tracks.length <= 1) return; // A song always has one track
-    setSong(prev => ({ ...prev, tracks: prev.tracks.filter((_, i) => i !== activeTrackIndex) }));
+    editSong(prev => ({ ...prev, tracks: prev.tracks.filter((_, i) => i !== activeTrackIndex) }));
     setActiveTrackIndex(prev => Math.max(0, prev - 1));
     setActiveBeatIndex(0);
     setActiveStringIndex(0);
@@ -233,7 +278,7 @@ export const TabSheetEditor: React.FC = () => {
 
   /** Rewrites only the active track's bars. */
   const setMeasures = (updater: (measures: TabMeasure[]) => TabMeasure[]) => {
-    setSong(prev => ({
+    editSong(prev => ({
       ...prev,
       tracks: prev.tracks.map((t, i) => (i === activeTrackIndex ? { ...t, measures: updater(t.measures) } : t)),
     }));
@@ -244,7 +289,7 @@ export const TabSheetEditor: React.FC = () => {
    * alignment, so they all go through here.
    */
   const setAllTrackMeasures = (updater: (measures: TabMeasure[], track: TabTrack) => TabMeasure[]) => {
-    setSong(prev => ({
+    editSong(prev => ({
       ...prev,
       tracks: prev.tracks.map(t => ({ ...t, measures: updater(t.measures, t) })),
     }));
@@ -252,12 +297,6 @@ export const TabSheetEditor: React.FC = () => {
 
   const startPlaybackFromCursor = () =>
     playback.start({ measureIndex: activeMeasureIndex, beatIndex: activeBeatIndex });
-
-  // Autosave into the library entry this editor session opened.
-  useEffect(() => {
-    librarySlot.current = replaceSong(librarySlot.current, songId, song);
-    saveLibrary(librarySlot.current);
-  }, [song, songId]);
 
   // Playback and panel choices made here are the same values the settings page
   // shows, so they are written back as they change.
@@ -279,7 +318,7 @@ export const TabSheetEditor: React.FC = () => {
 
   /** Tempo and metre are song-wide, so the overrides live on track 0. */
   const setConductorMeasure = (index: number, patch: (measure: TabMeasure) => TabMeasure) => {
-    setSong(prev => ({
+    editSong(prev => ({
       ...prev,
       tracks: prev.tracks.map((t, i) => (i === 0
         ? { ...t, measures: t.measures.map((m, idx) => (idx === index ? patch(m) : m)) }
@@ -295,7 +334,7 @@ export const TabSheetEditor: React.FC = () => {
   const setMeasureBpm = (index: number, bpm: number) => {
     const clamped = Math.max(MIN_BPM, Math.min(MAX_BPM, Math.round(bpm)));
     if (index === 0) {
-      setSong(prev => ({ ...prev, bpm: clamped }));
+      editSong(prev => ({ ...prev, bpm: clamped }));
       setConductorMeasure(0, measure => {
         const normalized = { ...measure };
         delete normalized.bpm;
@@ -321,7 +360,7 @@ export const TabSheetEditor: React.FC = () => {
     const effective = getEffectiveTimeSignature(song, activeMeasureIndex);
     const nextTimeSignature = { ...effective, [field]: value };
     if (activeMeasureIndex === 0) {
-      setSong(prev => ({ ...prev, timeSignature: nextTimeSignature }));
+      editSong(prev => ({ ...prev, timeSignature: nextTimeSignature }));
       setConductorMeasure(activeMeasureIndex, measure => {
         const normalized = { ...measure };
         delete normalized.timeSignature;
@@ -593,29 +632,26 @@ export const TabSheetEditor: React.FC = () => {
 
   const clearSong = () => {
     playback.stop();
-    setSong(createEmptySong());
+    editSong(createEmptySong());
     setActiveMeasureIndex(0);
     setActiveBeatIndex(0);
     setActiveStringIndex(0);
   };
 
-  const startNewSong = () => {
+  const startNewSong = async (): Promise<void> => {
     playback.stop();
-    // A new song lands in the folder the open one lives in, not the root.
-    const created = addSong(
-      librarySlot.current,
-      { ...createEmptySong(), bpm: settings.defaultBpm },
-      librarySlot.current.entries.find((entry) => entry.id === songId)?.folderId ?? null,
-    );
-    librarySlot.current = created.library;
-    saveLibrary(created.library);
-    setSongId(created.entry.id);
-    setSong(created.entry.song);
-    setActiveTrackIndex(0);
-    setActiveMeasureIndex(0);
-    setActiveBeatIndex(0);
-    setActiveStringIndex(0);
     setOpenBottomMenu(null);
+    setNotice(null);
+    try {
+      // A new song lands in the folder the open one lives in, when you may add to it.
+      const created = await createSong(
+        { ...createEmptySong(), bpm: settings.defaultBpm },
+        canEdit(role) ? meta.folderId : null,
+      );
+      navigate(`/songs/${created.id}`);
+    } catch (err) {
+      setNotice(err instanceof Error ? err.message : 'The new song could not be created.');
+    }
   };
 
   // --- KEYBOARD CONTROLS ---
@@ -627,7 +663,7 @@ export const TabSheetEditor: React.FC = () => {
       return;
     }
 
-    if (viewMode) return;
+    if (readOnly) return;
 
     const measure = measures[activeMeasureIndex];
     if (!measure) return;
@@ -1160,7 +1196,7 @@ export const TabSheetEditor: React.FC = () => {
       return;
     }
 
-    setSong(result.song);
+    editSong(result.song);
     setActiveTrackIndex(0);
     setActiveMeasureIndex(0);
     setActiveBeatIndex(0);
@@ -1228,7 +1264,7 @@ export const TabSheetEditor: React.FC = () => {
     setActiveMeasureIndex(mIdx);
     setActiveBeatIndex(bIdx);
     if (note) setActiveStringIndex(cursorSlotOf(note, notes));
-    setShowNoteOptions(wasSelected);
+    setShowNoteOptions(wasSelected && !readOnly);
   };
 
   const durationButtons = (['1', '2', '4', '8', '16', '32'] as const).map((dur) => (
@@ -1318,15 +1354,38 @@ export const TabSheetEditor: React.FC = () => {
           <input
             className="sheetor-title-input"
             value={song.title}
-            onChange={(e) => setSong({ ...song, title: e.target.value })}
+            readOnly={readOnly}
+            onChange={(e) => editSong({ ...song, title: e.target.value })}
             placeholder="Song Title"
           />
           <input
             className="sheetor-artist-input"
             value={song.artist}
-            onChange={(e) => setSong({ ...song, artist: e.target.value })}
+            readOnly={readOnly}
+            onChange={(e) => editSong({ ...song, artist: e.target.value })}
             placeholder="Artist"
           />
+          {notice !== null && (
+            <p className="editor-notice" role="alert">
+              {notice}
+            </p>
+          )}
+        </div>
+
+        <div className="presence">
+          <span className={`presence-status is-${live.status}`}>
+            {live.status === 'live' ? 'Live' : live.status === 'reconnecting' ? 'Reconnecting…' : 'Connecting…'}
+            {role === 'viewer' && ' · view only'}
+          </span>
+          {live.peers.map((peer) => (
+            <span
+              key={peer.connectionId}
+              className={`presence-chip peer-${peer.userId % 6}`}
+              title={`${peer.name} · ${peer.role}`}
+            >
+              {deriveInitials(peer.name)}
+            </span>
+          ))}
         </div>
 
         <dl className="selection-readout">
@@ -1644,7 +1703,7 @@ export const TabSheetEditor: React.FC = () => {
                     onClick={(e) => {
                       e.stopPropagation();
                       setBpmDraft(null);
-                      setBpmEditIndex(mIdx);
+                      if (!readOnly) setBpmEditIndex(mIdx);
                     }}
                   >
                     <title>Click to set the tempo for bar {mIdx + 1}</title>
@@ -1760,7 +1819,7 @@ export const TabSheetEditor: React.FC = () => {
                 {measure.beats.map((b) => {
                   const beatX = getBeatCoordinates(mIdx, measure.beats.indexOf(b));
 
-                  if (viewMode) return null;
+                  if (readOnly) return null;
                   return (
                     <g key={`clicks-${b.id}`}>
                       {/* Clicking standard staff region triggers layout coordinate mapper */}
@@ -1821,8 +1880,30 @@ export const TabSheetEditor: React.FC = () => {
 
               return (
                 <g key={`highlight-${b.id}`}>
+                  {/* Collaborators' cursors, one outline per person on this beat */}
+                  {live.peers
+                    .filter((peer) => peer.cursor?.trackId === activeTrack.id
+                      && peer.cursor.measureId === measure.id
+                      && peer.cursor.beatId === b.id)
+                    .map((peer) => (
+                      <g key={peer.connectionId} className={`peer-cursor peer-${peer.userId % 6}`} pointerEvents="none">
+                        <rect
+                          x={beatX - 11}
+                          y={rowY + getStaffTop(ts) - 6}
+                          width="22"
+                          height={getStaffBottom(ts) - getStaffTop(ts) + 12}
+                          fill="none"
+                          strokeWidth="1.5"
+                          rx="5"
+                        />
+                        <text className="peer-label" x={beatX - 11} y={rowY + getStaffTop(ts) - 9} fontSize="8">
+                          {peer.name}
+                        </text>
+                      </g>
+                    ))}
+
                   {/* Selected Cursor Highlight */}
-                  {!viewMode && isSelected && (
+                  {!readOnly && isSelected && (
                     <g>
                       <rect
                         x={beatX - 10}
@@ -2856,6 +2937,8 @@ export const TabSheetEditor: React.FC = () => {
             </button>
             {openBottomMenu === 'song' && (
               <div className="bottom-popover">
+              {!readOnly && (
+              <>
               <span className="popover-title">Measure {activeMeasureIndex + 1}</span>
               <div className="control-group">
                 <span className="control-label">Sig</span>
@@ -2886,21 +2969,24 @@ export const TabSheetEditor: React.FC = () => {
                 </select>
               </div>
               <div className="popover-divider" />
+              </>
+              )}
               <span className="popover-title">Library</span>
-              <button className="btn btn-primary" onClick={startNewSong}>New song</button>
+              <button className="btn btn-primary" onClick={() => void startNewSong()}>New song</button>
               <Link className="btn" to="/library" onClick={() => setOpenBottomMenu(null)}>
                 Open library
               </Link>
               <div className="popover-divider" />
               <span className="popover-title">Song file</span>
               <button className="btn" onClick={handleExport}>Export JSON</button>
-              <button className="btn" onClick={handleImport}>Import JSON</button>
-              <div className="popover-divider" />
-              <button className="btn btn-danger" onClick={clearSong}>Clear song</button>
+              {!readOnly && <button className="btn" onClick={handleImport}>Import JSON</button>}
+              {!readOnly && <div className="popover-divider" />}
+              {!readOnly && <button className="btn btn-danger" onClick={clearSong}>Clear song</button>}
             </div>
             )}
           </div>
 
+          {!readOnly && (
           <div className="bottom-menu">
             <button
               className={`bottom-menu-trigger ${openBottomMenu === 'edit' ? 'active' : ''}`}
@@ -2925,6 +3011,7 @@ export const TabSheetEditor: React.FC = () => {
             </div>
             )}
           </div>
+          )}
 
           <div className="cmd-divider" />
 
@@ -2965,20 +3052,26 @@ export const TabSheetEditor: React.FC = () => {
                 >
                   {isFrettedTrack ? 'Fretboard' : 'Keyboard'}
                 </button>
-                <button
-                  className={`btn ${viewMode ? 'btn-active' : ''}`}
-                  onClick={() => {
-                    setViewMode(prev => {
-                      if (!prev) {
-                        setShowNoteOptions(false);
-                        setOpenBottomMenu(null);
-                      }
-                      return !prev;
-                    });
-                  }}
-                >
-                  {viewMode ? 'Read-only on' : 'Read-only off'}
-                </button>
+                {role === 'viewer' ? (
+                  <button className="btn btn-active" disabled>
+                    View only
+                  </button>
+                ) : (
+                  <button
+                    className={`btn ${viewMode ? 'btn-active' : ''}`}
+                    onClick={() => {
+                      setViewMode(prev => {
+                        if (!prev) {
+                          setShowNoteOptions(false);
+                          setOpenBottomMenu(null);
+                        }
+                        return !prev;
+                      });
+                    }}
+                  >
+                    {viewMode ? 'Read-only on' : 'Read-only off'}
+                  </button>
+                )}
                 <div className="popover-divider" />
                 <button className="btn" onClick={() => {
                   setOpenBottomMenu(null);

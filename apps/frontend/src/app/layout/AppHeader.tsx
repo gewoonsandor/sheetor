@@ -1,5 +1,5 @@
 import { useSyncExternalStore } from 'react';
-import { Link, NavLink } from 'react-router-dom';
+import { Link, NavLink, useMatch } from 'react-router-dom';
 
 import { deriveInitials, getUserSnapshot, subscribeUser } from '../../features/user/userStore';
 
@@ -8,6 +8,7 @@ const navClass = ({ isActive }: { isActive: boolean }): string =>
 
 export const AppHeader = () => {
   const user = useSyncExternalStore(subscribeUser, getUserSnapshot);
+  const onSong = useMatch('/songs/:songId') !== null;
 
   return (
     <header className="app-header">
@@ -21,7 +22,11 @@ export const AppHeader = () => {
       </div>
 
       <nav className="app-nav" aria-label="Sections">
-        <NavLink to="/" className={navClass} end>
+        <NavLink
+          to="/"
+          className={({ isActive }) => navClass({ isActive: isActive || onSong })}
+          end
+        >
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
             <path d="M4 6h16M4 12h16M4 18h10" />
           </svg>

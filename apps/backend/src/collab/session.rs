@@ -19,18 +19,24 @@ use crate::state::AppState;
 pub async fn run(socket: WebSocket, state: AppState, song: Uuid, user: User, role: Role) {
     let (sink, stream) = socket.split();
     let (tx, rx) = mpsc::unbounded_channel();
-    let forwarder = tokio::spawn(forward(rx, sink));
+    let mut forwarder = tokio::spawn(forward(rx, sink));
     let conn = Uuid::new_v4();
 
     if join(&state, song, conn, &user, role, &tx).await {
-        read_loop(&state, song, conn, stream, &tx).await;
+        // A socket that can no longer be written to is as gone as one that closed.
+        tokio::select! {
+            () = read_loop(&state, song, conn, stream, &tx) => {}
+            _ = &mut forwarder => {}
+        }
         leave(&state, song, conn).await;
     } else {
         let _ = tx.send(close(CLOSE_UNAVAILABLE, "song unavailable"));
     }
 
     drop(tx);
-    let _ = forwarder.await;
+    if !forwarder.is_finished() {
+        let _ = forwarder.await;
+    }
 }
 
 async fn forward(mut rx: UnboundedReceiver<Message>, mut sink: SplitSink<WebSocket, Message>) {
@@ -65,7 +71,12 @@ async fn join(
         tx: tx.clone(),
     };
     match state.collab.join(song, conn, member, &stored) {
-        Ok(full) => tx.send(Message::Binary(full.into())).is_ok(),
+        // Once in the room the member must leave it, so a failed send is left to the
+        // read loop to notice rather than reported here.
+        Ok(full) => {
+            let _ = tx.send(Message::Binary(full.into()));
+            true
+        }
         Err(error) => {
             tracing::error!(%song, ?error, "stored song state does not load");
             false

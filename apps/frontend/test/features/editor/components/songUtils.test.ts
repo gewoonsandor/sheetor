@@ -17,6 +17,7 @@ import {
   midiToDiatonicAndAccidental,
   midiToNoteOctave,
   nextBeatPosition,
+  locateCursor,
   normalizeTrackLengths,
   requiredStringCount,
   resolveNoteMidi,
@@ -400,5 +401,46 @@ describe('createEmptyMeasure', () => {
     expect(m.beats).toHaveLength(4);
     expect(m.beats.every(b => b.duration === '4' && b.isRest === true && b.notes.length === 0)).toBe(true);
     expect(new Set(m.beats.map(b => b.id)).size).toBe(4);
+  });
+});
+
+describe('locateCursor', () => {
+  const bars = (): TabMeasure[] => [
+    measure([beat('4'), beat('4')]),
+    measure([beat('4'), beat('4'), beat('4')]),
+  ];
+  const at = (s: TabSong, measureIndex: number, beatIndex: number) => ({
+    trackId: s.tracks[0].id,
+    measureId: s.tracks[0].measures[measureIndex].id,
+    beatId: s.tracks[0].measures[measureIndex].beats[beatIndex].id,
+    trackIndex: 0,
+    measureIndex,
+    beatIndex,
+  });
+
+  it('follows its bar when a collaborator inserts one before it', () => {
+    const before = song(bars());
+    const cursor = at(before, 1, 2);
+    const after = song([measure([beat('4')]), ...before.tracks[0].measures]);
+    after.tracks[0].id = before.tracks[0].id;
+
+    expect(locateCursor(after, cursor, cursor)).toEqual({ trackIndex: 0, measureIndex: 2, beatIndex: 2 });
+  });
+
+  it('clamps to the last bar when its bar was deleted', () => {
+    const before = song(bars());
+    const cursor = at(before, 1, 2);
+    const after = { ...before, tracks: [{ ...before.tracks[0], measures: before.tracks[0].measures.slice(0, 1) }] };
+
+    expect(locateCursor(after, cursor, cursor)).toEqual({ trackIndex: 0, measureIndex: 0, beatIndex: 1 });
+  });
+
+  it('clamps to the last beat when its beat vanished', () => {
+    const before = song(bars());
+    const cursor = at(before, 1, 2);
+    const shortened = { ...before.tracks[0].measures[1], beats: before.tracks[0].measures[1].beats.slice(0, 1) };
+    const after = { ...before, tracks: [{ ...before.tracks[0], measures: [before.tracks[0].measures[0], shortened] }] };
+
+    expect(locateCursor(after, cursor, cursor)).toEqual({ trackIndex: 0, measureIndex: 1, beatIndex: 0 });
   });
 });

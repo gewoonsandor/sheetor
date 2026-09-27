@@ -80,6 +80,14 @@
   --ok-glow: rgb(var(--ok-rgb) / 0.22);
   --ok-ink: hsl(160 40% 8%);
 
+  /* Collaborators: one hue per person (user id mod 6), for presence chips and cursors. */
+  --peer-0: hsl(199 89% 60%);
+  --peer-1: hsl(142 60% 50%);
+  --peer-2: hsl(271 76% 70%);
+  --peer-3: hsl(24 94% 60%);
+  --peer-4: hsl(330 81% 65%);
+  --peer-5: hsl(48 96% 55%);
+
   /* Instruments are depictions of physical objects — dark wood, white and black
      keys — so they do NOT flip with the theme. They follow the palette only
      where they show accent or playback state. */
@@ -189,6 +197,13 @@
   --warn-rgb: 158 108 16;
   --ok-rgb: 20 122 88;
   --danger-hover-text: rgb(var(--danger-rgb));
+
+  --peer-0: hsl(199 89% 38%);
+  --peer-1: hsl(142 60% 38%);
+  --peer-2: hsl(271 76% 38%);
+  --peer-3: hsl(24 94% 38%);
+  --peer-4: hsl(330 81% 38%);
+  --peer-5: hsl(48 96% 38%);
 
   --edge-hi: rgb(255 255 255 / 0.85);
   --sheen: linear-gradient(180deg, rgb(255 255 255 / 0.6), rgb(255 255 255 / 0) 60%);
