@@ -1,3 +1,4 @@
+mod auth;
 pub mod current_user;
 mod folders;
 mod library;
@@ -19,6 +20,7 @@ use crate::state::AppState;
     tags(
         (name = "system", description = "Service health and metadata"),
         (name = "users", description = "User accounts"),
+        (name = "auth", description = "Sign-in configuration and single sign-on"),
         (name = "library", description = "Folders and songs visible to the signed-in user"),
         (name = "folders", description = "Folder management and sharing"),
         (name = "songs", description = "Songs and live collaboration"),
@@ -36,6 +38,7 @@ fn v1(state: AppState) -> OpenApiRouter {
     OpenApiRouter::new()
         .nest("/system", system::router())
         .nest("/users", users::router())
+        .nest("/auth", auth::router())
         .nest("/folders", folders::router())
         .nest("/songs", songs::router())
         .merge(library::router())

@@ -8,6 +8,7 @@ mod create;
 mod login;
 mod logout;
 mod me;
+mod rename;
 
 pub fn router() -> OpenApiRouter<AppState> {
     // `route_layer` applies to the routes registered before it, so the guarded
@@ -15,6 +16,7 @@ pub fn router() -> OpenApiRouter<AppState> {
     // demand a session to obtain a session.
     OpenApiRouter::new()
         .routes(routes!(me::handler))
+        .routes(routes!(rename::handler))
         .route_layer(login_required!(Backend))
         .routes(routes!(create::handler))
         .routes(routes!(login::handler))

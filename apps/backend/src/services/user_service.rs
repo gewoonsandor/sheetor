@@ -1,6 +1,6 @@
-use crate::database::queries::users::insert_user;
+use crate::database::queries::users::{insert_user, update_username};
 use crate::database::schemas::users::User;
-use crate::error::users::InsertUserError;
+use crate::error::users::{InsertUserError, UpdateUserError};
 use crate::helpers::users::password::{check_password_requirements, hash_password};
 use sqlx::PgPool;
 
@@ -20,4 +20,12 @@ pub async fn create(
         .map_err(|_| InsertUserError::HashTaskFailed)??;
 
     insert_user(pool, username, email, &hashed_password).await
+}
+
+pub async fn rename(pool: &PgPool, id: i32, username: &str) -> Result<User, UpdateUserError> {
+    let username = username.trim();
+    if !(1..=64).contains(&username.chars().count()) {
+        return Err(UpdateUserError::InvalidUsername);
+    }
+    Ok(update_username(pool, id, username).await?)
 }

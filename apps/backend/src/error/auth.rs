@@ -6,6 +6,10 @@ pub enum AuthError {
     #[api_error(status_code = 401, message(inherit))]
     InvalidCredentials,
 
+    #[error("sign-in with email and password is disabled")]
+    #[api_error(status_code = 403, message(inherit))]
+    LocalDisabled,
+
     #[error("password verification task failed")]
     HashTaskFailed,
 

@@ -4,4 +4,5 @@ pub mod folder_service;
 pub mod library_service;
 pub mod share_service;
 pub mod song_service;
+pub mod sso_service;
 pub mod user_service;
