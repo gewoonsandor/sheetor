@@ -72,9 +72,30 @@
   line-height: 1.5;
 }
 
-.login-submit {
+.login-submit,
+.login-sso {
   justify-content: center;
   width: 100%;
+}
+
+.login-sso {
+  text-decoration: none;
+}
+
+.login-divider {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-3);
+  color: var(--text-faint);
+  font-size: 0.75rem;
+}
+
+.login-divider::before,
+.login-divider::after {
+  content: '';
+  flex: 1;
+  height: 1px;
+  background: var(--border);
 }
 
 .login-swap {

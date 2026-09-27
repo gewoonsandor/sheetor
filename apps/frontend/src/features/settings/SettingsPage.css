@@ -73,6 +73,22 @@
   font-variant-numeric: normal;
 }
 
+/* A refused rename stacks its message under the field it belongs to. */
+.settings-row-control:has(.settings-error) {
+  flex-direction: column;
+  align-items: flex-end;
+}
+
+.settings-error {
+  margin: 0;
+  color: var(--danger);
+  font-size: 0.8125rem;
+}
+
+.settings-value {
+  color: var(--text-dim);
+}
+
 .settings-choices {
   display: flex;
   gap: var(--sp-1);

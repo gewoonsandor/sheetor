@@ -217,3 +217,41 @@ describe('logout', () => {
     expect(stored().name).toBe(store.DEFAULT_USER.name);
   });
 });
+
+describe('fetchAuthConfig', () => {
+  it('reads which sign-in methods the server offers', async () => {
+    answer(ok({ local_enabled: false, sso_name: 'Keycloak' }));
+
+    await expect(api.fetchAuthConfig()).resolves.toEqual({
+      localEnabled: false,
+      ssoName: 'Keycloak',
+    });
+    expect(calls[0].url).toBe('/api/v1/auth/config');
+  });
+
+  // The sign-in page awaits this before rendering anything, so it must settle.
+  it('falls back to the email form when the server cannot be asked', async () => {
+    answer('network-error');
+
+    await expect(api.fetchAuthConfig()).resolves.toEqual({ localEnabled: true, ssoName: null });
+  });
+});
+
+describe('renameAccount', () => {
+  it('stores the name the server saved', async () => {
+    answer(ok({ ...ACCOUNT, username: 'Ada' }));
+
+    await api.renameAccount('  Ada ');
+
+    expect(calls[0].url).toBe('/api/v1/users/me/name');
+    expect(calls[0].init?.method).toBe('PUT');
+    expect(body(0)).toEqual({ username: '  Ada ' });
+    expect(stored().name).toBe('Ada');
+  });
+
+  it('reports a refused name', async () => {
+    answer(ok({ message: 'display names must be 1 to 64 characters' }, 400));
+
+    await expect(api.renameAccount(' ')).rejects.toThrow('display names must be 1 to 64 characters');
+  });
+});

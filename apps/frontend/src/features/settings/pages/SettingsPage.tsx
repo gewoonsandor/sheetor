@@ -10,7 +10,7 @@ import {
   subscribeUser,
   updateUser,
 } from '../../user/userStore';
-import { logout } from '../../user/authApi';
+import { logout, renameAccount } from '../../user/authApi';
 import '../SettingsPage.css';
 
 type SettingsRowProps = {
@@ -39,14 +39,17 @@ const SettingsRow = ({ name, description, htmlFor, children }: SettingsRowProps)
 export const SettingsPage = () => {
   const user = useSyncExternalStore(subscribeUser, getUserSnapshot);
   const [nameDraft, setNameDraft] = useState<string>(user.name);
-  const [emailDraft, setEmailDraft] = useState<string>(user.email);
+  const [nameError, setNameError] = useState<string | null>(null);
 
-  const commitName = (): void => {
-    setNameDraft(updateUser({ name: nameDraft }).name);
-  };
-
-  const commitEmail = (): void => {
-    setEmailDraft(updateUser({ email: emailDraft }).email);
+  const commitName = async (): Promise<void> => {
+    if (nameDraft === user.name) return;
+    setNameError(null);
+    try {
+      setNameDraft((await renameAccount(nameDraft)).name);
+    } catch (err) {
+      setNameError(err instanceof Error ? err.message : 'Could not rename your account.');
+      setNameDraft(user.name);
+    }
   };
 
   const signOut = (): void => {
@@ -77,7 +80,7 @@ export const SettingsPage = () => {
 
             <SettingsRow
               name="Display name"
-              description="Shown in the app header. Taken from your account at sign-in; editing it here only changes this browser."
+              description="Shown in the app header and to the people you share folders with."
               htmlFor="settings-user-name"
             >
               <input
@@ -86,35 +89,25 @@ export const SettingsPage = () => {
                 type="text"
                 value={nameDraft}
                 onChange={(e) => setNameDraft(e.target.value)}
-                onBlur={commitName}
+                onBlur={() => void commitName()}
                 onKeyDown={(e) => {
-                  if (e.key === 'Enter') commitName();
+                  if (e.key === 'Enter') void commitName();
                 }}
               />
+              {nameError !== null && (
+                <p className="settings-error" role="alert">
+                  {nameError}
+                </p>
+              )}
             </SettingsRow>
 
-            <SettingsRow
-              name="Email"
-              description="The address you sign in with. Editing it here only relabels this browser's profile."
-              htmlFor="settings-user-email"
-            >
-              <input
-                id="settings-user-email"
-                className="control-input settings-text-input"
-                type="email"
-                placeholder="Add an email"
-                value={emailDraft}
-                onChange={(e) => setEmailDraft(e.target.value)}
-                onBlur={commitEmail}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter') commitEmail();
-                }}
-              />
+            <SettingsRow name="Email" description="The address you sign in with and are shared with.">
+              <span className="settings-value">{user.email}</span>
             </SettingsRow>
 
             <SettingsRow
               name="Session"
-              description="Signing out clears the session cookie and returns you to the sign-in screen. Your songs stay in this browser either way."
+              description="Signs you out of this browser. Your library is stored on the server."
             >
               <button className="btn" type="button" onClick={signOut}>
                 Sign out
