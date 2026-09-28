@@ -8,6 +8,7 @@ import {
   getBeatDurationInSeconds,
   getDurationVal,
   getEffectiveBpm,
+  conductorChanges,
   getEffectiveTimeSignature,
   isAudible,
   isFretted,
@@ -172,6 +173,18 @@ describe('effective bpm and time signature', () => {
     expect(getEffectiveBpm(s, 2)).toBe(90);
     expect(getEffectiveBpm(s, 3)).toBe(90);
     expect(getEffectiveTimeSignature(s, 3)).toEqual({ numerator: 3, denominator: 4 });
+  });
+
+  it('marks only overrides that change something, including one an earlier change made redundant', () => {
+    const marked = conductorChanges(song([
+      measure([beat('4')], { bpm: 120 }),
+      measure([beat('4')], { bpm: 90, timeSignature: { numerator: 4, denominator: 4 } }),
+      measure([beat('4')], { bpm: 90, timeSignature: { numerator: 3, denominator: 4 } }),
+      measure([beat('4')], { bpm: 120 }),
+    ]));
+    expect(marked.map(m => [m.bpm, m.timeSignature?.numerator])).toEqual([
+      [undefined, undefined], [90, undefined], [undefined, 3], [120, undefined],
+    ]);
   });
 });
 

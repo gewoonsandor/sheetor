@@ -51,6 +51,8 @@ import {
   beatAt,
   beatOnset,
   getEffectiveClefs,
+  conductorChanges,
+  sameTimeSignature,
 } from './songUtils';
 import type { CursorIds, CursorIndices } from './songUtils';
 import { getClip, setClip, subscribeClip } from '../clipboard';
@@ -523,22 +525,20 @@ export const TabSheetEditor: React.FC<TabSheetEditorProps> = ({ meta, channel })
   };
 
   /**
-   * Bar 1 sets the song tempo; every later bar stores an override. The score
-   * tempo marks edit an arbitrary bar, so the index is a parameter rather than
-   * the cursor - clicking bar 9 must never retune whichever bar is selected.
+   * Bar 1 sets the song tempo; a later bar stores an override, or drops it when it restates the
+   * tempo already in force. The score tempo marks edit an arbitrary bar, so the index is a
+   * parameter rather than the cursor - clicking bar 9 must never retune whichever bar is selected.
    */
   const setMeasureBpm = (index: number, bpm: number) => {
     const clamped = Math.max(MIN_BPM, Math.min(MAX_BPM, Math.round(bpm)));
-    if (index === 0) {
-      editSong(prev => ({ ...prev, bpm: clamped }));
-      setConductorMeasure(0, measure => {
-        const normalized = { ...measure };
-        delete normalized.bpm;
-        return normalized;
-      });
-      return;
-    }
-    setConductorMeasure(index, measure => ({ ...measure, bpm: clamped }));
+    if (index === 0) editSong(prev => ({ ...prev, bpm: clamped }));
+    const restates = index === 0 || getEffectiveBpm(song, index - 1) === clamped;
+    setConductorMeasure(index, measure => {
+      const next = { ...measure };
+      if (restates) delete next.bpm;
+      else next.bpm = clamped;
+      return next;
+    });
   };
 
   /**
@@ -552,19 +552,18 @@ export const TabSheetEditor: React.FC<TabSheetEditorProps> = ({ meta, channel })
     setBpmDraft(null);
   };
 
+  /** The metre from the cursor's bar on, by the same rule as `setMeasureBpm`. */
   const setActiveMeasureTimeSignature = (field: 'numerator' | 'denominator', value: number) => {
-    const effective = getEffectiveTimeSignature(song, activeMeasureIndex);
-    const nextTimeSignature = { ...effective, [field]: value };
-    if (activeMeasureIndex === 0) {
-      editSong(prev => ({ ...prev, timeSignature: nextTimeSignature }));
-      setConductorMeasure(activeMeasureIndex, measure => {
-        const normalized = { ...measure };
-        delete normalized.timeSignature;
-        return normalized;
-      });
-      return;
-    }
-    setConductorMeasure(activeMeasureIndex, measure => ({ ...measure, timeSignature: nextTimeSignature }));
+    const index = activeMeasureIndex;
+    const timeSignature = { ...getEffectiveTimeSignature(song, index), [field]: value };
+    if (index === 0) editSong(prev => ({ ...prev, timeSignature }));
+    const restates = index === 0 || sameTimeSignature(getEffectiveTimeSignature(song, index - 1), timeSignature);
+    setConductorMeasure(index, measure => {
+      const next = { ...measure };
+      if (restates) delete next.timeSignature;
+      else next.timeSignature = timeSignature;
+      return next;
+    });
   };
 
   const toggleRepeatStart = () => setConductorMeasure(activeMeasureIndex, measure => {
@@ -1274,8 +1273,9 @@ export const TabSheetEditor: React.FC<TabSheetEditorProps> = ({ meta, channel })
   const ROW_HEIGHT = computeRowHeight(stringCount, showTab, showNotation, grandStaff);
   const tabTop = getTabStaffTop(showNotation);
 
-  // Tempo, metre and repeat marks are song-wide, so they are read off the conductor.
-  const conductorMeasures = song.tracks[0]?.measures ?? [];
+  // Tempo, metre and repeat marks are song-wide, so they are read off the conductor; a tempo
+  // or metre that restates the one before is no change and is not marked.
+  const conductorMeasures = conductorChanges(song);
   // Bars drawn one above another share their spacing, so a grand staff's hands line up in time.
   const aligned = measures.map((_, mIdx) => alignBars(staves.map(staff => barOf(staff, mIdx))));
   // Every row opens with the key signature after the clef; the widest staff's sets the room.
@@ -2031,12 +2031,14 @@ export const TabSheetEditor: React.FC<TabSheetEditorProps> = ({ meta, channel })
             const effectiveTimeSignature = getEffectiveTimeSignature(song, mIdx);
             const effectiveBpm = getEffectiveBpm(song, mIdx);
             const marks = conductorMeasures[mIdx];
-            const showTimingChange = mIdx === 0 || typeof marks?.bpm === 'number' || !!marks?.timeSignature;
+            // Each mark shows where it changes something: a new tempo does not restate the metre.
+            const showTempo = mIdx === 0 || marks?.bpm !== undefined;
+            const showMetre = mIdx === 0 || marks?.timeSignature !== undefined;
             // A clef change partway through a row comes first, then the key, so a metre change moves right of both.
             const clefChange = clefChanges[mIdx] && measureLayouts[mIdx]?.x !== 0;
             const timeSignatureX = measureX + 12 + (clefChange ? CLEF_CHANGE_ROOM + keyRoom : 0);
             // A ‖: stands in for a plain bar line, but follows a clef or metre that opens the bar.
-            const repeatStartX = measureLayouts[mIdx]?.x === 0 || showTimingChange || clefChange
+            const repeatStartX = measureLayouts[mIdx]?.x === 0 || showMetre || clefChange
               ? measureX + getMeasurePadding(mIdx) - REPEAT_PADDING - 6
               : measureX;
 
@@ -2121,7 +2123,7 @@ export const TabSheetEditor: React.FC<TabSheetEditorProps> = ({ meta, channel })
                   </text>
                 )}
 
-                {showTimingChange && (bpmEditIndex === mIdx ? (
+                {showTempo && (bpmEditIndex === mIdx ? (
                   // An HTML input inside the SVG: foreignObject coordinates are
                   // user units, so the box tracks the tempo mark at any zoom
                   // without mapping screen pixels back into the viewBox.
@@ -2240,7 +2242,7 @@ export const TabSheetEditor: React.FC<TabSheetEditorProps> = ({ meta, channel })
                     })}
 
                     {/* Time Signature (first-of-row measures) */}
-                    {showTimingChange && (
+                    {showMetre && (
                       <g>
                         {showNotation && staves.map(staff => (
                           <React.Fragment key={staff.top}>
@@ -2280,8 +2282,8 @@ export const TabSheetEditor: React.FC<TabSheetEditorProps> = ({ meta, channel })
                   </g>
                 )}
 
-                {/* Big Time Signature for timing changes (non-first-of-row measures) */}
-                {showTimingChange && mIdx > 0 && measureLayouts[mIdx]?.x !== 0 && (
+                {/* Big Time Signature for metre changes (non-first-of-row measures) */}
+                {showMetre && mIdx > 0 && measureLayouts[mIdx]?.x !== 0 && (
                   <g>
                     {showNotation && staves.map(staff => (
                       <React.Fragment key={staff.top}>

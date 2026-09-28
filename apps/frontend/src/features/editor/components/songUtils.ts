@@ -520,6 +520,29 @@ export const getEffectiveTimeSignature = (song: TabSong, measureIndex: number): 
   return song.timeSignature;
 };
 
+export const sameTimeSignature = (a: TimeSignature, b: TimeSignature): boolean =>
+  a.numerator === b.numerator && a.denominator === b.denominator;
+
+/**
+ * The conductor's bars as the score marks them: a tempo or metre override that restates what is
+ * already in force changes nothing, so it is left out and draws no mark and takes no room.
+ */
+export const conductorChanges = (song: TabSong): TabMeasure[] => {
+  let bpm = song.bpm;
+  let metre = song.timeSignature;
+  return (song.tracks[0]?.measures ?? []).map(measure => {
+    const sameBpm = measure.bpm === bpm;
+    const sameMetre = measure.timeSignature !== undefined && sameTimeSignature(measure.timeSignature, metre);
+    bpm = measure.bpm ?? bpm;
+    metre = measure.timeSignature ?? metre;
+    if (!sameBpm && !sameMetre) return measure;
+    const marks = { ...measure };
+    if (sameBpm) delete marks.bpm;
+    if (sameMetre) delete marks.timeSignature;
+    return marks;
+  });
+};
+
 /** A track's clef at every bar: a change holds until the next; `opening` stands in when the track sets none. */
 export const getEffectiveClefs = (track: TabTrack, opening: Clef): Clef[] => {
   let clef = track.clef ?? opening;

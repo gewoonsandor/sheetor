@@ -115,7 +115,7 @@ const ROW_START_PADDING = 78;
 export const CLEF_CHANGE_ROOM = 24;
 
 /**
- * `widths` is each bar's content width (`alignBars`); tempo, metre and repeat marks come from the
+ * `widths` is each bar's content width (`alignBars`); metre and repeat marks come from the
  * conductor. `keyRoom` is what the key signature adds to the clef area at the start of every row;
  * `clefChanges` marks the bars where some staff changes clef, which reprint the clefs and the key
  * signature there, unless the bar opens a row and already shows them.
@@ -130,7 +130,8 @@ export const computeMeasureLayouts = (
     const marks = conductor[i];
     return {
       contentWidth,
-      hasTimingChange: !!(marks?.bpm || marks?.timeSignature),
+      // Only a metre takes room on the staff; a tempo mark sits above it.
+      metreRoom: marks?.timeSignature ? 28 : 0,
       repeatRoom: marks?.repeatStart ? REPEAT_PADDING : 0,
       clefRoom: clefChanges[i] ? CLEF_CHANGE_ROOM + keyRoom : 0,
     };
@@ -141,9 +142,9 @@ export const computeMeasureLayouts = (
   let curX = 0;
 
   for (let i = 0; i < infos.length; i++) {
-    const { contentWidth, hasTimingChange, repeatRoom, clefRoom } = infos[i];
+    const { contentWidth, metreRoom, repeatRoom, clefRoom } = infos[i];
     const isFirstInRow = curX === 0;
-    const padding = (isFirstInRow ? ROW_START_PADDING + keyRoom : (hasTimingChange ? 46 : 18) + clefRoom) + repeatRoom;
+    const padding = (isFirstInRow ? ROW_START_PADDING + keyRoom : 18 + metreRoom + clefRoom) + repeatRoom;
     const totalWidth = padding + contentWidth + 20;
 
     if (!isFirstInRow && curX + totalWidth > MAX_ROW_WIDTH) {
