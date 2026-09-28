@@ -11,12 +11,16 @@ node_modules
 dist
 dist-ssr
 *.local
+coverage
 
 # Rust
 /target
 
 # Nix / direnv
 .direnv
+# Links left by `nix build`
+result
+result-*
 # Spelled out rather than `.env*`, which would also swallow the tracked .envrc
 .env
 .env.*
@@ -31,3 +35,6 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+# Per-user agent settings; the shared .claude/settings.json stays tracked
+.claude/settings.local.json
