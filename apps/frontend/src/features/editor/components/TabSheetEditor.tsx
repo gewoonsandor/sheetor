@@ -2256,9 +2256,9 @@ export const TabSheetEditor: React.FC<TabSheetEditorProps> = ({ meta, channel })
                   </g>
                 )}
 
-                {/* A clef change partway through a row: smaller, kept on the line it names. */}
+                {/* A clef change partway through a row reprints every staff's clef, the unchanged
+                    hand's too, so both are readable at a glance: smaller, kept on the line each names. */}
                 {clefChange && staves.map(staff => {
-                  if (staff.clefs[mIdx] === staff.clefs[mIdx - 1]) return null;
                   const clef = clefAt(staff, mIdx);
                   return (
                     <path
