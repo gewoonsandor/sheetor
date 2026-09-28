@@ -34,6 +34,9 @@ export type InstrumentId =
  */
 export type StaffDisplay = 'notation' | 'tab' | 'both';
 
+/** The clef a notation staff is read in: treble (G) or bass (F). */
+export type Clef = 'treble' | 'bass';
+
 /**
  * Fretted tracks address pitch as string + fret against a tuning; pitched
  * tracks (piano, trumpet, ...) carry the absolute MIDI number instead. A
@@ -82,6 +85,8 @@ export interface TabMeasure {
   repeatStart?: boolean;
   /** Conductor only: a :‖ closes one here, and how many times the section plays in all. */
   repeatEnd?: number;
+  /** This track's own: its staff switches to this clef here, until the next change. */
+  clef?: Clef;
 }
 
 export interface TabTrack {
@@ -98,6 +103,8 @@ export interface TabTrack {
   transpose: number;
   /** Sharps (positive) or flats (negative) written at the start of every row; absent is C major. */
   keySignature?: number;
+  /** The clef bar 1 opens in; absent is treble, or bass on a grand staff's lower staff. */
+  clef?: Clef;
   /** Per-track trim, 0..1, multiplied into the master volume. */
   volume: number;
   muted?: boolean;

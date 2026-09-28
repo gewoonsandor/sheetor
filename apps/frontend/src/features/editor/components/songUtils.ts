@@ -1,5 +1,6 @@
 import type {
   BeatPosition,
+  Clef,
   Duration,
   FrettedNote,
   InstrumentId,
@@ -373,17 +374,23 @@ export const grandStaffOf = (tracks: TabTrack[], index: number): GrandStaff | nu
 export const addBassStaff = (song: TabSong, index: number): TabSong => {
   const upper = song.tracks[index];
   if (!upper || isFretted(upper) || grandStaffOf(song.tracks, index)) return song;
-  const keep = (low: boolean, fresh: boolean): TabMeasure[] => upper.measures.map(measure => ({
-    ...measure,
-    ...(fresh ? { id: createId() } : {}),
-    beats: measure.beats.map(beat => {
-      const notes = beat.notes.filter(n => ((resolveNoteMidi(n, upper) ?? GRAND_SPLIT) < GRAND_SPLIT) === low);
-      return { ...beat, ...(fresh ? { id: createId() } : {}), notes, isRest: notes.length === 0 };
-    }),
-  }));
+  const keep = (low: boolean, fresh: boolean): TabMeasure[] => upper.measures.map(measure => {
+    const bar: TabMeasure = {
+      ...measure,
+      ...(fresh ? { id: createId() } : {}),
+      beats: measure.beats.map(beat => {
+        const notes = beat.notes.filter(n => ((resolveNoteMidi(n, upper) ?? GRAND_SPLIT) < GRAND_SPLIT) === low);
+        return { ...beat, ...(fresh ? { id: createId() } : {}), notes, isRest: notes.length === 0 };
+      }),
+    };
+    // The left hand reads its own clefs, never the right hand's.
+    if (low) delete bar.clef;
+    return bar;
+  });
   const bass: TabTrack = { ...upper, id: createId(), name: `${upper.name} (left hand)`, measures: keep(true, true) };
   // A link left over from a deleted left hand must not come along.
   delete bass.bassTrack;
+  delete bass.clef;
   const tracks = [...song.tracks];
   tracks.splice(index, 1, { ...upper, bassTrack: bass.id, measures: keep(false, false) }, bass);
   return { ...song, tracks };
@@ -511,6 +518,15 @@ export const getEffectiveTimeSignature = (song: TabSong, measureIndex: number): 
     if (ts) return ts;
   }
   return song.timeSignature;
+};
+
+/** A track's clef at every bar: a change holds until the next; `opening` stands in when the track sets none. */
+export const getEffectiveClefs = (track: TabTrack, opening: Clef): Clef[] => {
+  let clef = track.clef ?? opening;
+  return track.measures.map(measure => {
+    clef = measure.clef ?? clef;
+    return clef;
+  });
 };
 
 // Number of strings a track needs for every fretted note it contains to have an

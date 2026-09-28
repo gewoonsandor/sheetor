@@ -32,6 +32,7 @@ import {
   pruneNotesToStringCount,
   staffStepToSoundingMidi,
   addBassStaff,
+  getEffectiveClefs,
   grandStaffOf,
   beatAt,
   beatOnset,
@@ -599,6 +600,24 @@ describe('grand staff', () => {
     const tracks = [{ ...piano([]), bassTrack: lower.id }, { ...piano([]), bassTrack: lower.id }, lower];
     expect(grandStaffOf(tracks, 1)).toBeNull();
     expect(grandStaffOf(tracks, 2)).toEqual({ treble: 0, bass: 2 });
+  });
+
+  it('opens the new left hand in its own clef, not the right hand clef changes', () => {
+    const upper: TabTrack = { ...piano([[{ midi: 48 }], [{ midi: 43 }]]), clef: 'treble' };
+    upper.measures[0].clef = 'treble';
+    const [, lower] = addBassStaff(song([], { tracks: [upper] }), 0).tracks;
+    expect(getEffectiveClefs(lower, 'bass')).toEqual(['bass']);
+  });
+});
+
+describe('clefs', () => {
+  it('holds each change until the next, opening in the track clef or else the fallback', () => {
+    const track = createTrack('piano', 4);
+    track.measures[1].clef = 'bass';
+    track.measures[3].clef = 'treble';
+    expect(getEffectiveClefs(track, 'treble')).toEqual(['treble', 'bass', 'bass', 'treble']);
+    expect(getEffectiveClefs({ ...track, clef: 'bass' }, 'treble')[0]).toBe('bass');
+    expect(getEffectiveClefs(createTrack('piano', 2), 'bass')).toEqual(['bass', 'bass']);
   });
 });
 

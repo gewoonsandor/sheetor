@@ -4,7 +4,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import './TabSheetEditor.css';
 
 import type {
-  BeatPosition, Duration, FrettedNote, InstrumentId, NoteTechniques, PitchedNote, StaffDisplay,
+  BeatPosition, Clef, Duration, FrettedNote, InstrumentId, NoteTechniques, PitchedNote, StaffDisplay,
   TabNote, TabBeat, TabMeasure, TabSong, TabTrack, BeamGroup, MLayout,
 } from './types';
 import {
@@ -50,6 +50,7 @@ import {
   grandStaffOf,
   beatAt,
   beatOnset,
+  getEffectiveClefs,
 } from './songUtils';
 import type { CursorIds, CursorIndices } from './songUtils';
 import { getClip, setClip, subscribeClip } from '../clipboard';
@@ -84,6 +85,7 @@ import {
   REPEAT_PADDING,
   GRAND_BASS_TOP,
   alignBars,
+  CLEF_CHANGE_ROOM,
 } from './layout';
 
 // Treble clef outline traced from the public-domain "Treble clef with empty staff.svg"
@@ -105,17 +107,24 @@ const BASS_CLEF_PATH =
 const GRAND_BRACE_PATH =
   'M -4 10 C -10 14 -6 58 -12 70 C -6 82 -10 126 -4 130 C -7 124 -2 84 -9 70 C -2 56 -7 16 -4 10 Z';
 
-/** A clef: how far below the row's origin its staff sits, and how far it moves a note's step. */
-interface Clef {
-  top: number;
+/** How a clef reads its staff and draws itself. */
+interface ClefShape {
+  path: string;
+  fillRule: 'evenodd' | 'nonzero';
   /** Diatonic steps added to a treble position; the bass clef's G2 sits where the treble's E4 does. */
   shift: number;
   /** Where the key signature sits against a treble staff's: a bass clef writes it a line lower. */
   keyOffset: number;
+  /** The line the clef names (G or F), which a smaller clef change stays centred on. */
+  line: number;
 }
 
-const TREBLE: Clef = { top: 0, shift: 0, keyOffset: 0 };
-const BASS: Clef = { top: GRAND_BASS_TOP, shift: 12, keyOffset: -2 };
+const CLEFS: Record<Clef, ClefShape> = {
+  treble: { path: TREBLE_CLEF_PATH, fillRule: 'evenodd', shift: 0, keyOffset: 0, line: 40 },
+  bass: { path: BASS_CLEF_PATH, fillRule: 'nonzero', shift: 12, keyOffset: -2, line: 20 },
+};
+
+const CLEF_LABELS: Record<Clef, string> = { treble: 'Treble (G)', bass: 'Bass (F)' };
 
 /** A key signature's first accidental, after the clef, and the room each one takes. */
 const KEY_X = 46;
@@ -161,9 +170,11 @@ type Hand = 'right' | 'left';
 
 const HAND_LABELS: Record<Hand, string> = { right: 'Right hand', left: 'Left hand' };
 
-/** One drawn staff: its clef and the track whose bars it carries. */
-interface Staff extends Clef {
+/** One drawn staff: how far below the row's origin it sits, the track whose bars it carries, and its clef at every bar. */
+interface Staff {
+  top: number;
   track: number;
+  clefs: Clef[];
 }
 
 const STAFF_LABELS: Record<StaffDisplay, string> = {
@@ -220,9 +231,12 @@ export const TabSheetEditor: React.FC<TabSheetEditorProps> = ({ meta, channel })
   const showNotation = activeTrack.display !== 'tab';
   const grand = grandStaffOf(song.tracks, activeTrackIndex);
   const grandStaff = grand !== null;
+  /** A staff reads its track's clefs, opening in `opening` when the track sets none. */
+  const staffOf = (track: number, top: number, opening: Clef): Staff =>
+    ({ top, track, clefs: getEffectiveClefs(song.tracks[track], opening) });
   const staves: Staff[] = grand
-    ? [{ ...TREBLE, track: grand.treble }, { ...BASS, track: grand.bass }]
-    : [{ ...TREBLE, track: activeTrackIndex }];
+    ? [staffOf(grand.treble, 0, 'treble'), staffOf(grand.bass, GRAND_BASS_TOP, 'bass')]
+    : [staffOf(activeTrackIndex, 0, 'treble')];
   const activeStaff = staves.find(s => s.track === activeTrackIndex) ?? staves[0];
   // A grand staff is one part with two hands: two tracks underneath, so each hand
   // keeps its own rhythm, but one chip, one name, one sound everywhere but the score.
@@ -243,8 +257,11 @@ export const TabSheetEditor: React.FC<TabSheetEditorProps> = ({ meta, channel })
   const keyOf = (staff: Staff): number => song.tracks[staff.track].keySignature ?? 0;
   /** A pitch as a staff writes it, spelled in that staff's key. */
   const spell = (midi: number, staff: Staff) => spellPitch(midi, song.tracks[staff.track].transpose, keyOf(staff));
-  /** Where a pitch sits on a staff, in the treble's steps (2 = bottom line, 10 = top line). */
-  const staffStep = (midi: number, staff: Staff): number => spell(midi, staff).diatonicStep + staff.shift;
+  /** The clef a staff is in at a bar. */
+  const clefAt = (staff: Staff, mIdx: number): ClefShape => CLEFS[staff.clefs[mIdx] ?? 'treble'];
+  /** Where a pitch sits on a staff at a bar, in the treble's steps (2 = bottom line, 10 = top line). */
+  const staffStep = (midi: number, staff: Staff, mIdx: number): number =>
+    spell(midi, staff).diatonicStep + clefAt(staff, mIdx).shift;
   /** The bar a staff draws at an index: its own track's. */
   const barOf = (staff: Staff, mIdx: number): TabMeasure => song.tracks[staff.track].measures[mIdx];
 
@@ -564,6 +581,22 @@ export const TabSheetEditor: React.FC<TabSheetEditorProps> = ({ meta, channel })
     if (times !== null) next.repeatEnd = Math.max(MIN_REPEAT, Math.min(MAX_REPEAT, times));
     return next;
   });
+
+  /**
+   * A staff's clef from the cursor's bar on. Bar 1 sets the track's own clef; a later bar
+   * stores a change, and picking the clef the bar before is already in removes it.
+   */
+  const setClef = (staff: Staff, clef: Clef) => {
+    const index = activeMeasureIndex;
+    if (index === 0) updateTrack(staff.track, { clef });
+    setMeasures(prev => prev.map((measure, i) => {
+      if (i !== index) return measure;
+      const next = { ...measure };
+      if (index === 0 || staff.clefs[index - 1] === clef) delete next.clef;
+      else next.clef = clef;
+      return next;
+    }), staff.track);
+  };
 
   /** Rewrites one beat's notes: the cursor's, unless a click names another beat, and on a grand staff maybe the other hand's track. */
   const updateActiveBeatNotes = (
@@ -1248,7 +1281,12 @@ export const TabSheetEditor: React.FC<TabSheetEditorProps> = ({ meta, channel })
   // Every row opens with the key signature after the clef; the widest staff's sets the room.
   const keyAccidentals = showNotation ? Math.max(...staves.map(staff => Math.abs(keyOf(staff)))) : 0;
   const keyRoom = keyAccidentals === 0 ? 0 : keyAccidentals * KEY_SPACING + 4;
-  const measureLayouts: MLayout[] = computeMeasureLayouts(aligned.map(a => a.minWidth), conductorMeasures, keyRoom);
+  // A staff that changes clef partway through a row writes the new clef, smaller, where it changes.
+  const clefChanges = measures.map((_, mIdx) =>
+    showNotation && mIdx > 0 && staves.some(staff => staff.clefs[mIdx] !== staff.clefs[mIdx - 1]));
+  const measureLayouts: MLayout[] = computeMeasureLayouts(
+    aligned.map(a => a.minWidth), conductorMeasures, keyRoom, clefChanges,
+  );
 
   // Per-measure shift for notes below the lowest notation staff: pushes the TAB
   // down, or with the TAB hidden grows the row. Irrelevant with no notation staff.
@@ -1259,7 +1297,7 @@ export const TabSheetEditor: React.FC<TabSheetEditorProps> = ({ meta, channel })
     for (const beat of barOf(lowestStaff, mIdx).beats) {
       if (beat.isRest) continue;
       for (const note of beat.notes) {
-        const step = staffStep(noteMidi(note, lowestStaff), lowestStaff);
+        const step = staffStep(noteMidi(note, lowestStaff), lowestStaff, mIdx);
         if (step < minStep) minStep = step;
       }
     }
@@ -1285,7 +1323,7 @@ export const TabSheetEditor: React.FC<TabSheetEditorProps> = ({ meta, channel })
     for (const beat of barOf(top, mIdx).beats) {
       if (beat.isRest || beat.notes.length === 0) continue;
       for (const note of beat.notes) {
-        const y = Y_of_step(staffStep(noteMidi(note, top), top));
+        const y = Y_of_step(staffStep(noteMidi(note, top), top, mIdx));
         if (y < minNoteY) minNoteY = y;
       }
     }
@@ -1325,11 +1363,11 @@ export const TabSheetEditor: React.FC<TabSheetEditorProps> = ({ meta, channel })
   // Bottom boundary (offset from rowY) used for bar lines, selection highlight,
   // and the playback cursor. With the TAB staff hidden this is just below the
   // lowest standard staff instead of the bottom TAB line; name a staff for just its own.
-  const getStaffBottom = (ts: number, staff: Clef = lowestStaff): number =>
+  const getStaffBottom = (ts: number, staff: Staff = lowestStaff): number =>
     showTab ? tabTop + ts + stringCount * TAB_STAFF_HEIGHT_PX - 10 : staff.top + 50;
 
   /** Top boundary of the drawn staff block, or of one staff of a grand staff. */
-  const getStaffTop = (ts: number, staff: Clef = staves[0]): number => (showNotation ? staff.top + 10 : tabTop + ts);
+  const getStaffTop = (ts: number, staff: Staff = staves[0]): number => (showNotation ? staff.top + 10 : tabTop + ts);
 
   const fretboardNeckHeight = computeFretboardNeckHeight(stringCount);
 
@@ -1344,9 +1382,9 @@ export const TabSheetEditor: React.FC<TabSheetEditorProps> = ({ meta, channel })
     return getMeasureX(mIdx) + padding + at * usableWidth;
   };
 
-  // Determine the unified stem direction for a beam group. `measure` is the
-  // bar of the staff being drawn.
-  const getBeamStemUp = (measure: TabMeasure, beamGroup: BeamGroup, staff: Staff): boolean => {
+  // Determine the unified stem direction for a beam group in a staff's bar `mIdx`.
+  const getBeamStemUp = (mIdx: number, beamGroup: BeamGroup, staff: Staff): boolean => {
+    const measure = barOf(staff, mIdx);
     let anyBelow = false;
     let anyAbove = false;
     let maxDist = 0;
@@ -1355,7 +1393,7 @@ export const TabSheetEditor: React.FC<TabSheetEditorProps> = ({ meta, channel })
       const beat = measure.beats[i];
       if (!beat) continue;
       for (const note of beat.notes) {
-        const diatonicStep = staffStep(noteMidi(note, staff), staff);
+        const diatonicStep = staffStep(noteMidi(note, staff), staff, mIdx);
         if (diatonicStep < 0) anyBelow = true;
         if (diatonicStep > 12) anyAbove = true;
         const dist = Math.abs(diatonicStep - 6);
@@ -1372,14 +1410,15 @@ export const TabSheetEditor: React.FC<TabSheetEditorProps> = ({ meta, channel })
 
   // Calculate beam Y position for a beam group (standard notation); `staffY` is
   // the row's origin plus the staff's offset.
-  const getBeamY = (measure: TabMeasure, beamGroup: BeamGroup, stemUp: boolean, staff: Staff, staffY: number): number => {
+  const getBeamY = (mIdx: number, beamGroup: BeamGroup, stemUp: boolean, staff: Staff, staffY: number): number => {
+    const measure = barOf(staff, mIdx);
     let minY = Infinity;
     let maxY = -Infinity;
     for (let i = beamGroup.startIdx; i <= beamGroup.endIdx; i++) {
       const b = measure.beats[i];
       if (!b || b.isRest || b.notes.length === 0) continue;
       for (const n of b.notes) {
-        const y = staffY + Y_of_step(staffStep(noteMidi(n, staff), staff));
+        const y = staffY + Y_of_step(staffStep(noteMidi(n, staff), staff, mIdx));
         if (y < minY) minY = y;
         if (y > maxY) maxY = y;
       }
@@ -1422,7 +1461,8 @@ export const TabSheetEditor: React.FC<TabSheetEditorProps> = ({ meta, channel })
   // names the beat and the track itself.
   const handleStandardStaffClick = (at: BeatPosition, clickY: number, staff: Staff) => {
     const track = song.tracks[staff.track];
-    const clicked = staffStepToSoundingMidi(Math.round((60 - clickY) / 5) - staff.shift, track.transpose, keyOf(staff));
+    const step = Math.round((60 - clickY) / 5) - clefAt(staff, at.measureIndex).shift;
+    const clicked = staffStepToSoundingMidi(step, track.transpose, keyOf(staff));
     setActiveTrackIndex(staff.track);
     moveCursorTo(at.measureIndex, at.beatIndex, false);
     if (!isFretted(track)) {
@@ -1984,8 +2024,11 @@ export const TabSheetEditor: React.FC<TabSheetEditorProps> = ({ meta, channel })
             const effectiveBpm = getEffectiveBpm(song, mIdx);
             const marks = conductorMeasures[mIdx];
             const showTimingChange = mIdx === 0 || typeof marks?.bpm === 'number' || !!marks?.timeSignature;
+            // A clef change partway through a row comes first, so a metre change moves right of it.
+            const clefChange = clefChanges[mIdx] && measureLayouts[mIdx]?.x !== 0;
+            const timeSignatureX = measureX + 12 + (clefChange ? CLEF_CHANGE_ROOM : 0);
             // A ‖: stands in for a plain bar line, but follows a clef or metre that opens the bar.
-            const repeatStartX = measureLayouts[mIdx]?.x === 0 || showTimingChange
+            const repeatStartX = measureLayouts[mIdx]?.x === 0 || showTimingChange || clefChange
               ? measureX + getMeasurePadding(mIdx) - REPEAT_PADDING - 6
               : measureX;
 
@@ -2140,18 +2183,24 @@ export const TabSheetEditor: React.FC<TabSheetEditorProps> = ({ meta, channel })
                 {/* Clef, TAB, tuning labels (rendered on the first measure of every row) */}
                 {(measureLayouts[mIdx]?.x === 0) && (
                   <g transform={`translate(${measureX}, ${rowY})`}>
-                    {showNotation && <path d={TREBLE_CLEF_PATH} fillRule="evenodd" className="glyph-ink" />}
-                    {grandStaff && (
-                      <>
-                        <path d={BASS_CLEF_PATH} transform={`translate(0, ${BASS.top})`} className="glyph-ink" />
-                        <path d={GRAND_BRACE_PATH} className="glyph-ink" />
-                      </>
-                    )}
+                    {showNotation && staves.map(staff => {
+                      const clef = clefAt(staff, mIdx);
+                      return (
+                        <path
+                          key={`clef-${staff.top}`}
+                          d={clef.path}
+                          fillRule={clef.fillRule}
+                          transform={`translate(0, ${staff.top})`}
+                          className="glyph-ink"
+                        />
+                      );
+                    })}
+                    {grandStaff && <path d={GRAND_BRACE_PATH} className="glyph-ink" />}
 
                     {/* Key signature, on every staff of the row */}
                     {showNotation && staves.flatMap(staff => keySignatureSteps(keyOf(staff)).map((step, i) => (
                       <React.Fragment key={`key-${staff.top}-${i}`}>
-                        {accidentalGlyph(Math.sign(keyOf(staff)), KEY_X + i * KEY_SPACING, staff.top + Y_of_step(step + staff.keyOffset))}
+                        {accidentalGlyph(Math.sign(keyOf(staff)), KEY_X + i * KEY_SPACING, staff.top + Y_of_step(step + clefAt(staff, mIdx).keyOffset))}
                       </React.Fragment>
                     )))}
 
@@ -2207,19 +2256,35 @@ export const TabSheetEditor: React.FC<TabSheetEditorProps> = ({ meta, channel })
                   </g>
                 )}
 
+                {/* A clef change partway through a row: smaller, kept on the line it names. */}
+                {clefChange && staves.map(staff => {
+                  if (staff.clefs[mIdx] === staff.clefs[mIdx - 1]) return null;
+                  const clef = clefAt(staff, mIdx);
+                  return (
+                    <path
+                      key={`clef-change-${staff.top}`}
+                      d={clef.path}
+                      fillRule={clef.fillRule}
+                      transform={`translate(${measureX + 3}, ${rowY + staff.top + clef.line}) scale(0.7) translate(-12, ${-clef.line})`}
+                      className="glyph-ink"
+                      pointerEvents="none"
+                    />
+                  );
+                })}
+
                 {/* Big Time Signature for timing changes (non-first-of-row measures) */}
                 {showTimingChange && mIdx > 0 && measureLayouts[mIdx]?.x !== 0 && (
                   <g>
                     {showNotation && staves.map(staff => (
                       <React.Fragment key={staff.top}>
-                        <text x={measureX + 12} y={rowY + staff.top + 25} className="music-text" fontSize="16" textAnchor="middle">{effectiveTimeSignature.numerator}</text>
-                        <text x={measureX + 12} y={rowY + staff.top + 45} className="music-text" fontSize="16" textAnchor="middle">{effectiveTimeSignature.denominator}</text>
+                        <text x={timeSignatureX} y={rowY + staff.top + 25} className="music-text" fontSize="16" textAnchor="middle">{effectiveTimeSignature.numerator}</text>
+                        <text x={timeSignatureX} y={rowY + staff.top + 45} className="music-text" fontSize="16" textAnchor="middle">{effectiveTimeSignature.denominator}</text>
                       </React.Fragment>
                     ))}
                     {showTab && (
                       <>
-                        <text x={measureX + 12} y={rowY + tabTop + ts + stringCount * TAB_STAFF_HEIGHT_PX / 2 - 8} className="music-text" fontSize="16" textAnchor="middle">{effectiveTimeSignature.numerator}</text>
-                        <text x={measureX + 12} y={rowY + tabTop + ts + stringCount * TAB_STAFF_HEIGHT_PX / 2 + 12} className="music-text" fontSize="16" textAnchor="middle">{effectiveTimeSignature.denominator}</text>
+                        <text x={timeSignatureX} y={rowY + tabTop + ts + stringCount * TAB_STAFF_HEIGHT_PX / 2 - 8} className="music-text" fontSize="16" textAnchor="middle">{effectiveTimeSignature.numerator}</text>
+                        <text x={timeSignatureX} y={rowY + tabTop + ts + stringCount * TAB_STAFF_HEIGHT_PX / 2 + 12} className="music-text" fontSize="16" textAnchor="middle">{effectiveTimeSignature.denominator}</text>
                       </>
                     )}
                   </g>
@@ -2450,7 +2515,7 @@ export const TabSheetEditor: React.FC<TabSheetEditorProps> = ({ meta, channel })
               // cursor addresses on a pitched track (there is no string there).
               const calculatedNotes = beatNotes.map((n, noteIndex) => {
                 const midi = noteMidi(n, staff);
-                const step = staffStep(midi, staff);
+                const step = staffStep(midi, staff, mIdx);
                 return {
                   note: n,
                   noteIndex,
@@ -2470,7 +2535,7 @@ export const TabSheetEditor: React.FC<TabSheetEditorProps> = ({ meta, channel })
               const avgStep = calculatedNotes.reduce((acc, curr) => acc + curr.step, 0) / calculatedNotes.length;
               
               // Stem direction: unified direction for beam groups, per-beat otherwise
-              const stemUp = beamInfo ? getBeamStemUp(measure, beamInfo, staff) : avgStep < 6;
+              const stemUp = beamInfo ? getBeamStemUp(mIdx, beamInfo, staff) : avgStep < 6;
               const isWhole = b.duration === '1';
               const hasStem = !isWhole;
 
@@ -2479,8 +2544,8 @@ export const TabSheetEditor: React.FC<TabSheetEditorProps> = ({ meta, channel })
               const rawStemY = hasStem
                 ? (beamInfo
                   ? (stemUp
-                    ? getBeamY(measure, beamInfo, stemUp, staff, staffY) - 2
-                    : getBeamY(measure, beamInfo, stemUp, staff, staffY) + 2)
+                    ? getBeamY(mIdx, beamInfo, stemUp, staff, staffY) - 2
+                    : getBeamY(mIdx, beamInfo, stemUp, staff, staffY) + 2)
                   : (stemUp ? highestY - 30 : lowestY + 30))
                 : 0;
               const stemEndY = rawStemY;
@@ -2737,8 +2802,8 @@ export const TabSheetEditor: React.FC<TabSheetEditorProps> = ({ meta, channel })
               {showNotation && beamGroups.map((g, gi) => {
                 const firstX = getBeatCoordinates(mIdx, g.startIdx, staff);
                 const lastX = getBeatCoordinates(mIdx, g.endIdx, staff);
-                const mainStemUp = getBeamStemUp(measure, g, staff);
-                const beamY = getBeamY(measure, g, mainStemUp, staff, staffY);
+                const mainStemUp = getBeamStemUp(mIdx, g, staff);
+                const beamY = getBeamY(mIdx, g, mainStemUp, staff, staffY);
                 const beamDir = mainStemUp ? 1 : -1;
                 const firstSX = mainStemUp ? firstX + 4 - 0.75 : firstX - 4 - 0.75;
                 const lastSX = mainStemUp ? lastX + 4 + 0.75 : lastX - 4 + 0.75;
@@ -2833,7 +2898,7 @@ export const TabSheetEditor: React.FC<TabSheetEditorProps> = ({ meta, channel })
               {showTab && beamGroups.map((g, gi) => {
                 const firstX = getBeatCoordinates(mIdx, g.startIdx, staff);
                 const lastX = getBeatCoordinates(mIdx, g.endIdx, staff);
-                const mainStemUp = getBeamStemUp(measure, g, staff);
+                const mainStemUp = getBeamStemUp(mIdx, g, staff);
                 const rhythmY = rowY + tabTop + ts + stringCount * 10 + 2 + 10;
                 const firstSX = mainStemUp ? firstX + 4 - 0.6 : firstX - 4 - 0.6;
                 const lastSX = mainStemUp ? lastX + 4 + 0.6 : lastX - 4 + 0.6;
@@ -3415,6 +3480,22 @@ export const TabSheetEditor: React.FC<TabSheetEditorProps> = ({ meta, channel })
                   ))}
                 </select>
               </div>
+              {/* Each staff's clef from this bar on: a grand staff's hands are set apart. */}
+              {showNotation && staves.map((staff, i) => (
+                <div className="control-group" key={`clef-${staff.top}`}>
+                  <span className="control-label">{grand ? `${i === 0 ? 'R.H.' : 'L.H.'} clef` : 'Clef'}</span>
+                  {(['treble', 'bass'] as const).map(clef => (
+                    <button
+                      key={clef}
+                      className={`btn ${staff.clefs[activeMeasureIndex] === clef ? 'btn-active' : ''}`}
+                      onClick={() => setClef(staff, clef)}
+                      aria-pressed={staff.clefs[activeMeasureIndex] === clef}
+                    >
+                      {CLEF_LABELS[clef]}
+                    </button>
+                  ))}
+                </div>
+              ))}
               <div className="control-group">
                 <span className="control-label">Repeat</span>
                 <button

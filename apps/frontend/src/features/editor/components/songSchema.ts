@@ -1,5 +1,5 @@
 import type {
-  Duration, InstrumentId, StaffDisplay, TabBeat, TabMeasure, TabNote, TabSong,
+  Clef, Duration, InstrumentId, StaffDisplay, TabBeat, TabMeasure, TabNote, TabSong,
   TabTrack, TimeSignature,
 } from './types';
 import {
@@ -43,6 +43,8 @@ const isDuration = (value: unknown): value is Duration =>
 
 const isValidBpm = (value: unknown): value is number =>
   typeof value === 'number' && Number.isFinite(value) && value >= MIN_BPM && value <= MAX_BPM;
+
+const isClef = (value: unknown): value is Clef => value === 'treble' || value === 'bass';
 
 const parseTimeSignature = (value: unknown): TimeSignature | null => {
   if (!isRecord(value)) return null;
@@ -141,6 +143,7 @@ const parseMeasure = (value: unknown, index: number, prefix: string = 'Measure '
   if (typeof times === 'number' && Number.isInteger(times) && times >= MIN_REPEAT && times <= MAX_REPEAT) {
     measure.repeatEnd = times;
   }
+  if (isClef(value.clef)) measure.clef = value.clef;
   return measure;
 };
 
@@ -212,6 +215,7 @@ const parseTrack = (value: unknown, index: number): TabTrack | string => {
   if (typeof key === 'number' && Number.isInteger(key) && key !== 0 && Math.abs(key) <= MAX_KEY_ACCIDENTALS) {
     track.keySignature = key;
   }
+  if (isClef(value.clef)) track.clef = value.clef;
   // Whether it names a usable partner is decided where it is read (`grandStaffOf`).
   if (typeof value.bassTrack === 'string') track.bassTrack = value.bassTrack;
 

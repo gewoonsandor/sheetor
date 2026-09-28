@@ -121,6 +121,18 @@ describe('parseSong', () => {
     expect([second.repeatStart, second.repeatEnd, third.repeatEnd]).toEqual([undefined, undefined, undefined]);
   });
 
+  it('keeps a track clef and bar clef changes, and drops a clef it does not know', () => {
+    const measures = [
+      { beats: [{ duration: '4' }], clef: 'treble' },
+      { beats: [{ duration: '4' }], clef: 'alto' },
+    ];
+    const result = parseSong({ ...valid(), tracks: [{ instrument: 'piano', clef: 'bass', measures }] });
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    const [track] = result.song.tracks;
+    expect([track.clef, ...track.measures.map(m => m.clef)]).toEqual(['bass', 'treble', undefined]);
+  });
+
   it('promotes a legacy single-track song into one guitar track', () => {
     const result = parseSong(valid());
     expect(result.ok).toBe(true);
