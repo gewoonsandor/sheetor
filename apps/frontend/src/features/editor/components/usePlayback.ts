@@ -17,6 +17,8 @@ export interface PlaybackSettings {
   speed: number;
   /** Only this track's beats drive the visual cursor. */
   activeTrackIndex: number;
+  /** A grand staff's other hand, whose playing beat the keyboard shows too. */
+  otherHandIndex: number | null;
 }
 
 // Each track walks its own beat list at its own rate; they stay locked because
@@ -32,6 +34,8 @@ interface TrackCursor {
 export interface PlaybackController {
   isPlaying: boolean;
   playbackBeat: BeatPosition | null;
+  /** The other hand's playing beat, while a grand staff plays. */
+  otherHandBeat: BeatPosition | null;
   start: (from: BeatPosition) => void;
   stop: () => void;
   playTone: (midi: number) => void;
@@ -46,6 +50,7 @@ export const usePlayback = (
 ): PlaybackController => {
   const [isPlaying, setIsPlaying] = useState<boolean>(false);
   const [playbackBeat, setPlaybackBeat] = useState<BeatPosition | null>(null);
+  const [otherHandBeat, setOtherHandBeat] = useState<BeatPosition | null>(null);
 
   const settingsRef = useRef<PlaybackSettings>(settings);
   const onCursorMoveRef = useRef<(position: BeatPosition) => void>(onCursorMove);
@@ -114,6 +119,7 @@ export const usePlayback = (
     }
     clearCursorTimers();
     setPlaybackBeat(null);
+    setOtherHandBeat(null);
   };
 
   const start = (from: BeatPosition): void => {
@@ -176,11 +182,18 @@ export const usePlayback = (
             playBeat(beat, track, schedTime, bpm);
           }
 
-          // Only the active track moves the on-screen cursor.
-          if (trackIndex === current.activeTrackIndex) {
+          // Only the active track moves the on-screen cursor; the other hand of a
+          // grand staff is followed too, so the keyboard can light both hands.
+          const followed = trackIndex === current.activeTrackIndex || trackIndex === current.otherHandIndex;
+          if (followed) {
             const position = cursor.position;
+            const active = trackIndex === current.activeTrackIndex;
             const timerId = window.setTimeout(() => {
               if (!isPlayingRef.current) return;
+              if (!active) {
+                setOtherHandBeat(position);
+                return;
+              }
               setPlaybackBeat(position);
               onCursorMoveRef.current(position);
             }, Math.max(0, (schedTime - ctx.currentTime) * 1000));
@@ -202,7 +215,11 @@ export const usePlayback = (
       });
 
       if (!anyRunning) {
-        stop();
+        // Everything is scheduled, up to the lookahead before it sounds: stop once the
+        // last beat has ended, not now, or its pending cursor moves are cancelled.
+        const end = Math.max(...cursorsRef.current.map(c => c.nextTime));
+        rafIdRef.current = null;
+        cursorTimersRef.current.push(window.setTimeout(stop, Math.max(0, (end - ctx.currentTime) * 1000)));
         return;
       }
 
@@ -244,5 +261,5 @@ export const usePlayback = (
     };
   }, []);
 
-  return { isPlaying, playbackBeat, start, stop, playTone };
+  return { isPlaying, playbackBeat, otherHandBeat, start, stop, playTone };
 };

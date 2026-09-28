@@ -46,6 +46,8 @@ import {
   STAFF_DISPLAYS,
   addBassStaff,
   grandStaffOf,
+  beatAt,
+  beatOnset,
 } from './songUtils';
 import type { CursorIds, CursorIndices } from './songUtils';
 import { getClip, setClip, subscribeClip } from '../clipboard';
@@ -111,6 +113,11 @@ interface Clef {
 const TREBLE: Clef = { top: 0, shift: 0 };
 const BASS: Clef = { top: GRAND_BASS_TOP, shift: 12 };
 
+/** Which hand of a grand staff: the treble staff's track is the right. */
+type Hand = 'right' | 'left';
+
+const HAND_LABELS: Record<Hand, string> = { right: 'Right hand', left: 'Left hand' };
+
 /** One drawn staff: its clef and the track whose bars it carries. */
 interface Staff extends Clef {
   track: number;
@@ -174,6 +181,18 @@ export const TabSheetEditor: React.FC<TabSheetEditorProps> = ({ meta, channel })
     ? [{ ...TREBLE, track: grand.treble }, { ...BASS, track: grand.bass }]
     : [{ ...TREBLE, track: activeTrackIndex }];
   const activeStaff = staves.find(s => s.track === activeTrackIndex) ?? staves[0];
+  // A grand staff is one part with two hands: two tracks underneath, so each hand
+  // keeps its own rhythm, but one chip, one name, one sound everywhere but the score.
+  const activeHand: Hand = grand?.bass === activeTrackIndex ? 'left' : 'right';
+  const otherHandIndex = grand ? (activeHand === 'left' ? grand.treble : grand.bass) : null;
+  /** The tracks a part is made of: the one, or both hands of a grand staff. */
+  const handsOf = (index: number): number[] => {
+    const pair = grandStaffOf(song.tracks, index);
+    return pair ? [pair.treble, pair.bass] : [index];
+  };
+  const hands = handsOf(activeTrackIndex);
+  /** The track the strip and the track settings show for the active part. */
+  const part = song.tracks[hands[0]] ?? activeTrack;
 
   const noteMidi = (note: TabNote, staff: Staff = activeStaff): number =>
     resolveNoteMidi(note, song.tracks[staff.track]) ?? NaN;
@@ -208,7 +227,7 @@ export const TabSheetEditor: React.FC<TabSheetEditorProps> = ({ meta, channel })
   const containerRef = useRef<HTMLDivElement>(null);
 
   const playback = usePlayback(
-    { song, volume, loop: loopPlayback, speed: playbackSpeed, activeTrackIndex },
+    { song, volume, loop: loopPlayback, speed: playbackSpeed, activeTrackIndex, otherHandIndex },
     (position) => {
       setActiveMeasureIndex(position.measureIndex);
       setActiveBeatIndex(position.beatIndex);
@@ -287,7 +306,9 @@ export const TabSheetEditor: React.FC<TabSheetEditorProps> = ({ meta, channel })
   const presets = tuningPresets(activeTrack.instrument);
   const presetName = Object.keys(presets).find(name => presets[name].join() === tuning.join()) ?? '';
 
+  /** Picks a part from the strip; picking the part you are on keeps your hand. */
   const selectTrack = (index: number) => {
+    if (handsOf(index).includes(activeTrackIndex)) return;
     setActiveTrackIndex(index);
     setShowNoteOptions(false);
     // Bar counts are shared, but beat counts are not, so re-clamp the cursor.
@@ -297,6 +318,28 @@ export const TabSheetEditor: React.FC<TabSheetEditorProps> = ({ meta, channel })
     if (activeBeatIndex >= beats) setActiveBeatIndex(Math.max(0, beats - 1));
     const slots = isFretted(target) ? (target.tuning?.length ?? 6) : 1;
     setActiveStringIndex(prev => Math.min(prev, slots - 1));
+  };
+
+  /** Moves input to the other hand, onto its beat sounding at the cursor's moment. */
+  const switchHand = (hand: Hand) => {
+    if (!grand || hand === activeHand) return;
+    const target = hand === 'left' ? grand.bass : grand.treble;
+    const bar = song.tracks[target].measures[activeMeasureIndex];
+    const here = measures[activeMeasureIndex];
+    const beat = bar && here ? beatAt(bar, beatOnset(here, activeBeatIndex)) : -1;
+    setActiveTrackIndex(target);
+    setActiveBeatIndex(beat === -1 ? Math.max(0, (bar?.beats.length ?? 1) - 1) : beat);
+    setAnchor(null);
+    setShowNoteOptions(false);
+  };
+
+  /** Changes every track of the part `index` belongs to: a grand staff mutes, solos and sounds as one. */
+  const updatePart = (index: number, patch: (track: TabTrack) => Partial<TabTrack>) => {
+    const members = handsOf(index);
+    editSong(prev => ({
+      ...prev,
+      tracks: prev.tracks.map((t, i) => (members.includes(i) ? { ...t, ...patch(t) } : t)),
+    }));
   };
 
   const addTrack = () => {
@@ -309,34 +352,39 @@ export const TabSheetEditor: React.FC<TabSheetEditorProps> = ({ meta, channel })
     setOpenBottomMenu('track');
   };
 
+  /** Copies the active part, both hands of a grand staff linked to each other, right after it. */
   const duplicateActiveTrack = () => {
+    const after = hands[hands.length - 1] + 1;
     editSong(prev => {
-      const source = prev.tracks[activeTrackIndex];
-      if (!source) return prev;
-      const copy: TabTrack = {
-        ...source,
-        id: createId(),
-        name: `${source.name} copy`,
-        soloed: false,
-        measures: source.measures.map(m => ({
-          ...m,
+      const copies = hands.map((i): TabTrack => {
+        const source = prev.tracks[i];
+        const copy: TabTrack = {
+          ...source,
           id: createId(),
-          beats: m.beats.map(b => ({ ...b, id: createId(), notes: b.notes.map(n => ({ ...n })) })),
-        })),
-      };
-      // The left hand stays with the original; the copy is a track of its own.
-      delete copy.bassTrack;
+          name: `${source.name} copy`,
+          soloed: false,
+          measures: source.measures.map(m => ({
+            ...m,
+            id: createId(),
+            beats: m.beats.map(b => ({ ...b, id: createId(), notes: b.notes.map(n => ({ ...n })) })),
+          })),
+        };
+        delete copy.bassTrack;
+        return copy;
+      });
+      if (copies.length === 2) copies[0].bassTrack = copies[1].id;
       const tracks = [...prev.tracks];
-      tracks.splice(activeTrackIndex + 1, 0, copy);
+      tracks.splice(after, 0, ...copies);
       return { ...prev, tracks };
     });
-    setActiveTrackIndex(prev => prev + 1);
+    setActiveTrackIndex(after);
   };
 
+  /** Deletes the active part, both hands of a grand staff together. */
   const deleteActiveTrack = () => {
-    if (song.tracks.length <= 1) return; // A song always has one track
-    editSong(prev => ({ ...prev, tracks: prev.tracks.filter((_, i) => i !== activeTrackIndex) }));
-    setActiveTrackIndex(prev => Math.max(0, prev - 1));
+    if (song.tracks.length <= hands.length) return; // A song always has one part
+    editSong(prev => ({ ...prev, tracks: prev.tracks.filter((_, i) => !hands.includes(i)) }));
+    setActiveTrackIndex(Math.max(0, hands[0] - 1));
     setActiveBeatIndex(0);
     setActiveStringIndex(0);
     setOpenBottomMenu(null);
@@ -1470,6 +1518,30 @@ export const TabSheetEditor: React.FC<TabSheetEditorProps> = ({ meta, channel })
       : [],
   );
 
+  // On a grand staff the keyboard shows both hands, each in its own colour: the
+  // other hand as it sounds at the cursor's moment, or as it plays.
+  const otherHandMidis = ((): Set<number> => {
+    if (otherHandIndex === null) return new Set();
+    const other = song.tracks[otherHandIndex];
+    const pb = playback.otherHandBeat;
+    const bar = other.measures[activeMeasureIndex];
+    const here = measures[activeMeasureIndex];
+    const beat = playback.isPlaying
+      ? (pb ? other.measures[pb.measureIndex]?.beats[pb.beatIndex] : undefined)
+      : (bar && here ? bar.beats[beatAt(bar, beatOnset(here, activeBeatIndex))] : undefined);
+    return new Set(beat?.notes.map(n => resolveNoteMidi(n, other) ?? NaN));
+  })();
+
+  /** A key's highlight: on a grand staff, the colour of the hand holding it. */
+  const keyClass = (midi: number): string => {
+    if (grand) {
+      const otherHand: Hand = activeHand === 'left' ? 'right' : 'left';
+      const hand = activeMidis.has(midi) ? activeHand : otherHandMidis.has(midi) ? otherHand : null;
+      return hand ? ` is-hand hand-${hand}` : '';
+    }
+    return `${activeMidis.has(midi) ? ' active' : ''}${playbackMidis.has(midi) ? ' playback-active' : ''}`;
+  };
+
   /**
    * The cursor slot a note occupies: its string on a fretted track, its rank
    * from the top of the chord on a pitched one.
@@ -1703,21 +1775,21 @@ export const TabSheetEditor: React.FC<TabSheetEditorProps> = ({ meta, channel })
         tracks={song.tracks}
         activeTrackIndex={activeTrackIndex}
         onSelect={selectTrack}
-        onToggleMute={(i) => updateTrack(i, { muted: !song.tracks[i].muted })}
-        onToggleSolo={(i) => updateTrack(i, { soloed: !song.tracks[i].soloed })}
+        onToggleMute={(i) => updatePart(i, () => ({ muted: !song.tracks[i].muted }))}
+        onToggleSolo={(i) => updatePart(i, () => ({ soloed: !song.tracks[i].soloed }))}
         onAddTrack={addTrack}
         onOpenSettings={() => setOpenBottomMenu(prev => (prev === 'track' ? null : 'track'))}
         settingsOpen={openBottomMenu === 'track'}
       >
         {openBottomMenu === 'track' && (
           <div className="bottom-popover track-popover">
-            <span className="popover-title">Track {activeTrackIndex + 1}</span>
+            <span className="popover-title">Track settings</span>
             <label className="compact-field wide-field">
               <span>Name</span>
               <input
                 className="control-input"
-                value={activeTrack.name}
-                onChange={(e) => updateActiveTrack({ name: e.target.value })}
+                value={part.name}
+                onChange={(e) => updateTrack(hands[0], { name: e.target.value })}
               />
             </label>
             <label className="compact-field wide-field">
@@ -1730,9 +1802,8 @@ export const TabSheetEditor: React.FC<TabSheetEditorProps> = ({ meta, channel })
                   // The instrument decides whether this is a TAB staff, so
                   // switching it can add or remove strings and rewrites the
                   // notes through their sounding pitch.
-                  const patch = retuneTrack(activeTrack, instrument);
-                  updateActiveTrack(patch);
-                  const slots = patch.tuning?.length ?? (trackKind(instrument) === 'fretted' ? stringCount : 1);
+                  updatePart(activeTrackIndex, track => retuneTrack(track, instrument));
+                  const slots = retuneTrack(activeTrack, instrument).tuning?.length ?? 1;
                   setActiveStringIndex(prev => Math.min(prev, Math.max(slots, 1) - 1));
                 }}
               >
@@ -1748,8 +1819,8 @@ export const TabSheetEditor: React.FC<TabSheetEditorProps> = ({ meta, channel })
                 min="0"
                 max="1"
                 step="0.05"
-                value={activeTrack.volume}
-                onChange={(e) => updateActiveTrack({ volume: parseFloat(e.target.value) })}
+                value={part.volume}
+                onChange={(e) => updatePart(activeTrackIndex, () => ({ volume: parseFloat(e.target.value) }))}
               />
             </label>
 
@@ -1809,7 +1880,7 @@ export const TabSheetEditor: React.FC<TabSheetEditorProps> = ({ meta, channel })
             <button
               className="btn btn-danger"
               onClick={deleteActiveTrack}
-              disabled={song.tracks.length <= 1}
+              disabled={song.tracks.length <= hands.length}
             >
               Delete track
             </button>
@@ -2823,6 +2894,22 @@ export const TabSheetEditor: React.FC<TabSheetEditorProps> = ({ meta, channel })
               </svg>
               Keyboard
             </div>
+            {grand && (
+              // Which hand the keys, the keyboard and MIDI write to, in the colours the keys light up in.
+              <div className="control-group hand-switch" role="group" aria-label="Hand">
+                {(['right', 'left'] as const).map(hand => (
+                  <button
+                    key={hand}
+                    className={`btn hand-${hand} ${activeHand === hand ? 'btn-active' : ''}`}
+                    onClick={() => switchHand(hand)}
+                    aria-pressed={activeHand === hand}
+                  >
+                    <span className="hand-dot" aria-hidden="true" />
+                    {HAND_LABELS[hand]}
+                  </button>
+                ))}
+              </div>
+            )}
             <div className="sheet-controls">
               <div className="duration-selector">{durationButtons}{dotButton}</div>
               <button
@@ -2848,7 +2935,7 @@ export const TabSheetEditor: React.FC<TabSheetEditorProps> = ({ meta, channel })
               {whiteKeyMidis.map((midi) => (
                 <button
                   key={`wk-${midi}`}
-                  className={`piano-key white ${activeMidis.has(midi) ? 'active' : ''} ${playbackMidis.has(midi) ? 'playback-active' : ''}`}
+                  className={`piano-key white${keyClass(midi)}`}
                   onClick={() => toggleNoteAtMidi(midi)}
                   title={midiToNoteOctave(midi)}
                 >
@@ -2859,7 +2946,7 @@ export const TabSheetEditor: React.FC<TabSheetEditorProps> = ({ meta, channel })
             {blackKeys.map(({ midi, leftPct }) => (
               <button
                 key={`bk-${midi}`}
-                className={`piano-key black ${activeMidis.has(midi) ? 'active' : ''} ${playbackMidis.has(midi) ? 'playback-active' : ''}`}
+                className={`piano-key black${keyClass(midi)}`}
                 style={{
                   left: `${leftPct}%`,
                   width: `${blackKeyWidthPct}%`,
@@ -2872,7 +2959,9 @@ export const TabSheetEditor: React.FC<TabSheetEditorProps> = ({ meta, channel })
           </div>
 
           <span className="fretboard-hint">
-            Click a key to add or remove that pitch on the selected beat
+            {grand
+              ? `Click a key to add or remove that pitch on the ${HAND_LABELS[activeHand].toLowerCase()}'s selected beat`
+              : 'Click a key to add or remove that pitch on the selected beat'}
           </span>
         </div>
       )}
@@ -3394,7 +3483,7 @@ export const TabSheetEditor: React.FC<TabSheetEditorProps> = ({ meta, channel })
             </button>
             {openBottomMenu === 'view' && (
               <div className="bottom-popover">
-                <span className="popover-title">Staff — {activeTrack.name}</span>
+                <span className="popover-title">Staff — {part.name}</span>
                 <div className="control-group">
                   {STAFF_DISPLAYS[trackKind(activeTrack.instrument)].map(mode => (
                     <button

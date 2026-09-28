@@ -14,8 +14,8 @@ and you can see where each person is working.
 - **Notation and TAB together.** Each track picks its instrument (guitar, bass, piano, strings,
   synths and more) and shows notes, TAB or both. Fretted tracks follow their tuning, and
   switching an instrument rewrites every note by its sounding pitch. Piano and other pitched
-  tracks can use a grand staff: a left-hand track on the bass clef under the right hand, each
-  with its own rhythm, lined up in time.
+  tracks can use a grand staff: one part with a right and a left hand on treble and bass clef,
+  each hand with its own rhythm, lined up in time, and lit in its own colour on the keyboard.
 - **Plays in the browser.** Tempo and metre changes per bar, repeat signs with any number of
   plays, loop, speed control, a plucked-string synth for guitars, and an interactive fretboard or
   piano for entering notes.

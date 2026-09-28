@@ -1109,6 +1109,30 @@ input[type="range"] {
   background: linear-gradient(180deg, var(--ok) 0%, rgb(var(--ok-rgb) / 0.55) 100%);
 }
 
+/* A grand staff lights each hand's keys in that hand's colour. */
+.hand-right { --hand-rgb: var(--instr-hand-right-rgb); }
+.hand-left { --hand-rgb: var(--instr-hand-left-rgb); }
+
+.piano-key.white.is-hand {
+  background: linear-gradient(180deg, rgb(var(--hand-rgb) / 0.72) 0%, rgb(var(--hand-rgb)) 100%);
+  color: var(--instr-key-black-bottom);
+}
+
+.piano-key.black.is-hand {
+  background: linear-gradient(180deg, rgb(var(--hand-rgb)) 0%, rgb(var(--hand-rgb) / 0.55) 100%);
+}
+
+.hand-switch .btn {
+  gap: var(--sp-2);
+}
+
+.hand-dot {
+  width: var(--sp-2);
+  height: var(--sp-2);
+  border-radius: 50%;
+  background: rgb(var(--hand-rgb));
+}
+
 .piano-key-label {
   pointer-events: none;
   font-variant-numeric: tabular-nums;

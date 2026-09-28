@@ -17,19 +17,18 @@ interface TrackStripProps {
   children?: React.ReactNode;
 }
 
-const staffLabel = (tracks: TabTrack[], index: number): string => {
-  const grand = grandStaffOf(tracks, index);
-  if (grand) return grand.treble === index ? 'grand staff, treble' : 'grand staff, bass';
-  const track = tracks[index];
+const staffLabel = (track: TabTrack, grand: boolean): string => {
+  if (grand) return 'grand staff';
   if (track.display === 'tab') return 'tab';
   if (track.display === 'both') return 'notes + tab';
   return 'notes';
 };
 
 /**
- * The score shows one track at a time, or both hands of a grand staff; this strip is how you choose which, and
- * where each track's mute/solo live. Presentational only — every change is
- * handed back to the editor.
+ * The score shows one part at a time; this strip is how you choose which, and
+ * where each part's mute/solo live. A grand staff is one part: its left hand's
+ * track has no chip of its own. Presentational only — every change is handed
+ * back to the editor, which applies it to both hands.
  */
 export const TrackStrip: React.FC<TrackStripProps> = ({
   tracks, activeTrackIndex, onSelect, onToggleMute, onToggleSolo,
@@ -41,7 +40,9 @@ export const TrackStrip: React.FC<TrackStripProps> = ({
     <div className="sheetor-tracks">
       <div className="track-list" role="tablist" aria-label="Tracks">
         {tracks.map((track, index) => {
-          const isActive = index === activeTrackIndex;
+          const grand = grandStaffOf(tracks, index);
+          if (grand?.bass === index) return null;
+          const isActive = index === activeTrackIndex || grand?.bass === activeTrackIndex;
           // A track that is not soloed while another one is reads as silenced.
           const dimmed = track.muted || (anySoloed && !track.soloed);
           return (
@@ -59,7 +60,7 @@ export const TrackStrip: React.FC<TrackStripProps> = ({
               >
                 <span className="track-chip-name">{track.name}</span>
                 <span className="track-chip-meta">
-                  {INSTRUMENTS[track.instrument].label} · {staffLabel(tracks, index)}
+                  {INSTRUMENTS[track.instrument].label} · {staffLabel(track, grand !== null)}
                 </span>
               </button>
               <div className="track-chip-toggles">

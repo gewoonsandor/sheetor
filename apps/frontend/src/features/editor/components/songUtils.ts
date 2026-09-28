@@ -568,6 +568,16 @@ export const beatSpan = (m: number, beatCount: number, from: BeatPosition, to: B
   m === to.measureIndex ? to.beatIndex : beatCount - 1,
 ];
 
+/** Where a beat starts in its bar, in quarter notes. */
+export const beatOnset = (measure: TabMeasure, beatIndex: number): number =>
+  measure.beats.slice(0, beatIndex).reduce((at, b) => at + getDurationVal(b.duration, b.dot), 0);
+
+/** The beat of a bar still sounding `time` quarter notes in, or -1 once the bar is over. */
+export const beatAt = (measure: TabMeasure, time: number): number => {
+  let end = 0;
+  return measure.beats.findIndex(b => (end += getDurationVal(b.duration, b.dot)) > time);
+};
+
 const coversWholeBars = (measures: TabMeasure[], from: BeatPosition, to: BeatPosition): boolean =>
   from.beatIndex === 0 && to.beatIndex === (measures[to.measureIndex]?.beats.length ?? 0) - 1;
 

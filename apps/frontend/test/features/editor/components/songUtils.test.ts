@@ -32,6 +32,8 @@ import {
   staffStepToSoundingMidi,
   addBassStaff,
   grandStaffOf,
+  beatAt,
+  beatOnset,
 } from '../../../../src/features/editor/components/songUtils';
 
 const beat = (duration: TabBeat['duration'], notes: TabBeat['notes'] = [{ stringIndex: 0, fret: 3 }]): TabBeat => ({
@@ -596,5 +598,14 @@ describe('grand staff', () => {
     const tracks = [{ ...piano([]), bassTrack: lower.id }, { ...piano([]), bassTrack: lower.id }, lower];
     expect(grandStaffOf(tracks, 1)).toBeNull();
     expect(grandStaffOf(tracks, 2)).toEqual({ treble: 0, bass: 2 });
+  });
+});
+
+describe('beat timing', () => {
+  it('finds the beat sounding at a moment, the next one exactly at its onset', () => {
+    const bar = measure([{ ...beat('4'), dot: true }, beat('8'), beat('2')]);
+    expect(beatOnset(bar, 2)).toBe(2);
+    expect([0, 1.4, 1.5, 1.9, 2, 3.9].map(t => beatAt(bar, t))).toEqual([0, 0, 1, 1, 2, 2]);
+    expect(beatAt(bar, 4)).toBe(-1);
   });
 });
