@@ -117,7 +117,8 @@ export const CLEF_CHANGE_ROOM = 24;
 /**
  * `widths` is each bar's content width (`alignBars`); tempo, metre and repeat marks come from the
  * conductor. `keyRoom` is what the key signature adds to the clef area at the start of every row;
- * `clefChanges` marks the bars where some staff changes clef, which a row start already shows.
+ * `clefChanges` marks the bars where some staff changes clef, which reprint the clefs and the key
+ * signature there, unless the bar opens a row and already shows them.
  */
 export const computeMeasureLayouts = (
   widths: number[],
@@ -131,7 +132,7 @@ export const computeMeasureLayouts = (
       contentWidth,
       hasTimingChange: !!(marks?.bpm || marks?.timeSignature),
       repeatRoom: marks?.repeatStart ? REPEAT_PADDING : 0,
-      clefRoom: clefChanges[i] ? CLEF_CHANGE_ROOM : 0,
+      clefRoom: clefChanges[i] ? CLEF_CHANGE_ROOM + keyRoom : 0,
     };
   });
 

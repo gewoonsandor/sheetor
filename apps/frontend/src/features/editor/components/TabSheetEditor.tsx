@@ -1427,6 +1427,14 @@ export const TabSheetEditor: React.FC<TabSheetEditorProps> = ({ meta, channel })
     return (maxY === -Infinity ? 0 : maxY) + 30;
   };
 
+  /** A staff's key signature in its clef at bar `mIdx`, the first accidental at `x` from the row's origin. */
+  const keySignatureGlyphs = (staff: Staff, mIdx: number, x: number): React.ReactNode[] =>
+    keySignatureSteps(keyOf(staff)).map((step, i) => (
+      <React.Fragment key={`key-${staff.top}-${i}`}>
+        {accidentalGlyph(Math.sign(keyOf(staff)), x + i * KEY_SPACING, staff.top + Y_of_step(step + clefAt(staff, mIdx).keyOffset))}
+      </React.Fragment>
+    ));
+
   // Keeps the bar being edited or played on screen: below the sticky app header and
   // above the panels floating over the bottom of the page. A bar that leaves that
   // band comes back by the shortest scroll while editing; while playing it goes to
@@ -2024,9 +2032,9 @@ export const TabSheetEditor: React.FC<TabSheetEditorProps> = ({ meta, channel })
             const effectiveBpm = getEffectiveBpm(song, mIdx);
             const marks = conductorMeasures[mIdx];
             const showTimingChange = mIdx === 0 || typeof marks?.bpm === 'number' || !!marks?.timeSignature;
-            // A clef change partway through a row comes first, so a metre change moves right of it.
+            // A clef change partway through a row comes first, then the key, so a metre change moves right of both.
             const clefChange = clefChanges[mIdx] && measureLayouts[mIdx]?.x !== 0;
-            const timeSignatureX = measureX + 12 + (clefChange ? CLEF_CHANGE_ROOM : 0);
+            const timeSignatureX = measureX + 12 + (clefChange ? CLEF_CHANGE_ROOM + keyRoom : 0);
             // A ‖: stands in for a plain bar line, but follows a clef or metre that opens the bar.
             const repeatStartX = measureLayouts[mIdx]?.x === 0 || showTimingChange || clefChange
               ? measureX + getMeasurePadding(mIdx) - REPEAT_PADDING - 6
@@ -2198,11 +2206,7 @@ export const TabSheetEditor: React.FC<TabSheetEditorProps> = ({ meta, channel })
                     {grandStaff && <path d={GRAND_BRACE_PATH} className="glyph-ink" />}
 
                     {/* Key signature, on every staff of the row */}
-                    {showNotation && staves.flatMap(staff => keySignatureSteps(keyOf(staff)).map((step, i) => (
-                      <React.Fragment key={`key-${staff.top}-${i}`}>
-                        {accidentalGlyph(Math.sign(keyOf(staff)), KEY_X + i * KEY_SPACING, staff.top + Y_of_step(step + clefAt(staff, mIdx).keyOffset))}
-                      </React.Fragment>
-                    )))}
+                    {showNotation && staves.flatMap(staff => keySignatureGlyphs(staff, mIdx, KEY_X))}
 
                     {/* Stacked TAB text */}
                     {showTab && (
@@ -2257,20 +2261,24 @@ export const TabSheetEditor: React.FC<TabSheetEditorProps> = ({ meta, channel })
                 )}
 
                 {/* A clef change partway through a row reprints every staff's clef, the unchanged
-                    hand's too, so both are readable at a glance: smaller, kept on the line each names. */}
-                {clefChange && staves.map(staff => {
-                  const clef = clefAt(staff, mIdx);
-                  return (
-                    <path
-                      key={`clef-change-${staff.top}`}
-                      d={clef.path}
-                      fillRule={clef.fillRule}
-                      transform={`translate(${measureX + 3}, ${rowY + staff.top + clef.line}) scale(0.7) translate(-12, ${-clef.line})`}
-                      className="glyph-ink"
-                      pointerEvents="none"
-                    />
-                  );
-                })}
+                    hand's too, and the key after it: smaller clefs, kept on the line each names. */}
+                {clefChange && (
+                  <g transform={`translate(${measureX}, ${rowY})`} pointerEvents="none">
+                    {staves.map(staff => {
+                      const clef = clefAt(staff, mIdx);
+                      return (
+                        <path
+                          key={`clef-change-${staff.top}`}
+                          d={clef.path}
+                          fillRule={clef.fillRule}
+                          transform={`translate(3, ${staff.top + clef.line}) scale(0.7) translate(-12, ${-clef.line})`}
+                          className="glyph-ink"
+                        />
+                      );
+                    })}
+                    {staves.flatMap(staff => keySignatureGlyphs(staff, mIdx, CLEF_CHANGE_ROOM + 6))}
+                  </g>
+                )}
 
                 {/* Big Time Signature for timing changes (non-first-of-row measures) */}
                 {showTimingChange && mIdx > 0 && measureLayouts[mIdx]?.x !== 0 && (
