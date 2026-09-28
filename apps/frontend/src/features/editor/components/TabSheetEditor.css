@@ -526,11 +526,11 @@ input[type="range"] {
 }
 
 .technique-pm {
-  fill: var(--warn);
+  fill: var(--accent);
 }
 
 .technique-pm-line {
-  stroke: var(--warn);
+  stroke: var(--accent);
 }
 
 .technique-ring {

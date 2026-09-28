@@ -2736,7 +2736,7 @@ export const TabSheetEditor: React.FC<TabSheetEditorProps> = ({ meta, channel })
                           {displayText}
                         </text>
                         {(n.slur || n.legatoSlide) && (() => {
-                          let prevPos: { x: number; y: number } | null = null;
+                          let prevPos: { x: number; y: number; fret: number } | null = null;
                           for (let i = bIdx - 1; i >= 0; i--) {
                             const prevBeat = measure.beats[i];
                             const prevNote = prevBeat?.notes.find(nn => isFrettedNote(nn) && nn.stringIndex === n.stringIndex);
@@ -2744,6 +2744,7 @@ export const TabSheetEditor: React.FC<TabSheetEditorProps> = ({ meta, channel })
                               prevPos = {
                                 x: getBeatCoordinates(mIdx, i, staff),
                                 y: getRowY(mIdx) + tabTop + ts + n.stringIndex * 10,
+                                fret: isFrettedNote(prevNote) ? prevNote.fret : n.fret,
                               };
                               break;
                             }
@@ -2763,12 +2764,14 @@ export const TabSheetEditor: React.FC<TabSheetEditorProps> = ({ meta, channel })
                             );
                           }
                           if (n.legatoSlide) {
+                            // Slanted the way the hand moves: up the neck climbs, down it falls.
+                            const rise = n.fret >= prevPos.fret ? 3 : -3;
                             return (
                               <line
                                 x1={prevPos.x + 7}
-                                y1={prevPos.y}
+                                y1={prevPos.y + rise}
                                 x2={beatX - 7}
-                                y2={stringY}
+                                y2={stringY - rise}
                                 className="slur-line"
                                 strokeWidth="1"
                                 style={{ pointerEvents: 'none' }}
