@@ -616,20 +616,25 @@ input[type="range"] {
 
 /* ----------------------------------------------------------------- Fretboard */
 
-/* With a short song there is spare height below the score; the tool panel
-   takes the slack so the page still reaches the fold. */
+/* The input panel floats over the score, just above the command bar, whenever
+   there is more score below it, so it never has to be scrolled to. At the end of
+   the song it settles into its own place after the score. */
 .sheetor-fretboard {
+  position: sticky;
+  bottom: calc(var(--cmdbar-h) + var(--sp-2));
+  z-index: var(--z-bar);
   margin-top: auto;
   display: flex;
   flex-direction: column;
   gap: var(--sp-3);
+  max-height: 45vh;
   padding: var(--sp-4);
   background: var(--sheen), var(--surface-1);
-  border: 1px solid var(--border);
+  border: 1px solid var(--border-strong);
   border-radius: var(--r-lg);
-  box-shadow: inset 0 1px 0 var(--edge-hi), var(--shadow-1);
-  overflow-x: auto;
-  overscroll-behavior-x: contain;
+  box-shadow: inset 0 1px 0 var(--edge-hi), var(--shadow-3);
+  overflow: auto;
+  overscroll-behavior: contain;
 }
 
 .fretboard-header {
@@ -637,6 +642,37 @@ input[type="range"] {
   justify-content: space-between;
   align-items: center;
   gap: var(--sp-3);
+}
+
+/* Whatever follows the title keeps to the right, beside the hide button. */
+.fretboard-header > .fretboard-title + * {
+  margin-left: auto;
+}
+
+/* Only an icon, and no frame until it is pointed at. */
+.panel-hide {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: var(--ctl-h-sm);
+  height: var(--ctl-h-sm);
+  padding: 0;
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: var(--r-sm);
+  color: var(--text-faint);
+  cursor: pointer;
+  transition: background var(--t) var(--ease), color var(--t) var(--ease);
+}
+
+.panel-hide:hover {
+  background: var(--surface-3);
+  color: var(--text);
+}
+
+.panel-hide svg {
+  width: 16px;
+  height: 16px;
 }
 
 .fretboard-title {

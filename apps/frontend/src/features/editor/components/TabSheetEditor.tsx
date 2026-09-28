@@ -1234,25 +1234,33 @@ export const TabSheetEditor: React.FC<TabSheetEditorProps> = ({ meta, channel })
     return (maxY === -Infinity ? 0 : maxY) + 30;
   };
 
-  // Auto-scroll during playback to keep playhead visible
+  // Keeps the bar being edited or played on screen: below the sticky app header and
+  // above the panels floating over the bottom of the page. A bar that leaves that
+  // band comes back by the shortest scroll while editing; while playing it goes to
+  // the top of the band, so the music that follows it is on screen too.
   useEffect(() => {
-    const beat = playback.playbackBeat;
-    if (!beat || !containerRef.current) return;
-    const mIdx = beat.measureIndex;
-    const beatX = getBeatCoordinates(mIdx, beat.beatIndex);
-    const rowY = getRowY(mIdx);
-    const container = containerRef.current;
-    const svg = container.querySelector('svg');
-    if (!svg) return;
-    const scale = container.clientWidth / MAX_ROW_WIDTH;
-    const scrollTargetX = beatX * scale - container.clientWidth / 3;
-    const scrollTargetY = rowY * scale - container.clientHeight / 3;
-    container.scrollTo({
-      left: Math.max(0, scrollTargetX),
-      top: Math.max(0, scrollTargetY),
-      behavior: 'smooth',
-    });
-  }, [playback.playbackBeat, measureLayouts]);
+    const root = containerRef.current;
+    const marker = root?.querySelector(playback.isPlaying ? '.playback-line' : '.selection-ring');
+    // The panel comes before the command bar in the page, so this finds the panel
+    // while it shows and the command bar once it is hidden.
+    const cover = root?.querySelector('.sheetor-fretboard, .bottom-command-bar');
+    if (!root || !marker || !cover) return;
+    const box = marker.getBoundingClientRect();
+    // Headroom above the staff keeps the bar number and tempo mark in sight.
+    const top = parseFloat(getComputedStyle(root).getPropertyValue('--header-h')) + 40;
+    const bottom = cover.getBoundingClientRect().top - 16;
+    if (box.top < top || (playback.isPlaying && box.bottom > bottom)) {
+      window.scrollBy({ top: box.top - top, behavior: 'smooth' });
+    } else if (box.bottom > bottom) {
+      window.scrollBy({ top: box.bottom - bottom, behavior: 'smooth' });
+    }
+    // A narrow window scrolls the score sideways instead.
+    const canvas = root.querySelector('.sheetor-canvas-container');
+    const view = canvas?.getBoundingClientRect();
+    if (canvas && view && (box.left < view.left || box.right > view.right)) {
+      canvas.scrollBy({ left: box.left - view.left - view.width / 3, behavior: 'smooth' });
+    }
+  }, [activeMeasureIndex, activeBeatIndex, activeTrackIndex, playback.playbackBeat, playback.isPlaying, showFretboard, showTab, showNotation]);
 
   // A click on the staff writes the pitch under the pointer into the beat that was
   // clicked. The cursor moves there too, but only on the next render, so the write
@@ -1517,6 +1525,20 @@ export const TabSheetEditor: React.FC<TabSheetEditorProps> = ({ meta, channel })
         <line x1="15" y1="14" x2="15" y2="4" stroke="currentColor" strokeWidth="2.2" />
       </svg>
       <span className="duration-label">.</span>
+    </button>
+  );
+
+  // The View menu's Fretboard/Keyboard toggle brings the panel back.
+  const hidePanelButton = (
+    <button
+      className="panel-hide"
+      onClick={() => setShowFretboard(false)}
+      title="Hide (View menu shows it again)"
+      aria-label={`Hide the ${showTab ? 'fretboard' : 'keyboard'}`}
+    >
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <path d="m6 9 6 6 6-6" />
+      </svg>
     </button>
   );
 
@@ -2751,6 +2773,7 @@ export const TabSheetEditor: React.FC<TabSheetEditorProps> = ({ meta, channel })
                 Clear
               </button>
             </div>
+            {hidePanelButton}
           </div>
 
           <div className="piano-keyboard">
@@ -2801,6 +2824,7 @@ export const TabSheetEditor: React.FC<TabSheetEditorProps> = ({ meta, channel })
             <span className="fretboard-hint">
               Click a fret to place a note on the selected beat
             </span>
+            {hidePanelButton}
           </div>
 
           <div className="fretboard-neck-container" style={{ height: `${fretboardNeckHeight}px` }}>
@@ -3324,7 +3348,7 @@ export const TabSheetEditor: React.FC<TabSheetEditorProps> = ({ meta, channel })
                   className={`btn ${showFretboard ? 'btn-active' : ''}`}
                   onClick={() => setShowFretboard(prev => !prev)}
                 >
-                  {isFrettedTrack ? 'Fretboard' : 'Keyboard'}
+                  {showTab ? 'Fretboard' : 'Keyboard'}
                 </button>
                 {role === 'viewer' ? (
                   <button className="btn btn-active" disabled>

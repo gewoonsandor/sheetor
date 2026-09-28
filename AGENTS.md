@@ -130,8 +130,6 @@ curl -s localhost:4000/api/v1/system/health     # smoke
 docker build -t sheetor .                       # the release image (needs a current .sqlx/)
 ```
 
-`npm run lint` currently emits one pre-existing `react-hooks/exhaustive-deps` warning (the auto-scroll effect) and exits 0.
-
 ## Code Conventions & Common Patterns
 
 ### Backend (Rust)
@@ -306,6 +304,8 @@ Verify a change by:
 - Dev has two ports and only one of them is the app: `:5173` (Vite, with HMR and the API proxy) is the one to open. `:4000` in dev answers the API but serves whatever stale `dist` is on disk.
 - `TabSheetEditor.tsx` is monolithic; prefer extracting pure helpers into `layout.ts`/`songUtils.ts` over growing it.
 - The command bar is the **only** control surface; earlier duplicates (`.sheetor-toolbar`, `.sheetor-controls`, `.sheetor-footer`) were deleted, so a command is added in exactly one place. Duration-glyph SVGs are still written out per duration in the note-options panel.
+- The fretboard/keyboard panel (`.sheetor-fretboard`) is `position: sticky` to just above the command bar, so over a long score it floats at the bottom of the window and at the end it settles after the score. Sticky only works while no ancestor between it and the window scrolls or clips; give one `overflow` and the panel scrolls away with the page again. Its chevron (`.panel-hide`) sets `showFretboard` false; the View menu brings it back.
+- One effect keeps the edited or played bar on screen: it measures `.selection-ring` (or `.playback-line` while playing) against the band between `--header-h` and the top of whatever covers the page bottom (the panel, else the command bar), scrolls the **window** by the shortest distance while editing, and turns the page so the playing row sits at the top. The page scrolls, not the score card, which is why the old `container.scrollTo` did nothing.
 - The score is not read-only: a `♩=` tempo mark swaps for an HTML `<input>` inside a `<foreignObject>` on click. Its x/y are SVG user units, so the box follows the mark without mapping screen pixels back through the `viewBox` — reuse that trick for any future in-score editor rather than overlaying an absolutely-positioned div. `.music-svg` sets `user-select: none`, so such an input needs `user-select: text` or its text cannot be selected. Editor shortcuts stay quiet because `handleKeyDown` returns early on `target.tagName === 'INPUT'`.
 - Narrow number fields must not use the native spinner: `.control-input` is 64px at its widest and the reserved arrow column pushes the centred digits off-centre. `.control-input[type="number"]` kills it globally — that rule lives in `TabSheetEditor.css` but reaches the settings page, which shares the class. The transport's tempo field is `type="text"` + `inputMode="numeric"` instead, because a `type="number"` input reports `value === ''` for a partial entry, which would break its text draft.
 - Playback settings are live via `settingsRef` in `usePlayback`; if you add a setting, thread it through `PlaybackSettings` or it will silently stay frozen at `start()` time.

@@ -21,7 +21,7 @@
   display: flex;
   align-items: center;
   gap: var(--sp-3);
-  height: 56px;
+  height: var(--header-h);
   padding: 0 max(var(--sp-4), calc((100% - var(--page-max)) / 2 + var(--sp-5)));
   background: var(--bar-surface);
   backdrop-filter: blur(18px) saturate(1.4);
