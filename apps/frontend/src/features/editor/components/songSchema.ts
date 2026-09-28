@@ -4,7 +4,8 @@ import type {
 } from './types';
 import {
   DEFAULT_TRANSPOSE, DURATIONS, MAX_BPM, MAX_FRET, MAX_REPEAT, MAX_STRINGS, MIN_BPM, MIN_REPEAT, TECHNIQUE_KEYS,
-  createId, createTrack, defaultTuning, normalizeTrackLengths, requiredStringCount, resizeTuning, trackKind,
+  createId, createTrack, defaultTuning, normalizeTrackLengths, pruneNotesToStringCount, requiredStringCount,
+  resizeTuning, trackKind,
 } from './songUtils';
 
 export type ParseSongResult =
@@ -190,7 +191,9 @@ const parseTrack = (value: unknown, index: number): TabTrack | string => {
     volume: typeof value.volume === 'number' && value.volume >= 0 && value.volume <= 1
       ? value.volume
       : 1,
-    measures,
+    // A pitched staff has no strings, so a fret written onto one has no pitch; older
+    // builds let number keys do that, and the note rendered as NaN.
+    measures: kind === 'pitched' ? pruneNotesToStringCount(measures, 0) : measures,
   };
 
   if (kind === 'fretted') {

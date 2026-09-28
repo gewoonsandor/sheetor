@@ -200,6 +200,24 @@ describe('parseSong', () => {
     expect(result.song.tracks[0].display).toBe('notation');
   });
 
+  it('drops a fret written onto a pitched track, which has no pitch, and keeps real notes', () => {
+    const result = parseSong({
+      title: 'T', bpm: 100, timeSignature: { numerator: 4, denominator: 4 },
+      tracks: [{
+        instrument: 'piano',
+        measures: [{ beats: [
+          { duration: '4', notes: [{ stringIndex: 0, fret: 5 }] },
+          { duration: '4', notes: [{ stringIndex: 0, fret: 5 }, { midi: 60 }] },
+        ] }],
+      }],
+    });
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    const [lone, mixed] = result.song.tracks[0].measures[0].beats;
+    expect(lone).toMatchObject({ notes: [], isRest: true });
+    expect(mixed.notes).toEqual([{ midi: 60 }]);
+  });
+
   it('rejects an empty track list', () => {
     expectError({
       title: 'T', bpm: 100, timeSignature: { numerator: 4, denominator: 4 }, tracks: [],

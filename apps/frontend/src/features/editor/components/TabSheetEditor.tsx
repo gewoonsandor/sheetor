@@ -4,7 +4,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import './TabSheetEditor.css';
 
 import type {
-  Duration, FrettedNote, InstrumentId, NoteTechniques, PitchedNote, StaffDisplay,
+  BeatPosition, Duration, FrettedNote, InstrumentId, NoteTechniques, PitchedNote, StaffDisplay,
   TabNote, TabBeat, TabMeasure, TabSong, TabTrack, BeamGroup, MLayout,
 } from './types';
 import {
@@ -399,13 +399,17 @@ export const TabSheetEditor: React.FC<TabSheetEditorProps> = ({ meta, channel })
     return next;
   });
 
-  const updateActiveBeatNotes = (updateFn: (notes: TabNote[]) => TabNote[]) => {
+  /** Rewrites one beat's notes; the cursor's beat unless a click named another. */
+  const updateActiveBeatNotes = (
+    updateFn: (notes: TabNote[]) => TabNote[],
+    at: BeatPosition = { measureIndex: activeMeasureIndex, beatIndex: activeBeatIndex },
+  ) => {
     setMeasures(prev => prev.map((m, mIdx) => {
-      if (mIdx !== activeMeasureIndex) return m;
+      if (mIdx !== at.measureIndex) return m;
       return {
         ...m,
         beats: m.beats.map((b, bIdx) => {
-          if (bIdx !== activeBeatIndex) return b;
+          if (bIdx !== at.beatIndex) return b;
           const newNotes = updateFn(b.notes);
           return { ...b, notes: newNotes, isRest: newNotes.length === 0 };
         })
@@ -413,7 +417,9 @@ export const TabSheetEditor: React.FC<TabSheetEditorProps> = ({ meta, channel })
     }));
   };
 
-  const setFretForActiveNote = (stringIndex: number, fret: number) => {
+  const setFretForActiveNote = (stringIndex: number, fret: number, at?: BeatPosition) => {
+    // A pitched staff has no strings; a fret written to one has no pitch at all.
+    if (!isFrettedTrack) return;
     updateActiveBeatNotes(currentNotes => {
       const onString = (n: TabNote) => isFrettedNote(n) && n.stringIndex === stringIndex;
       const existing = currentNotes.find(onString);
@@ -425,19 +431,19 @@ export const TabSheetEditor: React.FC<TabSheetEditorProps> = ({ meta, channel })
         playback.playTone(midi);
       }
       return filtered;
-    });
+    }, at);
     // Set active string
     setActiveStringIndex(stringIndex);
   };
 
   /** Adds or replaces an absolute pitch on the active beat (pitched tracks). */
-  const setPitchForActiveNote = (midi: number) => {
+  const setPitchForActiveNote = (midi: number, at?: BeatPosition) => {
     updateActiveBeatNotes(currentNotes => {
       const existing = currentNotes.find(n => !isFrettedNote(n) && n.midi === midi);
       if (existing) return currentNotes;
       playback.playTone(midi);
       return [...currentNotes, { midi }];
-    });
+    }, at);
   };
 
   // Pick the most comfortable string/fret for a pitch: prefer frets near the
@@ -1248,22 +1254,23 @@ export const TabSheetEditor: React.FC<TabSheetEditorProps> = ({ meta, channel })
     });
   }, [playback.playbackBeat, measureLayouts]);
 
-  // Map standard notation click to pitch & tab note
+  // A click on the staff writes the pitch under the pointer into the beat that was
+  // clicked. The cursor moves there too, but only on the next render, so the write
+  // names the beat itself.
   const handleStandardStaffClick = (mIdx: number, beatId: string, clickY: number) => {
-    const step = Math.round((60 - clickY) / 5);
-
-    // Clamp to what the current tuning can actually voice, so a click above or
-    // below the reachable range still lands on the nearest playable pitch.
+    const at = { measureIndex: mIdx, beatIndex: measures[mIdx].beats.findIndex(b => b.id === beatId) };
+    const clicked = staffStepToSoundingMidi(Math.round((60 - clickY) / 5), transpose);
+    moveCursorTo(at.measureIndex, at.beatIndex, false);
+    if (!isFrettedTrack) {
+      setPitchForActiveNote(clicked, at);
+      return;
+    }
+    // Clamp to what the tuning can voice, so a click above or below the reachable
+    // range still lands on the nearest playable pitch.
     const lowestMidi = Math.min(...tuning);
     const highestMidi = Math.max(...tuning) + 22;
-    const targetMidi = Math.max(lowestMidi, Math.min(highestMidi, staffStepToSoundingMidi(step)));
-
-    const placement = findBestStringFret(targetMidi);
-    if (placement) {
-      const bIdx = measures[mIdx].beats.findIndex(b => b.id === beatId);
-      moveCursorTo(mIdx, bIdx, false);
-      setFretForActiveNote(placement.stringIndex, placement.fret);
-    }
+    const placement = findBestStringFret(Math.max(lowestMidi, Math.min(highestMidi, clicked)));
+    if (placement) setFretForActiveNote(placement.stringIndex, placement.fret, at);
   };
 
   // Clicking a piano key places (or removes) that pitch on the active beat.
