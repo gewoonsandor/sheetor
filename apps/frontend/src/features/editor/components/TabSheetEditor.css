@@ -529,6 +529,10 @@ input[type="range"] {
   fill: var(--warn);
 }
 
+.technique-pm-line {
+  stroke: var(--warn);
+}
+
 .technique-ring {
   fill: var(--ok);
 }

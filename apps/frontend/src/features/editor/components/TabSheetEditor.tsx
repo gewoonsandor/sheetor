@@ -53,6 +53,7 @@ import {
   getEffectiveClefs,
   conductorChanges,
   sameTimeSignature,
+  beatRuns,
 } from './songUtils';
 import type { CursorIds, CursorIndices } from './songUtils';
 import { getClip, setClip, subscribeClip } from '../clipboard';
@@ -2793,12 +2794,7 @@ export const TabSheetEditor: React.FC<TabSheetEditorProps> = ({ meta, channel })
                     />
                   )}
 
-                  {/* Palm mute / let ring indicators */}
-                  {showTab && b.notes.some(n => n.palmMute) && (
-                    <text x={beatX - 12} y={rowY + tabTop + ts - 4} className="music-text technique-pm" fontSize="8" style={{ pointerEvents: 'none' }}>
-                      P.M.
-                    </text>
-                  )}
+                  {/* Let ring indicator; palm mutes are drawn per run, after every staff */}
                   {showTab && b.notes.some(n => n.letRing) && (
                     <text x={beatX - 12} y={rowY + tabTop + ts - 14} className="music-text technique-ring" fontSize="8" style={{ pointerEvents: 'none' }}>
                       let ring
@@ -3018,6 +3014,44 @@ export const TabSheetEditor: React.FC<TabSheetEditorProps> = ({ meta, channel })
               </g>
             );
           }))}
+
+          {/* Palm mute: P.M. over a lone note; a run of them opens with P.M., then a dashed line
+              to a bar halfway between its last note and the next. A run that wraps restates P.M. on each row. */}
+          {showTab && beatRuns(measures, b => !b.isRest && b.notes.some(n => n.palmMute)).flatMap(run => {
+            const rowOf = (at: BeatPosition) => measureLayouts[at.measureIndex]?.row;
+            const pieces: BeatPosition[][] = [];
+            for (const at of run) {
+              const piece = pieces[pieces.length - 1];
+              if (piece && rowOf(piece[0]) === rowOf(at)) piece.push(at);
+              else pieces.push([at]);
+            }
+            return pieces.map((piece, i) => {
+              const first = piece[0];
+              const last = piece[piece.length - 1];
+              const y = getRowY(first.measureIndex) + tabTop + getRowShift(first.measureIndex) - 4;
+              const x = getBeatCoordinates(first.measureIndex, first.beatIndex);
+              const lastX = getBeatCoordinates(last.measureIndex, last.beatIndex);
+              const barEnd = getMeasureX(last.measureIndex) + getMeasureWidth(last.measureIndex);
+              const next = nextBeatPosition(measures, last, false);
+              const nextX = next !== null && rowOf(next) === rowOf(last)
+                ? getBeatCoordinates(next.measureIndex, next.beatIndex)
+                : barEnd;
+              // A run that goes on to the next row runs to this row's end, with no closing bar.
+              const closes = i === pieces.length - 1;
+              const endX = closes ? (lastX + nextX) / 2 : barEnd;
+              return (
+                <g key={`pm-${first.measureIndex}-${first.beatIndex}`} style={{ pointerEvents: 'none' }}>
+                  <text x={x - 12} y={y} className="music-text technique-pm" fontSize="8">P.M.</text>
+                  {run.length > 1 && (
+                    <g className="technique-pm-line" strokeWidth="1">
+                      <line x1={x + 7} y1={y - 3} x2={endX} y2={y - 3} strokeDasharray="2 2" />
+                      {closes && <line x1={endX} y1={y - 7} x2={endX} y2={y + 1} />}
+                    </g>
+                  )}
+                </g>
+              );
+            });
+          })}
         </svg>
       </div>
 

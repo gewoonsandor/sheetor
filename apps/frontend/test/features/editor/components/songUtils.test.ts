@@ -37,6 +37,7 @@ import {
   grandStaffOf,
   beatAt,
   beatOnset,
+  beatRuns,
 } from '../../../../src/features/editor/components/songUtils';
 
 const beat = (duration: TabBeat['duration'], notes: TabBeat['notes'] = [{ stringIndex: 0, fret: 3 }]): TabBeat => ({
@@ -640,6 +641,19 @@ describe('beat timing', () => {
     expect(beatOnset(bar, 2)).toBe(2);
     expect([0, 1.4, 1.5, 1.9, 2, 3.9].map(t => beatAt(bar, t))).toEqual([0, 0, 1, 1, 2, 2]);
     expect(beatAt(bar, 4)).toBe(-1);
+  });
+
+  it('groups marked beats into runs that cross bar lines and end at any other beat', () => {
+    const pm = { stringIndex: 0, fret: 0, palmMute: true };
+    const open = { stringIndex: 0, fret: 0 };
+    const bars = [
+      measure([beat('4', [pm]), beat('4', [open]), beat('4', [pm]), beat('4', [pm])]),
+      measure([beat('4', [pm, open]), beat('4'), beat('4', [pm])]),
+    ];
+    const runs = beatRuns(bars, b => b.notes.some(n => n.palmMute));
+    expect(runs.map(run => run.map(at => `${at.measureIndex}:${at.beatIndex}`))).toEqual([
+      ['0:0'], ['0:2', '0:3', '1:0'], ['1:2'],
+    ]);
   });
 });
 

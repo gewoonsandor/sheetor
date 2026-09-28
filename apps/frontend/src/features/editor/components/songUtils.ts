@@ -605,6 +605,21 @@ export const nextBeatPosition = (measures: TabMeasure[], from: BeatPosition, loo
   return loop ? firstBeatPosition(measures) : null;
 };
 
+/** Runs of consecutive beats, across bar lines, that `marked` accepts; any other beat ends a run. */
+export const beatRuns = (measures: TabMeasure[], marked: (beat: TabBeat) => boolean): BeatPosition[][] => {
+  const runs: BeatPosition[][] = [];
+  let run: BeatPosition[] = [];
+  measures.forEach((measure, measureIndex) => measure.beats.forEach((beat, beatIndex) => {
+    if (!marked(beat)) {
+      run = [];
+      return;
+    }
+    if (run.length === 0) runs.push(run);
+    run.push({ measureIndex, beatIndex });
+  }));
+  return runs;
+};
+
 /**
  * The bar a :‖ at `endIndex` sends playback back to: its ‖:, or without one
  * the bar after the previous :‖, or else the start of the song.
