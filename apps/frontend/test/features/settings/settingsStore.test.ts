@@ -65,6 +65,7 @@ describe('loadSettings', () => {
       showToolPanel: false,
       readOnly: true,
       defaultBpm: 200,
+      midiInput: true,
     };
     saveSettings(saved);
     expect(loadSettings()).toEqual(saved);
@@ -148,13 +149,14 @@ describe('loadSettings', () => {
 });
 
 describe('saveSettings', () => {
-  it('writes only the six known fields', () => {
+  it('writes only the seven known fields', () => {
     const dirty = { ...DEFAULT_SETTINGS, tuning: ['E', 'A'], synthType: 'guitar' };
     saveSettings(dirty);
     expect(Object.keys(stored()).sort()).toEqual([
       'defaultBpm',
       'loopPlayback',
       'masterVolume',
+      'midiInput',
       'playbackSpeed',
       'readOnly',
       'showToolPanel',

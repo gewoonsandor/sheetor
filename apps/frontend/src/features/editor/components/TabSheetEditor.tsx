@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef, useSyncExternalStore } from 'react';
+import { flushSync } from 'react-dom';
 import { Link, useNavigate } from 'react-router-dom';
 import './TabSheetEditor.css';
 
@@ -45,6 +46,7 @@ import {
 } from './songUtils';
 import type { CursorIds, CursorIndices } from './songUtils';
 import { getClip, setClip, subscribeClip } from '../clipboard';
+import { midiSupported, useMidiInput } from '../midiInput';
 import { INSTRUMENTS } from './audioEngine';
 import { TrackStrip } from './TrackStrip';
 import { parseSong } from './songSchema';
@@ -150,6 +152,7 @@ export const TabSheetEditor: React.FC<TabSheetEditorProps> = ({ meta, channel })
   const [volume, setVolume] = useState<number>(settings.masterVolume);
   const [viewMode, setViewMode] = useState<boolean>(settings.readOnly);
   const [showFretboard, setShowFretboard] = useState<boolean>(settings.showToolPanel);
+  const [midiInput, setMidiInput] = useState<boolean>(settings.midiInput);
   const [showShortcuts, setShowShortcuts] = useState<boolean>(false);
   const [showNoteOptions, setShowNoteOptions] = useState<boolean>(false);
   const [openBottomMenu, setOpenBottomMenu] = useState<'song' | 'edit' | 'output' | 'view' | 'track' | null>(null);
@@ -320,8 +323,9 @@ export const TabSheetEditor: React.FC<TabSheetEditorProps> = ({ meta, channel })
       loopPlayback,
       showToolPanel: showFretboard,
       readOnly: viewMode,
+      midiInput,
     });
-  }, [volume, playbackSpeed, loopPlayback, showFretboard, viewMode]);
+  }, [volume, playbackSpeed, loopPlayback, showFretboard, viewMode, midiInput]);
 
   // --- STATE EDITORS ---
 
@@ -632,6 +636,7 @@ export const TabSheetEditor: React.FC<TabSheetEditorProps> = ({ meta, channel })
     setAllTrackMeasures(list => list.filter((_, idx) => idx !== activeMeasureIndex));
     setActiveMeasureIndex(prev => Math.max(0, prev - 1));
     setActiveBeatIndex(0);
+    setAnchor(null);
   };
 
   const duplicateActiveMeasure = () => {
@@ -737,6 +742,86 @@ export const TabSheetEditor: React.FC<TabSheetEditorProps> = ({ meta, channel })
     setAnchor(null);
   };
 
+  /** Steps to the next beat: an unfilled bar gets a rest, the last bar a new bar after it. */
+  const advanceCursor = () => {
+    const measure = measures[activeMeasureIndex];
+    if (!measure) return;
+    const beat = measure.beats[activeBeatIndex];
+    const measureDur = measure.beats.reduce((acc, b) => acc + getDurationVal(b.duration, b.dot), 0);
+    const timeSignature = getEffectiveTimeSignature(song, activeMeasureIndex);
+    const targetDur = timeSignature.numerator * (4 / timeSignature.denominator);
+
+    if (activeBeatIndex < measure.beats.length - 1) {
+      setActiveBeatIndex(prev => prev + 1);
+    } else if (measureDur < targetDur - 0.001) {
+      // Bar is not filled yet, create a new beat with same length
+      const newBeat: TabBeat = {
+        id: createId(),
+        duration: beat ? beat.duration : durationSelect,
+        notes: [],
+        isRest: true
+      };
+      setMeasures(list => list.map((m, mIdx) => (
+        mIdx === activeMeasureIndex ? { ...m, beats: [...m.beats, newBeat] } : m
+      )));
+      setActiveBeatIndex(prev => prev + 1);
+    } else if (activeMeasureIndex < measures.length - 1) {
+      setActiveMeasureIndex(prev => prev + 1);
+      setActiveBeatIndex(0);
+    } else {
+      const newMeasure: TabMeasure = {
+        id: createId(),
+        beats: [{
+          id: createId(),
+          duration: beat ? beat.duration : durationSelect,
+          notes: [],
+          isRest: true
+        }]
+      };
+      // A new bar has to appear on every track, not just this one.
+      setAllTrackMeasures((list, track) => [
+        ...list,
+        track === activeTrack ? newMeasure : createEmptyMeasure(),
+      ]);
+      setActiveMeasureIndex(prev => prev + 1);
+      setActiveBeatIndex(0);
+    }
+  };
+
+  // --- MIDI KEYBOARD ---
+
+  /** The first key of a chord replaces the cursor beat's notes; keys pressed while it is held join it. */
+  const pressMidiKey = (midi: number, chord: boolean) => {
+    if (!chord) setAnchor(null);
+    updateActiveBeatNotes(current => {
+      const notes = chord ? current : [];
+      if (notes.some(n => resolveNoteMidi(n, activeTrack) === midi)) return notes;
+      if (!isFrettedTrack) return [...notes, { midi }];
+      // Voiced inside the update, so the keys of a chord see each other before any render.
+      const occupied = new Set(notes.filter(isFrettedNote).map(n => n.stringIndex));
+      const placement = findBestStringFret(midi, occupied);
+      return placement ? [...notes, placement] : current;
+    });
+  };
+
+  const midiDevices = useMidiInput(
+    midiInput && !readOnly,
+    pressMidiKey,
+    // Rendered at once, so the next key lands on the new beat and not on the one just written.
+    () => flushSync(advanceCursor),
+  );
+  const midiStatus = !midiSupported()
+    ? 'This browser has no Web MIDI. Chrome, Edge and Firefox do, over HTTPS or on localhost.'
+    : !midiInput
+      ? 'Play into the score from a MIDI keyboard. Keys held together make a chord.'
+      : midiDevices === 'denied'
+        ? 'MIDI access was blocked. Allow it in the site settings.'
+        : midiDevices === null
+          ? 'Waiting for permission…'
+          : midiDevices.length === 0
+            ? 'No MIDI device connected.'
+            : `Listening to ${midiDevices.join(', ')}`;
+
   // --- KEYBOARD CONTROLS ---
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLDivElement>) => {
@@ -803,52 +888,7 @@ export const TabSheetEditor: React.FC<TabSheetEditorProps> = ({ meta, channel })
           }
           break;
         }
-        const measureDur = measure.beats.reduce((acc, b) => acc + getDurationVal(b.duration, b.dot), 0);
-        const timeSignature = getEffectiveTimeSignature(song, activeMeasureIndex);
-        const targetDur = timeSignature.numerator * (4 / timeSignature.denominator);
-
-        if (activeBeatIndex < measure.beats.length - 1) {
-          setActiveBeatIndex(prev => prev + 1);
-        } else {
-          // On the last beat of the measure
-          if (measureDur < targetDur - 0.001) {
-            // Bar is not filled yet, create a new beat with same length
-            const prevDuration = beat ? beat.duration : durationSelect;
-            const newBeat: TabBeat = {
-              id: createId(),
-              duration: prevDuration,
-              notes: [],
-              isRest: true
-            };
-            setMeasures(list => list.map((m, mIdx) => (
-              mIdx === activeMeasureIndex ? { ...m, beats: [...m.beats, newBeat] } : m
-            )));
-            setActiveBeatIndex(prev => prev + 1);
-          } else if (activeMeasureIndex < measures.length - 1) {
-            // Bar is filled, go to next measure
-            setActiveMeasureIndex(prev => prev + 1);
-            setActiveBeatIndex(0);
-          } else {
-            // Last bar is filled and we're on the last measure — create a new bar
-            const prevDuration = beat ? beat.duration : durationSelect;
-            const newMeasure: TabMeasure = {
-              id: createId(),
-              beats: [{
-                id: createId(),
-                duration: prevDuration,
-                notes: [],
-                isRest: true
-              }]
-            };
-            // A new bar has to appear on every track, not just this one.
-            setAllTrackMeasures((list, track) => [
-              ...list,
-              track === activeTrack ? newMeasure : createEmptyMeasure(),
-            ]);
-            setActiveMeasureIndex(prev => prev + 1);
-            setActiveBeatIndex(0);
-          }
-        }
+        advanceCursor();
         break;
       }
 
@@ -912,7 +952,9 @@ export const TabSheetEditor: React.FC<TabSheetEditorProps> = ({ meta, channel })
       case 'Backspace':
       case 'Delete':
         e.preventDefault();
-        if (hasSelection) {
+        if (e.ctrlKey || e.metaKey) {
+          deleteActiveMeasure();
+        } else if (hasSelection) {
           deleteSelection();
         } else if (beat?.isRest) {
           deleteActiveBeat();
@@ -3238,6 +3280,16 @@ export const TabSheetEditor: React.FC<TabSheetEditorProps> = ({ meta, channel })
               <button className="btn" onClick={insertMeasureAfterActive}>Insert measure</button>
               <button className="btn" onClick={duplicateActiveMeasure}>Duplicate measure</button>
               <button className="btn btn-danger" onClick={deleteActiveMeasure}>Delete measure</button>
+              <div className="popover-divider" />
+              <span className="popover-title">MIDI keyboard</span>
+              <button
+                className={`btn ${midiInput ? 'btn-active' : ''}`}
+                onClick={() => setMidiInput(prev => !prev)}
+                disabled={!midiSupported()}
+              >
+                {midiInput ? 'MIDI input on' : 'MIDI input off'}
+              </button>
+              <span className="popover-hint">{midiStatus}</span>
             </div>
             )}
           </div>
@@ -3329,6 +3381,7 @@ export const TabSheetEditor: React.FC<TabSheetEditorProps> = ({ meta, channel })
               <span><kbd>Shift</kbd><kbd>Ctrl</kbd><kbd>↑</kbd><kbd>↓</kbd> Pitch ±octave</span>
               <span><kbd>0</kbd>-<kbd>9</kbd> Fret</span>
               <span><kbd>Delete</kbd> Remove</span>
+              <span><kbd>Ctrl</kbd><kbd>Delete</kbd> Delete bar</span>
               <span><kbd>Space</kbd> Play</span>
               <span><kbd>R</kbd> Rest</span>
               <span><kbd>+</kbd><kbd>-</kbd> Duration</span>

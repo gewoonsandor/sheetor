@@ -1235,6 +1235,16 @@ input[type="range"] {
   font-size: 0.625rem;
 }
 
+/* Wraps to the popover's width instead of widening it. */
+.bottom-popover > .popover-hint {
+  width: 0;
+  min-width: 100%;
+  padding-block: var(--sp-1);
+  color: var(--text-dim);
+  font-size: 0.75rem;
+  line-height: 1.4;
+}
+
 /* The track menu hangs off the strip at the top of the page, so it opens
    downward. This has to sit after `.bottom-popover` to win on source order. */
 .track-popover {

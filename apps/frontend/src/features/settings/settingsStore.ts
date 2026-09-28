@@ -14,6 +14,7 @@ export interface AppSettings {
   showToolPanel: boolean;
   readOnly: boolean;
   defaultBpm: number;
+  midiInput: boolean;
 }
 
 export const DEFAULT_SETTINGS: AppSettings = {
@@ -23,6 +24,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   showToolPanel: true,
   readOnly: false,
   defaultBpm: 120,
+  midiInput: false,
 };
 
 type SettingsSource = { [K in keyof AppSettings]?: unknown };
@@ -37,7 +39,7 @@ const isPlaybackSpeed = (value: unknown): value is number =>
   typeof value === 'number' && PLAYBACK_SPEEDS.some((speed) => speed === value);
 
 const readSettings = (source: SettingsSource): AppSettings => {
-  const { masterVolume, playbackSpeed, loopPlayback, showToolPanel, readOnly, defaultBpm } = source;
+  const { masterVolume, playbackSpeed, loopPlayback, showToolPanel, readOnly, defaultBpm, midiInput } = source;
   return {
     masterVolume:
       typeof masterVolume === 'number' && Number.isFinite(masterVolume)
@@ -51,6 +53,7 @@ const readSettings = (source: SettingsSource): AppSettings => {
       typeof defaultBpm === 'number' && Number.isFinite(defaultBpm)
         ? Math.min(Math.max(Math.floor(defaultBpm), MIN_BPM), MAX_BPM)
         : DEFAULT_SETTINGS.defaultBpm,
+    midiInput: readBoolean(midiInput, DEFAULT_SETTINGS.midiInput),
   };
 };
 

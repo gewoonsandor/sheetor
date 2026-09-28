@@ -19,6 +19,9 @@ and you can see where each person is working.
   piano for entering notes.
 - **Copy and paste.** Shift-select beats or whole bars and copy, cut or paste them, within a song
   or into another one; notes pasted onto a different tuning or instrument keep their pitch.
+- **MIDI keyboard input.** Plug in a digital piano or controller and play into the score: each
+  note lands on the cursor and moves it on, and keys held together become a chord. Works in
+  Chrome, Edge and Firefox.
 - **A library on the server.** Nested folders, drag-and-drop filing, duplicates, and recent-first
   listing that tells you who touched a song last.
 - **Folder sharing with roles.** Share a folder, and everything inside it, with anyone who has an
