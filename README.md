@@ -25,7 +25,7 @@ and you can see where each person is working.
 - **A library on the server.** Nested folders, drag-and-drop filing, duplicates, and recent-first
   listing that tells you who touched a song last.
 - **Folder sharing with roles.** Share a folder, and everything inside it, with anyone who has an
-  account. *Editors* write with you; *viewers* watch.
+  account. _Editors_ write with you; _viewers_ watch.
 - **Real-time co-editing.** Built on a CRDT (Yjs), so simultaneous edits merge instead of
   overwriting each other. Presence chips and coloured cursors show who is where, and edits made
   while a connection drops are merged once it comes back.
@@ -99,20 +99,20 @@ volumes:
 
 Everything is configured through environment variables.
 
-| Variable | Default | Meaning |
-|---|---|---|
-| `DATABASE_URL` | required | PostgreSQL connection string. |
-| `PUBLIC_URL` | `http://localhost:<PORT>` | The exact origin people open in their browser, e.g. `https://sheetor.example.com`. Live editing refuses WebSocket connections from any other origin, and the SSO callback is `PUBLIC_URL/api/v1/auth/sso/callback`. |
-| `HOST` | `0.0.0.0` | Listen address. |
-| `PORT` | `4000` | Listen port. |
-| `COOKIE_SECURE` | `true` | Marks the session cookie `Secure`. Browsers accept it on `http://localhost`; set `false` only to drive the API over plain HTTP with `curl`. |
-| `LOG_LEVEL` | `info` | Log filter; `RUST_LOG` overrides it. |
-| `FRONTEND_DIST_DIR` | `/app/dist` in the image | Where the built frontend lives. |
-| `OIDC_ISSUER_URL` | unset | Issuer of your OpenID Connect provider. Setting it turns single sign-on on. |
-| `OIDC_CLIENT_ID` | required with SSO | Client id registered at the provider. |
-| `OIDC_CLIENT_SECRET` | required with SSO | Client secret (a confidential client). |
-| `OIDC_DISPLAY_NAME` | `Single sign-on` | Button label: "Continue with …". |
-| `LOCAL_AUTH_ENABLED` | `true` | `false` hides email-and-password sign-in and sign-up, and the API refuses them. Ignored when no provider is configured, so you cannot lock everyone out. |
+| Variable             | Default                   | Meaning                                                                                                                                                                                                             |
+| -------------------- | ------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `DATABASE_URL`       | required                  | PostgreSQL connection string.                                                                                                                                                                                       |
+| `PUBLIC_URL`         | `http://localhost:<PORT>` | The exact origin people open in their browser, e.g. `https://sheetor.example.com`. Live editing refuses WebSocket connections from any other origin, and the SSO callback is `PUBLIC_URL/api/v1/auth/sso/callback`. |
+| `HOST`               | `0.0.0.0`                 | Listen address.                                                                                                                                                                                                     |
+| `PORT`               | `4000`                    | Listen port.                                                                                                                                                                                                        |
+| `COOKIE_SECURE`      | `true`                    | Marks the session cookie `Secure`. Browsers accept it on `http://localhost`; set `false` only to drive the API over plain HTTP with `curl`.                                                                         |
+| `LOG_LEVEL`          | `info`                    | Log filter; `RUST_LOG` overrides it.                                                                                                                                                                                |
+| `FRONTEND_DIST_DIR`  | `/app/dist` in the image  | Where the built frontend lives.                                                                                                                                                                                     |
+| `OIDC_ISSUER_URL`    | unset                     | Issuer of your OpenID Connect provider. Setting it turns single sign-on on.                                                                                                                                         |
+| `OIDC_CLIENT_ID`     | required with SSO         | Client id registered at the provider.                                                                                                                                                                               |
+| `OIDC_CLIENT_SECRET` | required with SSO         | Client secret (a confidential client).                                                                                                                                                                              |
+| `OIDC_DISPLAY_NAME`  | `Single sign-on`          | Button label: "Continue with …".                                                                                                                                                                                    |
+| `LOCAL_AUTH_ENABLED` | `true`                    | `false` hides email-and-password sign-in and sign-up, and the API refuses them. Ignored when no provider is configured, so you cannot lock everyone out.                                                            |
 
 TLS belongs in a reverse proxy in front of Sheetor. The proxy must pass WebSocket upgrades for
 `/api/v1/songs/*/live`, which is where live editing happens.
@@ -123,13 +123,13 @@ Register Sheetor as a confidential client using the Authorization Code flow, wit
 `https://<your-host>/api/v1/auth/sso/callback` (that is, `PUBLIC_URL` plus that path). Sheetor
 requests the scopes `openid email profile` and uses PKCE.
 
-**Authentik.** Create an *OAuth2/OpenID Provider* (client type *Confidential*, the redirect URI
-above) and an *Application* that uses it. The issuer is
+**Authentik.** Create an _OAuth2/OpenID Provider_ (client type _Confidential_, the redirect URI
+above) and an _Application_ that uses it. The issuer is
 `https://<authentik>/application/o/<application-slug>/`.
 
-**Keycloak.** In your realm, create a client of type *OpenID Connect* with *Client
-authentication* on and *Standard flow* enabled, and add the redirect URI. The issuer is
-`https://<keycloak>/realms/<realm>`, and the secret is on the client's *Credentials* tab.
+**Keycloak.** In your realm, create a client of type _OpenID Connect_ with _Client
+authentication_ on and _Standard flow_ enabled, and add the redirect URI. The issuer is
+`https://<keycloak>/realms/<realm>`, and the secret is on the client's _Credentials_ tab.
 
 ```bash
 OIDC_ISSUER_URL=https://auth.example.com/realms/music
@@ -196,6 +196,12 @@ The React app talks to the axum server over REST for the library and over one We
 song. The server keeps each open song as a live Yjs document, relays updates between the people
 in it, and writes it to PostgreSQL. Conventions and layout for contributors are in
 [`AGENTS.md`](AGENTS.md).
+
+## Disclaimer
+
+Yes, a lot of this is ai written. The frontend fully and the backend is a combination of my own
+work and ai. I don't write frontend and I don't want to write frontend. I still thought this was
+a good idea for a project.
 
 ## License
 
