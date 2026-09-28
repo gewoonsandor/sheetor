@@ -173,7 +173,7 @@ const parseTrack = (value: unknown, index: number): TabTrack | string => {
   // The instrument decides the kind; a stored `kind` is ignored so a file can
   // never describe a guitar track that renders without TAB.
   const kind = trackKind(instrument);
-  // A pitched track has no TAB and a guitar no grand staff, whatever the file claims.
+  // A pitched track has no TAB, whatever the file claims; an old one-track grand staff reads as notes.
   const allowed = STAFF_DISPLAYS[kind];
   const display = allowed.includes(value.display as StaffDisplay) ? (value.display as StaffDisplay) : allowed[0];
 
@@ -207,6 +207,8 @@ const parseTrack = (value: unknown, index: number): TabTrack | string => {
   }
   if (value.muted === true) track.muted = true;
   if (value.soloed === true) track.soloed = true;
+  // Whether it names a usable partner is decided where it is read (`grandStaffOf`).
+  if (typeof value.bassTrack === 'string') track.bassTrack = value.bassTrack;
 
   return track;
 };

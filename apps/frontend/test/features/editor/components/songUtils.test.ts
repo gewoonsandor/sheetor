@@ -30,6 +30,8 @@ import {
   trackKind,
   pruneNotesToStringCount,
   staffStepToSoundingMidi,
+  addBassStaff,
+  grandStaffOf,
 } from '../../../../src/features/editor/components/songUtils';
 
 const beat = (duration: TabBeat['duration'], notes: TabBeat['notes'] = [{ stringIndex: 0, fret: 3 }]): TabBeat => ({
@@ -566,5 +568,33 @@ describe('locateCursor', () => {
     const after = { ...before, tracks: [{ ...before.tracks[0], measures: [before.tracks[0].measures[0], shortened] }] };
 
     expect(locateCursor(after, cursor, cursor)).toEqual({ trackIndex: 0, measureIndex: 1, beatIndex: 0 });
+  });
+});
+
+describe('grand staff', () => {
+  const piano = (chords: TabBeat['notes'][]): TabTrack => ({
+    ...createTrack('piano'),
+    measures: [measure(chords.map(notes => beat('4', notes)))],
+  });
+
+  it('splits a piano track at middle C into a linked left hand with the same rhythm', () => {
+    const start = song([], { tracks: [createTrack('guitar'), piano([[{ midi: 60 }, { midi: 48 }], [{ midi: 43 }]])] });
+    const next = addBassStaff(start, 1);
+    const [, upper, lower] = next.tracks;
+    expect(grandStaffOf(next.tracks, 1)).toEqual({ treble: 1, bass: 2 });
+    expect(grandStaffOf(next.tracks, 2)).toEqual({ treble: 1, bass: 2 });
+    expect(upper.measures[0].beats.map(b => [b.notes, b.isRest])).toEqual([[[{ midi: 60 }], false], [[], true]]);
+    expect(lower.measures[0].beats.map(b => [b.duration, b.notes])).toEqual([['4', [{ midi: 48 }]], ['4', [{ midi: 43 }]]]);
+    expect(lower.measures[0].beats[0].id).not.toBe(upper.measures[0].beats[0].id);
+  });
+
+  it('ignores a link to a missing, fretted or already claimed track', () => {
+    expect(grandStaffOf([{ ...piano([]), bassTrack: 'gone' }], 0)).toBeNull();
+    const guitar = createTrack('guitar');
+    expect(grandStaffOf([{ ...piano([]), bassTrack: guitar.id }, guitar], 0)).toBeNull();
+    const lower = piano([]);
+    const tracks = [{ ...piano([]), bassTrack: lower.id }, { ...piano([]), bassTrack: lower.id }, lower];
+    expect(grandStaffOf(tracks, 1)).toBeNull();
+    expect(grandStaffOf(tracks, 2)).toEqual({ treble: 0, bass: 2 });
   });
 });

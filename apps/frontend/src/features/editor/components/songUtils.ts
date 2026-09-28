@@ -287,7 +287,57 @@ export const isFretted = (track: TabTrack): boolean => trackKind(track.instrumen
 /** The staves each kind can draw; the first is where a track of that kind starts. */
 export const STAFF_DISPLAYS: Record<TrackKind, readonly StaffDisplay[]> = {
   fretted: ['both', 'notation', 'tab'],
-  pitched: ['notation', 'grand'],
+  pitched: ['notation'],
+};
+
+/** Middle C: turning on a grand staff moves every note below it to the bass staff. */
+export const GRAND_SPLIT = 60;
+
+/** A grand staff's two tracks, by index: the treble staff's and the bass staff's. */
+export interface GrandStaff {
+  treble: number;
+  bass: number;
+}
+
+/**
+ * The grand staff a track belongs to, as either hand. The link is checked where
+ * it is read, so a deleted track, a fretted instrument or a chain of links just
+ * means no grand staff, and no edit has to repair it.
+ */
+export const grandStaffOf = (tracks: TabTrack[], index: number): GrandStaff | null => {
+  const pairAt = (treble: number): GrandStaff | null => {
+    const upper = tracks[treble];
+    const bass = tracks.findIndex(t => t.id === upper?.bassTrack);
+    if (bass === -1 || bass === treble) return null;
+    if (isFretted(upper) || isFretted(tracks[bass]) || tracks[bass].bassTrack !== undefined) return null;
+    // Two tracks naming one bass track: the first keeps it.
+    return tracks.findIndex(t => t.bassTrack === upper.bassTrack) === treble ? { treble, bass } : null;
+  };
+  return pairAt(index) ?? pairAt(tracks.findIndex(t => t.bassTrack !== undefined && t.bassTrack === tracks[index]?.id));
+};
+
+/**
+ * Turns a pitched track into a grand staff: a new track right after it takes
+ * every note below middle C onto the bass staff, keeping the rhythm, so the two
+ * hands start out exactly as written and can then part ways.
+ */
+export const addBassStaff = (song: TabSong, index: number): TabSong => {
+  const upper = song.tracks[index];
+  if (!upper || isFretted(upper) || grandStaffOf(song.tracks, index)) return song;
+  const keep = (low: boolean, fresh: boolean): TabMeasure[] => upper.measures.map(measure => ({
+    ...measure,
+    ...(fresh ? { id: createId() } : {}),
+    beats: measure.beats.map(beat => {
+      const notes = beat.notes.filter(n => ((resolveNoteMidi(n, upper) ?? GRAND_SPLIT) < GRAND_SPLIT) === low);
+      return { ...beat, ...(fresh ? { id: createId() } : {}), notes, isRest: notes.length === 0 };
+    }),
+  }));
+  const bass: TabTrack = { ...upper, id: createId(), name: `${upper.name} (left hand)`, measures: keep(true, true) };
+  // A link left over from a deleted left hand must not come along.
+  delete bass.bassTrack;
+  const tracks = [...song.tracks];
+  tracks.splice(index, 1, { ...upper, bassTrack: bass.id, measures: keep(false, false) }, bass);
+  return { ...song, tracks };
 };
 
 export const createTrack = (

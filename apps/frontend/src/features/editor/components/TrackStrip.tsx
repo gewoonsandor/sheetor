@@ -2,6 +2,7 @@ import React from 'react';
 
 import type { TabTrack } from './types';
 import { INSTRUMENTS } from './audioEngine';
+import { grandStaffOf } from './songUtils';
 
 interface TrackStripProps {
   tracks: TabTrack[];
@@ -16,15 +17,17 @@ interface TrackStripProps {
   children?: React.ReactNode;
 }
 
-const staffLabel = (track: TabTrack): string => {
+const staffLabel = (tracks: TabTrack[], index: number): string => {
+  const grand = grandStaffOf(tracks, index);
+  if (grand) return grand.treble === index ? 'grand staff, treble' : 'grand staff, bass';
+  const track = tracks[index];
   if (track.display === 'tab') return 'tab';
   if (track.display === 'both') return 'notes + tab';
-  if (track.display === 'grand') return 'grand staff';
   return 'notes';
 };
 
 /**
- * The score shows one track at a time; this strip is how you choose which, and
+ * The score shows one track at a time, or both hands of a grand staff; this strip is how you choose which, and
  * where each track's mute/solo live. Presentational only — every change is
  * handed back to the editor.
  */
@@ -56,7 +59,7 @@ export const TrackStrip: React.FC<TrackStripProps> = ({
               >
                 <span className="track-chip-name">{track.name}</span>
                 <span className="track-chip-meta">
-                  {INSTRUMENTS[track.instrument].label} · {staffLabel(track)}
+                  {INSTRUMENTS[track.instrument].label} · {staffLabel(tracks, index)}
                 </span>
               </button>
               <div className="track-chip-toggles">

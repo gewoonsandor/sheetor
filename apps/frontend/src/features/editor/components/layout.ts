@@ -28,8 +28,41 @@ export const getBeatMinContribution = (duration: Duration): number => {
   return MIN_BEAT_WIDTH;
 };
 
-export const computeMeasureContentWidth = (beats: { duration: Duration }[]): number => {
-  return beats.reduce((acc, b) => acc + getBeatMinContribution(b.duration), 0);
+/**
+ * Spaces bars drawn one above another, a grand staff's two hands, on the rhythm
+ * they share: each beat sits where its onset falls, spaced by the square root of
+ * the time to the next onset in any of them, so notes struck together line up.
+ * `positions[bar][beat]` runs 0..1 across the bar; a bar alone spaces as it always
+ * has, and a lone onset is centred.
+ */
+export const alignBars = (bars: TabMeasure[]): { positions: number[][]; minWidth: number } => {
+  // Onsets are sums of dyadic durations, so they compare exactly as map keys.
+  const onsets = bars.map(bar => {
+    let at = 0;
+    return bar.beats.map(b => {
+      const start = at;
+      at += getDurationVal(b.duration, b.dot);
+      return start;
+    });
+  });
+  const room = new Map<number, number>();
+  let end = 0;
+  bars.forEach((bar, i) => bar.beats.forEach((b, j) => {
+    const at = onsets[i][j];
+    room.set(at, Math.max(room.get(at) ?? 0, getBeatMinContribution(b.duration)));
+    end = Math.max(end, at + getDurationVal(b.duration, b.dot));
+  }));
+  const times = [...room.keys()].sort((a, b) => a - b);
+  const offsets = new Map<number, number>();
+  let total = 0;
+  times.forEach((at, k) => {
+    offsets.set(at, total);
+    total += Math.sqrt((times[k + 1] ?? end) - at);
+  });
+  return {
+    positions: onsets.map(list => list.map(at => (times.length === 1 ? 0.5 : (offsets.get(at) ?? 0) / total))),
+    minWidth: [...room.values()].reduce((sum, w) => sum + w, 0),
+  };
 };
 
 export const FRETBOARD_STRING_TOP = 20;
@@ -75,12 +108,12 @@ export const getFretboardStringY = (stringIdx: number, stringCount: number): num
 /** Room a ‖: sign takes before a bar's first beat. */
 export const REPEAT_PADDING = 16;
 
-/** Beats come from the drawn track; tempo, metre and repeat marks from the conductor. */
-export const computeMeasureLayouts = (measures: TabMeasure[], conductor: TabMeasure[]): MLayout[] => {
-  const infos = measures.map((measure, i) => {
+/** `widths` is each bar's content width (`alignBars`); tempo, metre and repeat marks come from the conductor. */
+export const computeMeasureLayouts = (widths: number[], conductor: TabMeasure[]): MLayout[] => {
+  const infos = widths.map((contentWidth, i) => {
     const marks = conductor[i];
     return {
-      contentWidth: computeMeasureContentWidth(measure.beats),
+      contentWidth,
       hasTimingChange: !!(marks?.bpm || marks?.timeSignature),
       repeatRoom: marks?.repeatStart ? REPEAT_PADDING : 0,
     };

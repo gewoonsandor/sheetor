@@ -29,10 +29,10 @@ export type InstrumentId =
 
 /**
  * Which staves a track draws: standard notation, guitar TAB, or both stacked
- * (fretted tracks); notation alone or a piano's grand staff, treble over bass
- * with middle C and up on the treble (pitched tracks).
+ * (fretted tracks); notation only on pitched tracks, whose grand staff is a
+ * pair of tracks (`TabTrack.bassTrack`) rather than a display.
  */
-export type StaffDisplay = 'notation' | 'tab' | 'both' | 'grand';
+export type StaffDisplay = 'notation' | 'tab' | 'both';
 
 /**
  * Fretted tracks address pitch as string + fret against a tuning; pitched
@@ -101,6 +101,11 @@ export interface TabTrack {
   muted?: boolean;
   soloed?: boolean;
   measures: TabMeasure[];
+  /**
+   * Pitched tracks only: the track drawn on the bass staff under this one. The
+   * two are a grand staff, one hand each, so each keeps its own rhythm.
+   */
+  bassTrack?: string;
 }
 
 export interface TabSong {
