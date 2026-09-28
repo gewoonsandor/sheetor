@@ -3,7 +3,8 @@ import type {
   TabTrack, TimeSignature,
 } from './types';
 import {
-  DEFAULT_TRANSPOSE, DURATIONS, MAX_BPM, MAX_FRET, MAX_REPEAT, MAX_STRINGS, MIN_BPM, MIN_REPEAT, STAFF_DISPLAYS,
+  DEFAULT_TRANSPOSE, DURATIONS, MAX_BPM, MAX_FRET, MAX_KEY_ACCIDENTALS, MAX_REPEAT, MAX_STRINGS, MIN_BPM, MIN_REPEAT,
+  STAFF_DISPLAYS,
   TECHNIQUE_KEYS,
   createId, createTrack, defaultTuning, normalizeTrackLengths, pruneNotesToStringCount, requiredStringCount,
   resizeTuning, trackKind,
@@ -207,6 +208,10 @@ const parseTrack = (value: unknown, index: number): TabTrack | string => {
   }
   if (value.muted === true) track.muted = true;
   if (value.soloed === true) track.soloed = true;
+  const key = value.keySignature;
+  if (typeof key === 'number' && Number.isInteger(key) && key !== 0 && Math.abs(key) <= MAX_KEY_ACCIDENTALS) {
+    track.keySignature = key;
+  }
   // Whether it names a usable partner is decided where it is read (`grandStaffOf`).
   if (typeof value.bassTrack === 'string') track.bassTrack = value.bassTrack;
 

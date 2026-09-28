@@ -190,36 +190,85 @@ export const GUITAR_NOTE_OPTIONS: string[] = (() => {
   return options;
 })();
 
+// The letters C..B as semitones above C; a staff step's letter is the step mod 7.
+const DIATONIC_SEMITONES = [0, 2, 4, 5, 7, 9, 11];
+
+const letterOf = (step: number): number => ((step % 7) + 7) % 7;
+
+/** The widest key signature either way: a key is sharps when positive, flats when negative. */
+export const MAX_KEY_ACCIDENTALS = 7;
+
+const SHARP_ORDER = [3, 0, 4, 1, 5, 2, 6]; // F C G D A E B
+const FLAT_ORDER = [6, 2, 5, 1, 4, 0, 3];  // B E A D G C F
+
+/** How a key alters each letter C..B: 1 sharp, -1 flat, 0 natural. */
+export const keyAlterations = (key: number): number[] => {
+  const alterations = [0, 0, 0, 0, 0, 0, 0];
+  for (const letter of (key > 0 ? SHARP_ORDER : FLAT_ORDER).slice(0, Math.abs(key))) {
+    alterations[letter] = Math.sign(key);
+  }
+  return alterations;
+};
+
+/** Where a key signature's accidentals sit on a treble staff, in the order they are written. */
+export const keySignatureSteps = (key: number): number[] =>
+  (key > 0 ? [10, 7, 11, 8, 5, 9, 6] : [6, 9, 5, 8, 4, 7, 3]).slice(0, Math.abs(key));
+
+/** A written note: its line or space (0 = middle C), and the sharp (1) or flat (-1) it carries. */
+export interface SpelledPitch {
+  diatonicStep: number;
+  alteration: number;
+}
+
 /**
  * Sounding MIDI to a staff position. `transpose` is how far the staff is
- * written above what it sounds — 12 for guitar/bass, 0 at concert pitch.
+ * written above what it sounds — 12 for guitar/bass, 0 at concert pitch. A
+ * pitch the key has takes the key's spelling (B♭ in F major sits on the B
+ * line); any other is its white key, or a black key spelled toward the key's
+ * side, sharp in sharp keys and C major, flat in flat keys.
  */
-export const midiToDiatonicAndAccidental = (midi: number, transpose: number = 12) => {
-  const writtenMidi = midi + transpose;
-  const octave = Math.floor(writtenMidi / 12) - 1;
-  const pc = pitchClass(writtenMidi);
-
-  const stepOffset = [0, 0, 1, 1, 2, 3, 3, 4, 4, 5, 5, 6];
-  const accidentals = ['', '#', '', '#', '', '', '#', '', '#', '', '#', ''];
-
-  const diatonicStep = (octave - 4) * 7 + stepOffset[pc];
-  const accidental = accidentals[pc];
-
-  return { diatonicStep, accidental };
+export const spellPitch = (midi: number, transpose: number = 12, key: number = 0): SpelledPitch => {
+  const written = midi + transpose;
+  const pc = pitchClass(written);
+  const inKey = keyAlterations(key);
+  let letter = DIATONIC_SEMITONES.findIndex((semitone, l) => pitchClass(semitone + inKey[l]) === pc);
+  let alteration = letter === -1 ? 0 : inKey[letter];
+  if (letter === -1) letter = DIATONIC_SEMITONES.indexOf(pc);
+  if (letter === -1) {
+    alteration = key < 0 ? -1 : 1;
+    letter = DIATONIC_SEMITONES.indexOf(pc - alteration);
+  }
+  // The octave is the letter's own: C♭5 sounds as B4 but sits with the C5s.
+  const octave = Math.floor((written - alteration) / 12) - 1;
+  return { diatonicStep: (octave - 4) * 7 + letter, alteration };
 };
 
 export const Y_of_step = (step: number) => 60 - step * 5;
 
-// Inverse of Y_of_step + midiToDiatonicAndAccidental: a diatonic step on the
-// staff back to the pitch we store. Guitar notation is written an octave above
-// what it sounds, so the written pitch is dropped by 12 to get the sounding one.
-const DIATONIC_SEMITONES = [0, 2, 4, 5, 7, 9, 11];
-
-export const staffStepToSoundingMidi = (step: number, transpose: number = 12): number => {
+/**
+ * Inverse of Y_of_step + spellPitch: a staff step back to the pitch we store,
+ * as the key reads it (the F line is F♯ in G major). Guitar notation is written
+ * an octave above what it sounds, so the written pitch is dropped by 12.
+ */
+export const staffStepToSoundingMidi = (step: number, transpose: number = 12, key: number = 0): number => {
   const octave = 4 + Math.floor(step / 7);
-  const degree = ((step % 7) + 7) % 7;
-  const writtenMidi = (octave + 1) * 12 + DIATONIC_SEMITONES[degree];
-  return writtenMidi - transpose;
+  const letter = letterOf(step);
+  return (octave + 1) * 12 + DIATONIC_SEMITONES[letter] + keyAlterations(key)[letter] - transpose;
+};
+
+/**
+ * The accidental each note of a bar is written with, per beat and note: null
+ * where the key signature, or an earlier note on the same line or space in
+ * this bar, already says it; otherwise 1 (♯), -1 (♭) or 0 (♮).
+ */
+export const barAccidentals = (beats: SpelledPitch[][], key: number): (number | null)[][] => {
+  const inKey = keyAlterations(key);
+  const current = new Map<number, number>();
+  return beats.map(notes => notes.map(({ diatonicStep, alteration }) => {
+    const before = current.get(diatonicStep) ?? inKey[letterOf(diatonicStep)];
+    current.set(diatonicStep, alteration);
+    return alteration === before ? null : alteration;
+  }));
 };
 
 export const DURATIONS: readonly Duration[] = ['1', '2', '4', '8', '16', '32'];

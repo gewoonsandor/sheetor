@@ -13,7 +13,8 @@ import {
   isFretted,
   isFrettedNote,
   createTrack,
-  midiToDiatonicAndAccidental,
+  spellPitch,
+  barAccidentals,
   midiToNoteOctave,
   nextBeatPosition,
   nextPlayPosition,
@@ -119,9 +120,9 @@ describe('staffStepToSoundingMidi', () => {
   it('round-trips every step back through the renderer', () => {
     for (let step = -12; step <= 16; step++) {
       const midi = staffStepToSoundingMidi(step);
-      expect(midiToDiatonicAndAccidental(midi).diatonicStep).toBe(step);
+      expect(spellPitch(midi).diatonicStep).toBe(step);
       // Natural degrees only — the staff has no position for an accidental.
-      expect(midiToDiatonicAndAccidental(midi).accidental).toBe('');
+      expect(spellPitch(midi).alteration).toBe(0);
     }
   });
 });
@@ -466,8 +467,8 @@ describe('switching a track instrument', () => {
 
 describe('transposition', () => {
   it('shifts the staff position by a whole octave', () => {
-    const concert = midiToDiatonicAndAccidental(60, 0).diatonicStep;
-    const guitar = midiToDiatonicAndAccidental(60, 12).diatonicStep;
+    const concert = spellPitch(60, 0).diatonicStep;
+    const guitar = spellPitch(60, 12).diatonicStep;
     expect(guitar - concert).toBe(7); // one octave = seven diatonic steps
   });
 
@@ -475,7 +476,7 @@ describe('transposition', () => {
     for (const transpose of [0, 12]) {
       for (let step = -12; step <= 16; step++) {
         const midi = staffStepToSoundingMidi(step, transpose);
-        expect(midiToDiatonicAndAccidental(midi, transpose).diatonicStep).toBe(step);
+        expect(spellPitch(midi, transpose).diatonicStep).toBe(step);
       }
     }
   });
@@ -607,5 +608,36 @@ describe('beat timing', () => {
     expect(beatOnset(bar, 2)).toBe(2);
     expect([0, 1.4, 1.5, 1.9, 2, 3.9].map(t => beatAt(bar, t))).toEqual([0, 0, 1, 1, 2, 2]);
     expect(beatAt(bar, 4)).toBe(-1);
+  });
+});
+
+describe('key signatures', () => {
+  // Concert pitch, so the numbers below are the written pitches.
+  const spelled = (midi: number, key: number) => spellPitch(midi, 0, key);
+
+  it('spells a pitch the key has on its own letter, and others toward the key side', () => {
+    expect(spelled(70, -1)).toEqual({ diatonicStep: 6, alteration: -1 }); // B♭4 in F major, on the B line
+    expect(spelled(70, 0)).toEqual({ diatonicStep: 5, alteration: 1 });   // A♯4 in C major
+    expect(spelled(66, -2)).toEqual({ diatonicStep: 4, alteration: -1 }); // G♭4 in B♭ major
+    expect(spelled(71, -6)).toEqual({ diatonicStep: 7, alteration: -1 }); // C♭5 in G♭ major sits with the C5s
+    expect(spelled(65, 6)).toEqual({ diatonicStep: 2, alteration: 1 });   // E♯4 in F♯ major
+  });
+
+  it('reads every line and space in the key, and spells it back without an accidental', () => {
+    for (let key = -7; key <= 7; key++) {
+      for (let step = -7; step <= 14; step++) {
+        const midi = staffStepToSoundingMidi(step, 0, key);
+        const [[accidental]] = barAccidentals([[spelled(midi, key)]], key);
+        expect(spelled(midi, key).diatonicStep).toBe(step);
+        expect(accidental).toBeNull();
+      }
+    }
+    expect(staffStepToSoundingMidi(3, 0, 1)).toBe(66); // the F line is F♯ in G major
+  });
+
+  it('writes an accidental once per line in a bar, and cancels it when the line changes back', () => {
+    const [f, fSharp] = [spelled(65, 1), spelled(66, 1)];
+    expect(barAccidentals([[f], [f], [fSharp], [spelled(78, 1)]], 1)).toEqual([[0], [null], [1], [null]]);
+    expect(barAccidentals([[spelled(66, 0)], [spelled(66, 0)], [spelled(65, 0)]], 0)).toEqual([[1], [null], [0]]);
   });
 });

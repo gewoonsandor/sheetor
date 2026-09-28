@@ -96,6 +96,8 @@ export interface TabTrack {
    * notated an octave high (12); concert-pitch instruments use 0.
    */
   transpose: number;
+  /** Sharps (positive) or flats (negative) written at the start of every row; absent is C major. */
+  keySignature?: number;
   /** Per-track trim, 0..1, multiplied into the master volume. */
   volume: number;
   muted?: boolean;

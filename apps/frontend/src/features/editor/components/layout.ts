@@ -108,8 +108,14 @@ export const getFretboardStringY = (stringIdx: number, stringCount: number): num
 /** Room a ‖: sign takes before a bar's first beat. */
 export const REPEAT_PADDING = 16;
 
-/** `widths` is each bar's content width (`alignBars`); tempo, metre and repeat marks come from the conductor. */
-export const computeMeasureLayouts = (widths: number[], conductor: TabMeasure[]): MLayout[] => {
+/** A row's clef and time signature, then room for an accidental on its first note. */
+const ROW_START_PADDING = 78;
+
+/**
+ * `widths` is each bar's content width (`alignBars`); tempo, metre and repeat marks come from the
+ * conductor. `keyRoom` is what the key signature adds to the clef area at the start of every row.
+ */
+export const computeMeasureLayouts = (widths: number[], conductor: TabMeasure[], keyRoom: number = 0): MLayout[] => {
   const infos = widths.map((contentWidth, i) => {
     const marks = conductor[i];
     return {
@@ -126,13 +132,13 @@ export const computeMeasureLayouts = (widths: number[], conductor: TabMeasure[])
   for (let i = 0; i < infos.length; i++) {
     const { contentWidth, hasTimingChange, repeatRoom } = infos[i];
     const isFirstInRow = curX === 0;
-    const padding = (isFirstInRow ? 70 : (hasTimingChange ? 46 : 18)) + repeatRoom;
+    const padding = (isFirstInRow ? ROW_START_PADDING + keyRoom : (hasTimingChange ? 46 : 18)) + repeatRoom;
     const totalWidth = padding + contentWidth + 20;
 
     if (!isFirstInRow && curX + totalWidth > MAX_ROW_WIDTH) {
       curRow++;
       curX = 0;
-      const newPadding = 70 + repeatRoom;
+      const newPadding = ROW_START_PADDING + keyRoom + repeatRoom;
       const newTotalWidth = newPadding + contentWidth + 20;
       layouts.push({ row: curRow, x: 0, width: Math.max(newTotalWidth, MIN_MEASURE_WIDTH), padding: newPadding });
       curX = Math.max(newTotalWidth, MIN_MEASURE_WIDTH);

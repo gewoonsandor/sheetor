@@ -25,7 +25,9 @@ import {
   tuningPresets,
   resizeTuning,
   GUITAR_NOTE_OPTIONS,
-  midiToDiatonicAndAccidental,
+  spellPitch,
+  barAccidentals,
+  keySignatureSteps,
   staffStepToSoundingMidi,
   Y_of_step,
   createEmptyMeasure,
@@ -108,10 +110,51 @@ interface Clef {
   top: number;
   /** Diatonic steps added to a treble position; the bass clef's G2 sits where the treble's E4 does. */
   shift: number;
+  /** Where the key signature sits against a treble staff's: a bass clef writes it a line lower. */
+  keyOffset: number;
 }
 
-const TREBLE: Clef = { top: 0, shift: 0 };
-const BASS: Clef = { top: GRAND_BASS_TOP, shift: 12 };
+const TREBLE: Clef = { top: 0, shift: 0, keyOffset: 0 };
+const BASS: Clef = { top: GRAND_BASS_TOP, shift: 12, keyOffset: -2 };
+
+/** A key signature's first accidental, after the clef, and the room each one takes. */
+const KEY_X = 46;
+const KEY_SPACING = 9;
+
+/** ♯ (1), ♭ (-1) or ♮ (0), centred on (cx, y) in staff units, where a space is 10 high. */
+const accidentalGlyph = (alteration: number, cx: number, y: number): React.ReactNode => {
+  if (alteration < 0) {
+    return (
+      <path
+        d={`M ${cx - 2.5} ${y - 12} L ${cx - 2.5} ${y + 3} C ${cx + 5} ${y - 1} ${cx + 4} ${y - 6} ${cx - 2.5} ${y - 2}`}
+        className="glyph-ink-stroke"
+        strokeWidth="1.4"
+        fill="none"
+        pointerEvents="none"
+      />
+    );
+  }
+  const [left, right] = alteration > 0 ? [[-6, 6], [-8, 4]] : [[-9, 3.5], [-3.5, 9]];
+  const half = alteration > 0 ? 4.5 : 2;
+  return (
+    <g className="glyph-ink-stroke" strokeWidth="1.3" pointerEvents="none">
+      <line x1={cx - 1.5} y1={y + left[0]} x2={cx - 1.5} y2={y + left[1]} />
+      <line x1={cx + 1.5} y1={y + right[0]} x2={cx + 1.5} y2={y + right[1]} />
+      <line x1={cx - half} y1={y - 2.5} x2={cx + half} y2={y - 4} strokeWidth="1.8" />
+      <line x1={cx - half} y1={y + 2.5} x2={cx + half} y2={y + 1} strokeWidth="1.8" />
+    </g>
+  );
+};
+
+/** Key signatures from seven flats to seven sharps, as the Key menu lists them: major / relative minor. */
+const KEY_OPTIONS = [
+  ['C♭', 'A♭'], ['G♭', 'E♭'], ['D♭', 'B♭'], ['A♭', 'F'], ['E♭', 'C'], ['B♭', 'G'], ['F', 'D'], ['C', 'A'],
+  ['G', 'E'], ['D', 'B'], ['A', 'F♯'], ['E', 'C♯'], ['B', 'G♯'], ['F♯', 'D♯'], ['C♯', 'A♯'],
+].map(([major, minor], i) => {
+  const key = i - 7;
+  const count = key === 0 ? '' : ` · ${Math.abs(key)}${key > 0 ? '♯' : '♭'}`;
+  return { key, label: `${major} / ${minor}m${count}` };
+});
 
 /** Which hand of a grand staff: the treble staff's track is the right. */
 type Hand = 'right' | 'left';
@@ -196,9 +239,12 @@ export const TabSheetEditor: React.FC<TabSheetEditorProps> = ({ meta, channel })
 
   const noteMidi = (note: TabNote, staff: Staff = activeStaff): number =>
     resolveNoteMidi(note, song.tracks[staff.track]) ?? NaN;
+  /** A staff's key signature: its own track's, so a grand staff's hands could even differ. */
+  const keyOf = (staff: Staff): number => song.tracks[staff.track].keySignature ?? 0;
+  /** A pitch as a staff writes it, spelled in that staff's key. */
+  const spell = (midi: number, staff: Staff) => spellPitch(midi, song.tracks[staff.track].transpose, keyOf(staff));
   /** Where a pitch sits on a staff, in the treble's steps (2 = bottom line, 10 = top line). */
-  const staffStep = (midi: number, staff: Staff): number =>
-    midiToDiatonicAndAccidental(midi, song.tracks[staff.track].transpose).diatonicStep + staff.shift;
+  const staffStep = (midi: number, staff: Staff): number => spell(midi, staff).diatonicStep + staff.shift;
   /** The bar a staff draws at an index: its own track's. */
   const barOf = (staff: Staff, mIdx: number): TabMeasure => song.tracks[staff.track].measures[mIdx];
 
@@ -1199,7 +1245,10 @@ export const TabSheetEditor: React.FC<TabSheetEditorProps> = ({ meta, channel })
   const conductorMeasures = song.tracks[0]?.measures ?? [];
   // Bars drawn one above another share their spacing, so a grand staff's hands line up in time.
   const aligned = measures.map((_, mIdx) => alignBars(staves.map(staff => barOf(staff, mIdx))));
-  const measureLayouts: MLayout[] = computeMeasureLayouts(aligned.map(a => a.minWidth), conductorMeasures);
+  // Every row opens with the key signature after the clef; the widest staff's sets the room.
+  const keyAccidentals = showNotation ? Math.max(...staves.map(staff => Math.abs(keyOf(staff)))) : 0;
+  const keyRoom = keyAccidentals === 0 ? 0 : keyAccidentals * KEY_SPACING + 4;
+  const measureLayouts: MLayout[] = computeMeasureLayouts(aligned.map(a => a.minWidth), conductorMeasures, keyRoom);
 
   // Per-measure shift for notes below the lowest notation staff: pushes the TAB
   // down, or with the TAB hidden grows the row. Irrelevant with no notation staff.
@@ -1373,7 +1422,7 @@ export const TabSheetEditor: React.FC<TabSheetEditorProps> = ({ meta, channel })
   // names the beat and the track itself.
   const handleStandardStaffClick = (at: BeatPosition, clickY: number, staff: Staff) => {
     const track = song.tracks[staff.track];
-    const clicked = staffStepToSoundingMidi(Math.round((60 - clickY) / 5) - staff.shift, track.transpose);
+    const clicked = staffStepToSoundingMidi(Math.round((60 - clickY) / 5) - staff.shift, track.transpose, keyOf(staff));
     setActiveTrackIndex(staff.track);
     moveCursorTo(at.measureIndex, at.beatIndex, false);
     if (!isFretted(track)) {
@@ -1809,6 +1858,22 @@ export const TabSheetEditor: React.FC<TabSheetEditorProps> = ({ meta, channel })
               </select>
             </label>
             <label className="compact-field wide-field">
+              <span>Key</span>
+              <select
+                className="control-select"
+                value={part.keySignature ?? 0}
+                onChange={(e) => {
+                  const key = Number(e.target.value);
+                  // A grand staff's hands share their key; C major is stored as no key at all.
+                  updatePart(activeTrackIndex, () => ({ keySignature: key === 0 ? undefined : key }));
+                }}
+              >
+                {KEY_OPTIONS.map(opt => (
+                  <option key={opt.key} value={opt.key}>{opt.label}</option>
+                ))}
+              </select>
+            </label>
+            <label className="compact-field wide-field">
               <span>Volume</span>
               <input
                 type="range"
@@ -2083,6 +2148,13 @@ export const TabSheetEditor: React.FC<TabSheetEditorProps> = ({ meta, channel })
                       </>
                     )}
 
+                    {/* Key signature, on every staff of the row */}
+                    {showNotation && staves.flatMap(staff => keySignatureSteps(keyOf(staff)).map((step, i) => (
+                      <React.Fragment key={`key-${staff.top}-${i}`}>
+                        {accidentalGlyph(Math.sign(keyOf(staff)), KEY_X + i * KEY_SPACING, staff.top + Y_of_step(step + staff.keyOffset))}
+                      </React.Fragment>
+                    )))}
+
                     {/* Stacked TAB text */}
                     {showTab && (
                       <>
@@ -2119,15 +2191,15 @@ export const TabSheetEditor: React.FC<TabSheetEditorProps> = ({ meta, channel })
                       <g>
                         {showNotation && staves.map(staff => (
                           <React.Fragment key={staff.top}>
-                            <text x="50" y={staff.top + 25} className="music-text" fontSize="16" textAnchor="middle">{effectiveTimeSignature.numerator}</text>
-                            <text x="50" y={staff.top + 45} className="music-text" fontSize="16" textAnchor="middle">{effectiveTimeSignature.denominator}</text>
+                            <text x={50 + keyRoom} y={staff.top + 25} className="music-text" fontSize="16" textAnchor="middle">{effectiveTimeSignature.numerator}</text>
+                            <text x={50 + keyRoom} y={staff.top + 45} className="music-text" fontSize="16" textAnchor="middle">{effectiveTimeSignature.denominator}</text>
                           </React.Fragment>
                         ))}
 
                         {showTab && (
                           <>
-                            <text x="50" y={tabTop + ts + stringCount * TAB_STAFF_HEIGHT_PX / 2 - 8} className="music-text" fontSize="16" textAnchor="middle">{effectiveTimeSignature.numerator}</text>
-                            <text x="50" y={tabTop + ts + stringCount * TAB_STAFF_HEIGHT_PX / 2 + 12} className="music-text" fontSize="16" textAnchor="middle">{effectiveTimeSignature.denominator}</text>
+                            <text x={50 + keyRoom} y={tabTop + ts + stringCount * TAB_STAFF_HEIGHT_PX / 2 - 8} className="music-text" fontSize="16" textAnchor="middle">{effectiveTimeSignature.numerator}</text>
+                            <text x={50 + keyRoom} y={tabTop + ts + stringCount * TAB_STAFF_HEIGHT_PX / 2 + 12} className="music-text" fontSize="16" textAnchor="middle">{effectiveTimeSignature.denominator}</text>
                           </>
                         )}
                       </g>
@@ -2310,8 +2382,12 @@ export const TabSheetEditor: React.FC<TabSheetEditorProps> = ({ meta, channel })
             const rowY = getRowY(mIdx);
             const staffY = rowY + staff.top;
             const ts = getRowShift(mIdx);
-            const transpose = song.tracks[staff.track].transpose;
             const beamGroups = computeBeamGroups(measure.beats, getEffectiveTimeSignature(song, mIdx));
+            // Each note's ♯/♭/♮: only where neither the key nor an earlier note in the bar already says it.
+            const accidentals = barAccidentals(
+              measure.beats.map(b => (b.isRest ? [] : b.notes.map(n => spell(noteMidi(n, staff), staff)))),
+              keyOf(staff),
+            );
             return (
               <g key={`measure-${measure.id}-${staff.top}`}>
               {measure.beats.map((b, bIdx) => {
@@ -2381,7 +2457,7 @@ export const TabSheetEditor: React.FC<TabSheetEditorProps> = ({ meta, channel })
                   midi,
                   dot: b.dot,
                   step,
-                  accidental: midiToDiatonicAndAccidental(midi, transpose).accidental,
+                  accidental: accidentals[bIdx]?.[noteIndex] ?? null,
                   y: staffY + Y_of_step(step)
                 };
               });
@@ -2452,37 +2528,7 @@ export const TabSheetEditor: React.FC<TabSheetEditorProps> = ({ meta, channel })
                           });
                         })()}
 
-                        {/* Accidental (#) if sharp */}
-                        {n.accidental === '#' && (
-                          <g className="glyph-ink-stroke" strokeWidth="1.3" opacity="0.9" style={{ pointerEvents: 'none' }}>
-                            <line x1={beatX - 13} y1={n.y - 6} x2={beatX - 13} y2={n.y + 6} />
-                            <line x1={beatX - 10} y1={n.y - 8} x2={beatX - 10} y2={n.y + 4} />
-                            <line x1={beatX - 16} y1={n.y - 2.5} x2={beatX - 7} y2={n.y - 4} />
-                            <line x1={beatX - 16} y1={n.y + 2.5} x2={beatX - 7} y2={n.y + 1} />
-                      {!beamInfo && b.duration === '32' && (
-                        <g className="glyph-ink">
-                          <path
-                            d={stemUp 
-                              ? `M ${stemX} ${stemEndY} c 4 3, 7 9, 5 17 c -1 -5, -3 -9, -5 -12` 
-                              : `M ${stemX} ${stemEndY} c 4 -3, 7 -9, 5 -17 c -1 5, -3 9, -5 12`
-                            }
-                          />
-                          <path
-                            d={stemUp 
-                              ? `M ${stemX} ${stemEndY + 5} c 4 3, 7 9, 5 17 c -1 -5, -3 -9, -5 -12` 
-                              : `M ${stemX} ${stemEndY - 5} c 4 -3, 7 -9, 5 -17 c -1 5, -3 9, -5 12`
-                            }
-                          />
-                          <path
-                            d={stemUp 
-                              ? `M ${stemX} ${stemEndY + 10} c 4 3, 7 9, 5 17 c -1 -5, -3 -9, -5 -12` 
-                              : `M ${stemX} ${stemEndY - 10} c 4 -3, 7 -9, 5 -17 c -1 5, -3 9, -5 12`
-                            }
-                          />
-                        </g>
-                      )}
-                    </g>
-                  )}
+                        {n.accidental !== null && accidentalGlyph(n.accidental, beatX - 11.5, n.y)}
 
                         {/* Notehead */}
                         <ellipse
@@ -2539,6 +2585,28 @@ export const TabSheetEditor: React.FC<TabSheetEditorProps> = ({ meta, channel })
                             d={stemUp 
                               ? `M ${stemX} ${stemEndY + 5} c 4 3, 7 9, 5 17 c -1 -5, -3 -9, -5 -12` 
                               : `M ${stemX} ${stemEndY - 5} c 4 -3, 7 -9, 5 -17 c -1 5, -3 9, -5 12`
+                            }
+                          />
+                        </g>
+                      )}
+                      {!beamInfo && b.duration === '32' && (
+                        <g className="glyph-ink">
+                          <path
+                            d={stemUp 
+                              ? `M ${stemX} ${stemEndY} c 4 3, 7 9, 5 17 c -1 -5, -3 -9, -5 -12` 
+                              : `M ${stemX} ${stemEndY} c 4 -3, 7 -9, 5 -17 c -1 5, -3 9, -5 12`
+                            }
+                          />
+                          <path
+                            d={stemUp 
+                              ? `M ${stemX} ${stemEndY + 5} c 4 3, 7 9, 5 17 c -1 -5, -3 -9, -5 -12` 
+                              : `M ${stemX} ${stemEndY - 5} c 4 -3, 7 -9, 5 -17 c -1 5, -3 9, -5 12`
+                            }
+                          />
+                          <path
+                            d={stemUp 
+                              ? `M ${stemX} ${stemEndY + 10} c 4 3, 7 9, 5 17 c -1 -5, -3 -9, -5 -12` 
+                              : `M ${stemX} ${stemEndY - 10} c 4 -3, 7 -9, 5 -17 c -1 5, -3 9, -5 12`
                             }
                           />
                         </g>
