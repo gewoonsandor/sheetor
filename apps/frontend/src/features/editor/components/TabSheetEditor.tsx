@@ -34,8 +34,17 @@ import {
   getEffectiveTimeSignature,
   pruneNotesToStringCount,
   locateCursor,
+  beatSpan,
+  copyBeats,
+  MAX_REPEAT,
+  MIN_REPEAT,
+  nextBeatPosition,
+  orderRange,
+  pasteClip,
+  removeBeats,
 } from './songUtils';
 import type { CursorIds, CursorIndices } from './songUtils';
+import { getClip, setClip, subscribeClip } from '../clipboard';
 import { INSTRUMENTS } from './audioEngine';
 import { TrackStrip } from './TrackStrip';
 import { parseSong } from './songSchema';
@@ -63,6 +72,7 @@ import {
   getTabStaffTop,
   TAB_STAFF_HEIGHT_PX,
   TAB_FRET_FONT_SIZE,
+  REPEAT_PADDING,
 } from './layout';
 
 // Treble clef outline traced from the public-domain "Treble clef with empty staff.svg"
@@ -120,6 +130,9 @@ export const TabSheetEditor: React.FC<TabSheetEditorProps> = ({ meta, channel })
   const [bpmEditIndex, setBpmEditIndex] = useState<number | null>(null);
   // While a tempo box is being typed in, the draft wins; null shows the song.
   const [bpmDraft, setBpmDraft] = useState<string | null>(null);
+  // The far end of a Shift-selection, by id so a collaborator's edit cannot move it.
+  const [anchor, setAnchor] = useState<{ measureId: string; beatId: string } | null>(null);
+  const clip = useSyncExternalStore(subscribeClip, getClip);
 
   // Everything the score and the input panels read comes from the active
   // track, so the rest of the component works one track at a time.
@@ -370,6 +383,21 @@ export const TabSheetEditor: React.FC<TabSheetEditorProps> = ({ meta, channel })
     }
     setConductorMeasure(activeMeasureIndex, measure => ({ ...measure, timeSignature: nextTimeSignature }));
   };
+
+  const toggleRepeatStart = () => setConductorMeasure(activeMeasureIndex, measure => {
+    const next = { ...measure };
+    if (next.repeatStart) delete next.repeatStart;
+    else next.repeatStart = true;
+    return next;
+  });
+
+  /** How many times the section ending at the cursor's bar plays; null removes the :‖. */
+  const setRepeatEnd = (times: number | null) => setConductorMeasure(activeMeasureIndex, measure => {
+    const next = { ...measure };
+    delete next.repeatEnd;
+    if (times !== null) next.repeatEnd = Math.max(MIN_REPEAT, Math.min(MAX_REPEAT, times));
+    return next;
+  });
 
   const updateActiveBeatNotes = (updateFn: (notes: TabNote[]) => TabNote[]) => {
     setMeasures(prev => prev.map((m, mIdx) => {
@@ -654,6 +682,61 @@ export const TabSheetEditor: React.FC<TabSheetEditorProps> = ({ meta, channel })
     }
   };
 
+  // --- SELECTION & CLIPBOARD ---
+
+  const cursorPosition = { measureIndex: activeMeasureIndex, beatIndex: activeBeatIndex };
+  const anchorMeasureIndex = measures.findIndex(m => m.id === anchor?.measureId);
+  const anchorBeatIndex = measures[anchorMeasureIndex]?.beats.findIndex(b => b.id === anchor?.beatId) ?? -1;
+  const [selectionFrom, selectionTo] = orderRange(
+    anchorBeatIndex === -1 ? cursorPosition : { measureIndex: anchorMeasureIndex, beatIndex: anchorBeatIndex },
+    cursorPosition,
+  );
+  const hasSelection = selectionFrom.measureIndex !== selectionTo.measureIndex
+    || selectionFrom.beatIndex !== selectionTo.beatIndex;
+
+  /** Shift-moves grow a selection from where the cursor was; any other move drops it. */
+  const markSelection = (extend: boolean) => {
+    if (!extend) setAnchor(null);
+    else if (anchorBeatIndex === -1 && activeMeasureId !== null && activeBeatId !== null) {
+      setAnchor({ measureId: activeMeasureId, beatId: activeBeatId });
+    }
+  };
+
+  const moveCursorTo = (measureIndex: number, beatIndex: number, extend: boolean) => {
+    markSelection(extend);
+    setActiveMeasureIndex(measureIndex);
+    setActiveBeatIndex(beatIndex);
+  };
+
+  /** Copies the selection, or just the cursor's beat when nothing is selected. */
+  const copySelection = () => {
+    setClip(copyBeats(activeTrack, selectionFrom, selectionTo));
+  };
+
+  const deleteSelection = () => {
+    const next = removeBeats(song, activeTrackIndex, selectionFrom, selectionTo);
+    editSong(next);
+    const bars = next.tracks[activeTrackIndex].measures;
+    const measureIndex = Math.min(selectionFrom.measureIndex, bars.length - 1);
+    setActiveMeasureIndex(measureIndex);
+    setActiveBeatIndex(Math.min(selectionFrom.beatIndex, bars[measureIndex].beats.length - 1));
+    setAnchor(null);
+  };
+
+  const cutSelection = () => {
+    copySelection();
+    deleteSelection();
+  };
+
+  const pasteClipboard = () => {
+    if (!clip) return;
+    const pasted = pasteClip(song, activeTrackIndex, cursorPosition, clip);
+    editSong(pasted.song);
+    setActiveMeasureIndex(pasted.cursor.measureIndex);
+    setActiveBeatIndex(pasted.cursor.beatIndex);
+    setAnchor(null);
+  };
+
   // --- KEYBOARD CONTROLS ---
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLDivElement>) => {
@@ -668,6 +751,15 @@ export const TabSheetEditor: React.FC<TabSheetEditorProps> = ({ meta, channel })
     const measure = measures[activeMeasureIndex];
     if (!measure) return;
     const beat = measure.beats[activeBeatIndex];
+
+    if ((e.ctrlKey || e.metaKey) && ['c', 'x', 'v'].includes(e.key.toLowerCase())) {
+      e.preventDefault();
+      const key = e.key.toLowerCase();
+      if (key === 'c') copySelection();
+      else if (key === 'x') cutSelection();
+      else pasteClipboard();
+      return;
+    }
 
     switch (e.key) {
       // Arrow navigation — with Shift held, the arrows retune the selected note
@@ -690,6 +782,7 @@ export const TabSheetEditor: React.FC<TabSheetEditorProps> = ({ meta, channel })
         break;
       case 'ArrowLeft':
         e.preventDefault();
+        markSelection(e.shiftKey);
         if (activeBeatIndex > 0) {
           setActiveBeatIndex(prev => prev - 1);
         } else if (activeMeasureIndex > 0) {
@@ -700,6 +793,16 @@ export const TabSheetEditor: React.FC<TabSheetEditorProps> = ({ meta, channel })
         break;
       case 'ArrowRight': {
         e.preventDefault();
+        markSelection(e.shiftKey);
+        if (e.shiftKey) {
+          // Selecting walks the beats that exist; it never writes new ones.
+          const next = nextBeatPosition(measures, cursorPosition, false);
+          if (next) {
+            setActiveMeasureIndex(next.measureIndex);
+            setActiveBeatIndex(next.beatIndex);
+          }
+          break;
+        }
         const measureDur = measure.beats.reduce((acc, b) => acc + getDurationVal(b.duration, b.dot), 0);
         const timeSignature = getEffectiveTimeSignature(song, activeMeasureIndex);
         const targetDur = timeSignature.numerator * (4 / timeSignature.denominator);
@@ -748,6 +851,10 @@ export const TabSheetEditor: React.FC<TabSheetEditorProps> = ({ meta, channel })
         }
         break;
       }
+
+      case 'Escape':
+        setAnchor(null);
+        break;
 
       // Spacebar toggles playback
       case ' ':
@@ -805,7 +912,9 @@ export const TabSheetEditor: React.FC<TabSheetEditorProps> = ({ meta, channel })
       case 'Backspace':
       case 'Delete':
         e.preventDefault();
-        if (beat?.isRest) {
+        if (hasSelection) {
+          deleteSelection();
+        } else if (beat?.isRest) {
           deleteActiveBeat();
         } else if (showNoteOptions) {
           removeCursorNote();
@@ -860,7 +969,7 @@ export const TabSheetEditor: React.FC<TabSheetEditorProps> = ({ meta, channel })
         // Handle number entry (0 to 9) with multi-digit parsing (e.g. typing 1 then 2 = fret 12)
         if (/[0-9]/.test(e.key)) {
           e.preventDefault();
-          const now = Date.now();
+          const now = e.timeStamp;
           let fretVal = parseInt(e.key);
 
           // If the last key was pressed less than 800ms ago and was a number
@@ -919,7 +1028,9 @@ export const TabSheetEditor: React.FC<TabSheetEditorProps> = ({ meta, channel })
   const ROW_HEIGHT = computeRowHeight(stringCount, showTab, showNotation);
   const tabTop = getTabStaffTop(showNotation);
 
-  const measureLayouts: MLayout[] = computeMeasureLayouts(measures);
+  // Tempo, metre and repeat marks are song-wide, so they are read off the conductor.
+  const conductorMeasures = song.tracks[0]?.measures ?? [];
+  const measureLayouts: MLayout[] = computeMeasureLayouts(measures, conductorMeasures);
 
   // Per-measure shift for notes below the notation staff: pushes the TAB down,
   // or with the TAB hidden grows the row. Irrelevant with no notation staff.
@@ -1109,9 +1220,8 @@ export const TabSheetEditor: React.FC<TabSheetEditorProps> = ({ meta, channel })
 
     const placement = findBestStringFret(targetMidi);
     if (placement) {
-      setActiveMeasureIndex(mIdx);
       const bIdx = measures[mIdx].beats.findIndex(b => b.id === beatId);
-      setActiveBeatIndex(bIdx);
+      moveCursorTo(mIdx, bIdx, false);
       setFretForActiveNote(placement.stringIndex, placement.fret);
     }
   };
@@ -1218,6 +1328,7 @@ export const TabSheetEditor: React.FC<TabSheetEditorProps> = ({ meta, channel })
     ? bpmDraft
     : String(activeMeasureBpm);
   const activeMeasureTimeSignature = getEffectiveTimeSignature(song, activeMeasureIndex);
+  const activeRepeat = conductorMeasures[activeMeasureIndex]?.repeatEnd;
 
   // Piano keyboard geometry & highlighting. A fretted track's keyboard spans
   // what its tuning can reach; a pitched track gets a fixed practical range.
@@ -1258,14 +1369,35 @@ export const TabSheetEditor: React.FC<TabSheetEditorProps> = ({ meta, channel })
   const isCursorNote = (mIdx: number, bIdx: number, noteIndex: number, notes: TabNote[]): boolean =>
     activeMeasureIndex === mIdx && activeBeatIndex === bIdx && cursorNoteIndex(notes) === noteIndex;
 
-  const selectNote = (mIdx: number, bIdx: number, noteIndex: number, notes: TabNote[]) => {
+  const selectNote = (mIdx: number, bIdx: number, noteIndex: number, notes: TabNote[], extend: boolean) => {
     const wasSelected = isCursorNote(mIdx, bIdx, noteIndex, notes);
     const note = notes[noteIndex];
-    setActiveMeasureIndex(mIdx);
-    setActiveBeatIndex(bIdx);
+    moveCursorTo(mIdx, bIdx, extend);
     if (note) setActiveStringIndex(cursorSlotOf(note, notes));
-    setShowNoteOptions(wasSelected && !readOnly);
+    setShowNoteOptions(wasSelected && !extend && !readOnly);
   };
+
+  /** Dots of a repeat sign sit in the two spaces either side of each staff's middle. */
+  const repeatDotYs = (ts: number): number[] => {
+    const ys = showNotation ? [25, 35] : [];
+    if (showTab) {
+      const middle = tabTop + ts + (stringCount - 1) * 5;
+      const offset = stringCount % 2 === 0 ? 10 : 5;
+      ys.push(middle - offset, middle + offset);
+    }
+    return ys;
+  };
+
+  /** ‖: when `side` is 1, :‖ when it is -1 — thick line outside, dots facing the music. */
+  const repeatSign = (x: number, side: 1 | -1, rowY: number, ts: number) => (
+    <g pointerEvents="none">
+      <line x1={x + side * 1.25} y1={rowY + getStaffTop(ts)} x2={x + side * 1.25} y2={rowY + getStaffBottom(ts)} className="bar-line-end" />
+      <line x1={x + side * 5} y1={rowY + getStaffTop(ts)} x2={x + side * 5} y2={rowY + getStaffBottom(ts)} className="bar-line" />
+      {repeatDotYs(ts).map(y => (
+        <circle key={y} cx={x + side * 8.5} cy={rowY + y} r="1.8" className="glyph-ink" />
+      ))}
+    </g>
+  );
 
   const durationButtons = (['1', '2', '4', '8', '16', '32'] as const).map((dur) => (
     <button
@@ -1606,7 +1738,12 @@ export const TabSheetEditor: React.FC<TabSheetEditorProps> = ({ meta, channel })
             const ts = getRowShift(mIdx);
             const effectiveTimeSignature = getEffectiveTimeSignature(song, mIdx);
             const effectiveBpm = getEffectiveBpm(song, mIdx);
-            const showTimingChange = mIdx === 0 || typeof measure.bpm === 'number' || !!measure.timeSignature;
+            const marks = conductorMeasures[mIdx];
+            const showTimingChange = mIdx === 0 || typeof marks?.bpm === 'number' || !!marks?.timeSignature;
+            // A ‖: stands in for a plain bar line, but follows a clef or metre that opens the bar.
+            const repeatStartX = measureLayouts[mIdx]?.x === 0 || showTimingChange
+              ? measureX + getMeasurePadding(mIdx) - REPEAT_PADDING - 6
+              : measureX;
 
             const { isValid, actual, expected } = checkMeasureBeats(measure, mIdx, (i) => getEffectiveTimeSignature(song, i));
 
@@ -1672,6 +1809,22 @@ export const TabSheetEditor: React.FC<TabSheetEditorProps> = ({ meta, channel })
                   y2={rowY + getStaffBottom(ts)}
                   className={isLast ? "bar-line-end" : "bar-line"}
                 />
+
+                {marks?.repeatStart && repeatSign(repeatStartX, 1, rowY, ts)}
+                {marks?.repeatEnd !== undefined && repeatSign(measureEnd, -1, rowY, ts)}
+                {/* A plain repeat plays twice; engravers only write the count beyond that. */}
+                {(marks?.repeatEnd ?? 0) > 2 && (
+                  <text
+                    x={measureEnd - 2}
+                    y={rowY - 6}
+                    textAnchor="end"
+                    className="music-text"
+                    fontSize="9"
+                    style={{ pointerEvents: 'none' }}
+                  >
+                    ×{marks?.repeatEnd}
+                  </text>
+                )}
 
                 {showTimingChange && (bpmEditIndex === mIdx ? (
                   // An HTML input inside the SVG: foreignObject coordinates are
@@ -1832,6 +1985,10 @@ export const TabSheetEditor: React.FC<TabSheetEditorProps> = ({ meta, channel })
                         fill="transparent"
                         style={{ cursor: 'pointer' }}
                         onClick={(e) => {
+                          if (e.shiftKey) {
+                            moveCursorTo(mIdx, measure.beats.indexOf(b), true);
+                            return;
+                          }
                           const rect = e.currentTarget.getBoundingClientRect();
                           const relativeY = e.clientY - rect.top;
                           const designY = relativeY * (65 / rect.height);
@@ -1851,9 +2008,8 @@ export const TabSheetEditor: React.FC<TabSheetEditorProps> = ({ meta, channel })
                             height="10"
                             fill="transparent"
                             style={{ cursor: 'pointer' }}
-                            onClick={() => {
-                              setActiveMeasureIndex(mIdx);
-                              setActiveBeatIndex(measure.beats.indexOf(b));
+                            onClick={(e) => {
+                              moveCursorTo(mIdx, measure.beats.indexOf(b), e.shiftKey);
                               setActiveStringIndex(stringIdx);
                               setShowNoteOptions(false);
                             }}
@@ -1864,6 +2020,26 @@ export const TabSheetEditor: React.FC<TabSheetEditorProps> = ({ meta, channel })
                   );
                 })}
               </g>
+            );
+          })}
+
+          {/* Shift-selection: one band per bar it touches, under the notes */}
+          {hasSelection && measures.map((measure, mIdx) => {
+            if (mIdx < selectionFrom.measureIndex || mIdx > selectionTo.measureIndex) return null;
+            const [first, last] = beatSpan(mIdx, measure.beats.length, selectionFrom, selectionTo);
+            const ts = getRowShift(mIdx);
+            const left = getBeatCoordinates(mIdx, first) - 11;
+            return (
+              <rect
+                key={`range-${measure.id}`}
+                x={left}
+                y={getRowY(mIdx) + getStaffTop(ts) - 5}
+                width={getBeatCoordinates(mIdx, last) + 11 - left}
+                height={getStaffBottom(ts) - getStaffTop(ts) + 10}
+                rx="4"
+                className="selection-range"
+                pointerEvents="none"
+              />
             );
           })}
 
@@ -2133,8 +2309,8 @@ export const TabSheetEditor: React.FC<TabSheetEditorProps> = ({ meta, channel })
                           transform={`rotate(-20 ${beatX} ${n.y})`}
                           strokeWidth="1.4"
                           className={`notehead${isSelected ? ' is-selected' : ''}${b.duration === '1' || b.duration === '2' ? ' is-hollow' : ''}`}
-                          onClick={() => {
-                            selectNote(mIdx, bIdx, n.noteIndex, b.notes);
+                          onClick={(e) => {
+                            selectNote(mIdx, bIdx, n.noteIndex, b.notes, e.shiftKey);
                           }}
                         />
                         {/* Dotted note dot */}
@@ -2208,8 +2384,8 @@ export const TabSheetEditor: React.FC<TabSheetEditorProps> = ({ meta, channel })
                       <g
                         key={`tab-note-${mIdx}-${bIdx}-${n.stringIndex}`}
                         className={`tab-fret-container ${isSelected ? 'active-note' : ''}`}
-                        onClick={() => {
-                          selectNote(mIdx, bIdx, noteIndex, b.notes);
+                        onClick={(e) => {
+                          selectNote(mIdx, bIdx, noteIndex, b.notes, e.shiftKey);
                         }}
                       >
                         {/* Background rectangle to block staff line behind fret number */}
@@ -2968,6 +3144,53 @@ export const TabSheetEditor: React.FC<TabSheetEditorProps> = ({ meta, channel })
                   ))}
                 </select>
               </div>
+              <div className="control-group">
+                <span className="control-label">Repeat</span>
+                <button
+                  className={`btn ${conductorMeasures[activeMeasureIndex]?.repeatStart ? 'btn-active' : ''}`}
+                  onClick={toggleRepeatStart}
+                  title="Start a repeated section at this bar"
+                >
+                  Start
+                </button>
+                <button
+                  className={`btn ${activeRepeat !== undefined ? 'btn-active' : ''}`}
+                  onClick={() => setRepeatEnd(activeRepeat !== undefined ? null : MIN_REPEAT)}
+                  title="End a repeated section at this bar"
+                >
+                  End
+                </button>
+              </div>
+              {activeRepeat !== undefined && (
+                <div className="control-group">
+                  <span className="control-label">Plays</span>
+                  <div className="stepper">
+                    <button
+                      type="button"
+                      className="stepper-btn"
+                      onClick={() => setRepeatEnd(activeRepeat - 1)}
+                      disabled={activeRepeat <= MIN_REPEAT}
+                      aria-label="Play the section one time fewer"
+                    >
+                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
+                        <path d="M5 12h14" />
+                      </svg>
+                    </button>
+                    <output className="stepper-value">×{activeRepeat}</output>
+                    <button
+                      type="button"
+                      className="stepper-btn"
+                      onClick={() => setRepeatEnd(activeRepeat + 1)}
+                      disabled={activeRepeat >= MAX_REPEAT}
+                      aria-label="Play the section one time more"
+                    >
+                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
+                        <path d="M12 5v14M5 12h14" />
+                      </svg>
+                    </button>
+                  </div>
+                </div>
+              )}
               <div className="popover-divider" />
               </>
               )}
@@ -2999,6 +3222,13 @@ export const TabSheetEditor: React.FC<TabSheetEditorProps> = ({ meta, channel })
             </button>
             {openBottomMenu === 'edit' && (
               <div className="bottom-popover">
+              <span className="popover-title">Clipboard</span>
+              <div className="control-group">
+                <button className="btn" onClick={copySelection} style={{ flex: 1 }}>Copy</button>
+                <button className="btn" onClick={cutSelection} style={{ flex: 1 }}>Cut</button>
+                <button className="btn" onClick={pasteClipboard} disabled={!clip} style={{ flex: 1 }}>Paste</button>
+              </div>
+              <div className="popover-divider" />
               <span className="popover-title">Beat {activeBeatIndex + 1}</span>
               <button className="btn btn-primary" onClick={insertBeatAfterActive}>Insert beat</button>
               <button className="btn btn-danger" onClick={deleteActiveBeat}>Delete beat</button>
@@ -3102,6 +3332,8 @@ export const TabSheetEditor: React.FC<TabSheetEditorProps> = ({ meta, channel })
               <span><kbd>Space</kbd> Play</span>
               <span><kbd>R</kbd> Rest</span>
               <span><kbd>+</kbd><kbd>-</kbd> Duration</span>
+              <span><kbd>Shift</kbd><kbd>←</kbd><kbd>→</kbd> Select beats</span>
+              <span><kbd>Ctrl</kbd><kbd>C</kbd><kbd>X</kbd><kbd>V</kbd> Copy, cut, paste</span>
               <span className="shortcut-divider">Note techniques</span>
               <span><kbd>H</kbd> Slur</span>
               <span><kbd>S</kbd> Legato slide</span>

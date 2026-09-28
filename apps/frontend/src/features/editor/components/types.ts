@@ -74,6 +74,10 @@ export interface TabMeasure {
   beats: TabBeat[];
   bpm?: number;
   timeSignature?: TimeSignature;
+  /** Conductor only, like bpm: a ‖: opens a repeated section at this bar. */
+  repeatStart?: boolean;
+  /** Conductor only: a :‖ closes one here, and how many times the section plays in all. */
+  repeatEnd?: number;
 }
 
 export interface TabTrack {

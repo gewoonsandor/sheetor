@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 
-import type { TabBeat, TabMeasure, TabSong, TabTrack } from '../../../../src/features/editor/components/types';
+import type { BeatPosition, TabBeat, TabMeasure, TabSong, TabTrack } from '../../../../src/features/editor/components/types';
 import {
   computeBeamGroups,
   createEmptyMeasure,
@@ -17,6 +17,10 @@ import {
   midiToDiatonicAndAccidental,
   midiToNoteOctave,
   nextBeatPosition,
+  nextPlayPosition,
+  copyBeats,
+  pasteClip,
+  removeBeats,
   locateCursor,
   normalizeTrackLengths,
   requiredStringCount,
@@ -232,6 +236,102 @@ describe('beat positions', () => {
     const bars = [measure([]), measure([])];
     expect(firstBeatPosition(bars)).toBeNull();
     expect(nextBeatPosition(bars, { measureIndex: 0, beatIndex: 0 }, true)).toBeNull();
+  });
+});
+
+describe('repeats', () => {
+  /** Bar indices a single-track song plays through, beat by beat, from its first beat. */
+  const walk = (bars: TabMeasure[]): number[] => {
+    const passes = new Map<number, number>();
+    const played: number[] = [];
+    let at: BeatPosition | null = { measureIndex: 0, beatIndex: 0 };
+    while (at && played.length < 50) {
+      played.push(at.measureIndex);
+      at = nextPlayPosition(bars, bars, at, false, passes);
+    }
+    return played;
+  };
+
+  it('plays a section the chosen number of times, then carries on', () => {
+    const bars = [
+      measure([beat('4')]),
+      measure([beat('4'), beat('4')], { repeatStart: true }),
+      measure([beat('4')], { repeatEnd: 3 }),
+      measure([beat('4')]),
+    ];
+    expect(walk(bars)).toEqual([0, 1, 1, 2, 1, 1, 2, 1, 1, 2, 3]);
+  });
+
+  it('goes back to the previous repeat end, or the top, when no start is marked', () => {
+    const bars = [
+      measure([beat('4')], { repeatEnd: 2 }),
+      measure([beat('4')]),
+      measure([beat('4')], { repeatEnd: 2 }),
+    ];
+    expect(walk(bars)).toEqual([0, 0, 1, 2, 1, 2]);
+  });
+});
+
+describe('clipboard', () => {
+  const riff = () => song([
+    measure([beat('4', [{ stringIndex: 0, fret: 3 }]), beat('4', [{ stringIndex: 5, fret: 0 }])]),
+    measure([beat('2', [{ stringIndex: 1, fret: 1 }])]),
+  ]);
+  const frets = (track: TabTrack) => track.measures.map(m => m.beats.map(b => b.notes));
+
+  it('pastes whole bars as new bars on every track, with fresh ids', () => {
+    const start = riff();
+    start.tracks.push({ ...createTrack('bass'), measures: [createEmptyMeasure(), createEmptyMeasure()] });
+    const clip = copyBeats(start.tracks[0], { measureIndex: 0, beatIndex: 0 }, { measureIndex: 0, beatIndex: 1 });
+    const { song: next, cursor } = pasteClip(start, 0, { measureIndex: 1, beatIndex: 0 }, clip);
+
+    expect(next.tracks.map(t => t.measures.length)).toEqual([3, 3]);
+    expect(frets(next.tracks[0])[2]).toEqual(frets(start.tracks[0])[0]);
+    expect(next.tracks[0].measures[2].id).not.toBe(start.tracks[0].measures[0].id);
+    expect(cursor).toEqual({ measureIndex: 2, beatIndex: 0 });
+  });
+
+  it('pastes part of a bar as beats after the cursor', () => {
+    const start = riff();
+    const clip = copyBeats(start.tracks[0], { measureIndex: 0, beatIndex: 1 }, { measureIndex: 0, beatIndex: 1 });
+    const { song: next, cursor } = pasteClip(start, 0, { measureIndex: 1, beatIndex: 0 }, clip);
+
+    expect(frets(next.tracks[0])[1]).toEqual([[{ stringIndex: 1, fret: 1 }], [{ stringIndex: 5, fret: 0 }]]);
+    expect(next.tracks[0].measures).toHaveLength(2);
+    expect(cursor).toEqual({ measureIndex: 1, beatIndex: 1 });
+  });
+
+  it('carries notes into another tuning or a pitched track by sounding pitch', () => {
+    const start = riff();
+    start.tracks.push(
+      { ...createTrack('guitar'), tuning: [64, 59, 55, 50, 45, 38], measures: [createEmptyMeasure(), createEmptyMeasure()] },
+      { ...createTrack('piano'), measures: [createEmptyMeasure(), createEmptyMeasure()] },
+    );
+    const clip = copyBeats(start.tracks[0], { measureIndex: 0, beatIndex: 0 }, { measureIndex: 0, beatIndex: 1 });
+    const dropD = pasteClip(start, 1, { measureIndex: 0, beatIndex: 0 }, clip).song.tracks[1];
+    const piano = pasteClip(start, 2, { measureIndex: 0, beatIndex: 0 }, clip).song.tracks[2];
+
+    // The high E keeps its string; low E is not open on drop D, so it moves to fret 2.
+    expect(frets(dropD)[1]).toEqual([[{ stringIndex: 0, fret: 3 }], [{ stringIndex: 5, fret: 2 }]]);
+    expect(frets(piano)[1]).toEqual([[{ midi: 67 }], [{ midi: 40 }]]);
+  });
+
+  it('cuts whole bars from every track but always leaves one', () => {
+    const start = riff();
+    start.tracks.push({ ...createTrack('piano'), measures: [createEmptyMeasure(), createEmptyMeasure()] });
+    const cut = removeBeats(start, 0, { measureIndex: 0, beatIndex: 0 }, { measureIndex: 0, beatIndex: 1 });
+    expect(cut.tracks.map(t => t.measures.length)).toEqual([1, 1]);
+    expect(frets(cut.tracks[0])).toEqual([[[{ stringIndex: 1, fret: 1 }]]]);
+
+    const all = removeBeats(start, 0, { measureIndex: 0, beatIndex: 0 }, { measureIndex: 1, beatIndex: 0 });
+    expect(all.tracks.map(t => t.measures.length)).toEqual([1, 1]);
+  });
+
+  it('leaves a single rest in a bar a partial cut empties', () => {
+    const start = riff();
+    const cut = removeBeats(start, 0, { measureIndex: 0, beatIndex: 1 }, { measureIndex: 1, beatIndex: 0 });
+    expect(frets(cut.tracks[0])).toEqual([[[{ stringIndex: 0, fret: 3 }]], [[]]]);
+    expect(cut.tracks[0].measures[1].beats[0]).toMatchObject({ duration: '2', isRest: true });
   });
 });
 

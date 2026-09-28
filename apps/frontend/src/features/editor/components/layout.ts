@@ -68,12 +68,17 @@ export const getFretboardStringY = (stringIdx: number, stringCount: number): num
   return FRETBOARD_STRING_TOP + stringIdx * FRETBOARD_STRING_GAP;
 };
 
-export const computeMeasureLayouts = (measures: TabMeasure[]): MLayout[] => {
-  const infos = measures.map((measure) => {
-    const contentWidth = computeMeasureContentWidth(measure.beats);
+/** Room a ‖: sign takes before a bar's first beat. */
+export const REPEAT_PADDING = 16;
+
+/** Beats come from the drawn track; tempo, metre and repeat marks from the conductor. */
+export const computeMeasureLayouts = (measures: TabMeasure[], conductor: TabMeasure[]): MLayout[] => {
+  const infos = measures.map((measure, i) => {
+    const marks = conductor[i];
     return {
-      contentWidth,
-      hasTimingChange: !!(measure?.bpm || measure?.timeSignature),
+      contentWidth: computeMeasureContentWidth(measure.beats),
+      hasTimingChange: !!(marks?.bpm || marks?.timeSignature),
+      repeatRoom: marks?.repeatStart ? REPEAT_PADDING : 0,
     };
   });
 
@@ -82,15 +87,15 @@ export const computeMeasureLayouts = (measures: TabMeasure[]): MLayout[] => {
   let curX = 0;
 
   for (let i = 0; i < infos.length; i++) {
-    const { contentWidth, hasTimingChange } = infos[i];
+    const { contentWidth, hasTimingChange, repeatRoom } = infos[i];
     const isFirstInRow = curX === 0;
-    const padding = isFirstInRow ? 70 : (hasTimingChange ? 46 : 18);
+    const padding = (isFirstInRow ? 70 : (hasTimingChange ? 46 : 18)) + repeatRoom;
     const totalWidth = padding + contentWidth + 20;
 
     if (!isFirstInRow && curX + totalWidth > MAX_ROW_WIDTH) {
       curRow++;
       curX = 0;
-      const newPadding = 70;
+      const newPadding = 70 + repeatRoom;
       const newTotalWidth = newPadding + contentWidth + 20;
       layouts.push({ row: curRow, x: 0, width: Math.max(newTotalWidth, MIN_MEASURE_WIDTH), padding: newPadding });
       curX = Math.max(newTotalWidth, MIN_MEASURE_WIDTH);

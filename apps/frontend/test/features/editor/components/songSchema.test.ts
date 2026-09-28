@@ -105,6 +105,22 @@ describe('parseSong', () => {
     expect(result.song.tracks[0].measures[0].timeSignature).toBeUndefined();
   });
 
+  it('keeps repeat marks and drops a count that is not a whole number of plays', () => {
+    const result = parseSong({
+      ...valid(),
+      measures: [
+        { beats: [{ duration: '4' }], repeatStart: true, repeatEnd: 3 },
+        { beats: [{ duration: '4' }], repeatStart: 'yes', repeatEnd: 1 },
+        { beats: [{ duration: '4' }], repeatEnd: 2.5 },
+      ],
+    });
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    const [first, second, third] = result.song.tracks[0].measures;
+    expect([first.repeatStart, first.repeatEnd]).toEqual([true, 3]);
+    expect([second.repeatStart, second.repeatEnd, third.repeatEnd]).toEqual([undefined, undefined, undefined]);
+  });
+
   it('promotes a legacy single-track song into one guitar track', () => {
     const result = parseSong(valid());
     expect(result.ok).toBe(true);

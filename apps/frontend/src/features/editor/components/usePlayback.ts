@@ -4,7 +4,7 @@ import type { BeatPosition, TabBeat, TabSong, TabTrack } from './types';
 import { getVoice } from './audioEngine';
 import {
   firstBeatPosition, getBeatDurationInSeconds, getEffectiveBpm, isAudible,
-  nextBeatPosition, resolveNoteMidi,
+  nextPlayPosition, resolveNoteMidi,
 } from './songUtils';
 
 const LOOKAHEAD_SECONDS = 0.1;
@@ -25,6 +25,8 @@ interface TrackCursor {
   position: BeatPosition;
   nextTime: number;
   done: boolean;
+  /** Times each repeat end has been reached on this pass through the song. */
+  passes: Map<number, number>;
 }
 
 export interface PlaybackController {
@@ -136,8 +138,8 @@ export const usePlayback = (
         ? requested
         : firstBeatPosition(track.measures);
       return position
-        ? { position, nextTime: startTime, done: false }
-        : { position: { measureIndex: 0, beatIndex: 0 }, nextTime: startTime, done: true };
+        ? { position, nextTime: startTime, done: false, passes: new Map() }
+        : { position: { measureIndex: 0, beatIndex: 0 }, nextTime: startTime, done: true, passes: new Map() };
     });
 
     setIsPlaying(true);
@@ -187,7 +189,8 @@ export const usePlayback = (
 
           cursor.nextTime += getBeatDurationInSeconds(beat.duration, beat.dot, bpm) / current.speed;
 
-          const next = nextBeatPosition(track.measures, cursor.position, current.loop);
+          const conductor = current.song.tracks[0]?.measures ?? [];
+          const next = nextPlayPosition(track.measures, conductor, cursor.position, current.loop, cursor.passes);
           if (!next) {
             cursor.done = true;
             break;

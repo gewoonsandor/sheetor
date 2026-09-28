@@ -14,8 +14,11 @@ and you can see where each person is working.
 - **Notation and TAB together.** Each track picks its instrument (guitar, bass, piano, strings,
   synths and more) and shows notes, TAB or both. Fretted tracks follow their tuning, and
   switching an instrument rewrites every note by its sounding pitch.
-- **Plays in the browser.** Tempo and metre changes per bar, loop, speed control, a plucked-string
-  synth for guitars, and an interactive fretboard or piano for entering notes.
+- **Plays in the browser.** Tempo and metre changes per bar, repeat signs with any number of
+  plays, loop, speed control, a plucked-string synth for guitars, and an interactive fretboard or
+  piano for entering notes.
+- **Copy and paste.** Shift-select beats or whole bars and copy, cut or paste them, within a song
+  or into another one; notes pasted onto a different tuning or instrument keep their pitch.
 - **A library on the server.** Nested folders, drag-and-drop filing, duplicates, and recent-first
   listing that tells you who touched a song last.
 - **Folder sharing with roles.** Share a folder, and everything inside it, with anyone who has an

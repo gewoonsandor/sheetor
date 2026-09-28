@@ -29,6 +29,10 @@ export const MAX_FRET = 24;
 export const MIN_BPM = 20;
 export const MAX_BPM = 400;
 
+/** How many times a repeated section may play in all; a single play is no repeat. */
+export const MIN_REPEAT = 2;
+export const MAX_REPEAT = 99;
+
 /**
  * Every technique flag a note can carry. Both the parse boundary and note
  * conversion copy flags one by one, so the list has to live in one place.
@@ -206,7 +210,7 @@ export const isFrettedNote = (note: TabNote): note is FrettedNote => 'fret' in n
  * fretted tracks resolve through their tuning, which yields undefined for a
  * note stranded above the current string count.
  */
-export const resolveNoteMidi = (note: TabNote, track: TabTrack): number | undefined => {
+export const resolveNoteMidi = (note: TabNote, track: Pick<TabTrack, 'tuning'>): number | undefined => {
   if (!isFrettedNote(note)) return note.midi;
   const openPitch = track.tuning?.[note.stringIndex];
   if (openPitch === undefined) return undefined;
@@ -422,6 +426,167 @@ export const nextBeatPosition = (measures: TabMeasure[], from: BeatPosition, loo
     if (measures[m].beats.length > 0) return { measureIndex: m, beatIndex: 0 };
   }
   return loop ? firstBeatPosition(measures) : null;
+};
+
+/**
+ * The bar a :‖ at `endIndex` sends playback back to: its ‖:, or without one
+ * the bar after the previous :‖, or else the start of the song.
+ */
+export const repeatStartFor = (conductor: TabMeasure[], endIndex: number): number => {
+  for (let m = endIndex; m > 0; m--) {
+    if (conductor[m]?.repeatStart || conductor[m - 1]?.repeatEnd) return m;
+  }
+  return 0;
+};
+
+/**
+ * The next beat to play, honouring the conductor's repeat marks. `passes`
+ * counts how often each :‖ has been reached and is updated in place; a
+ * finished repeat forgets its count, so a looped song plays it in full again.
+ */
+export const nextPlayPosition = (
+  measures: TabMeasure[],
+  conductor: TabMeasure[],
+  from: BeatPosition,
+  loop: boolean,
+  passes: Map<number, number>,
+): BeatPosition | null => {
+  const bar = from.measureIndex;
+  const leavingBar = from.beatIndex + 1 >= (measures[bar]?.beats.length ?? 0);
+  const times = conductor[bar]?.repeatEnd ?? 1;
+  if (leavingBar && times > 1) {
+    const played = passes.get(bar) ?? 1;
+    if (played < times) {
+      passes.set(bar, played + 1);
+      return { measureIndex: repeatStartFor(conductor, bar), beatIndex: 0 };
+    }
+    passes.delete(bar);
+  }
+  return nextBeatPosition(measures, from, loop);
+};
+
+// --- SELECTION & CLIPBOARD ---
+
+/** The two ends of a selection in score order. */
+export const orderRange = (a: BeatPosition, b: BeatPosition): [BeatPosition, BeatPosition] =>
+  a.measureIndex < b.measureIndex || (a.measureIndex === b.measureIndex && a.beatIndex <= b.beatIndex)
+    ? [a, b]
+    : [b, a];
+
+/** The first and last beat of bar `m` that the selection `from`..`to` covers. */
+export const beatSpan = (m: number, beatCount: number, from: BeatPosition, to: BeatPosition): [number, number] => [
+  m === from.measureIndex ? from.beatIndex : 0,
+  m === to.measureIndex ? to.beatIndex : beatCount - 1,
+];
+
+const coversWholeBars = (measures: TabMeasure[], from: BeatPosition, to: BeatPosition): boolean =>
+  from.beatIndex === 0 && to.beatIndex === (measures[to.measureIndex]?.beats.length ?? 0) - 1;
+
+/** Beats lifted out of one track, bar by bar, with the tuning that gives them pitch. */
+export interface Clip {
+  bars: TabBeat[][];
+  /** The selection ran from a bar's first beat to a bar's last, so it pastes as bars. */
+  wholeBars: boolean;
+  tuning?: number[];
+}
+
+export const copyBeats = (track: TabTrack, from: BeatPosition, to: BeatPosition): Clip => ({
+  bars: track.measures.slice(from.measureIndex, to.measureIndex + 1).map((measure, i) => {
+    const [first, last] = beatSpan(from.measureIndex + i, measure.beats.length, from, to);
+    return measure.beats.slice(first, last + 1);
+  }),
+  wholeBars: coversWholeBars(track.measures, from, to),
+  tuning: track.tuning,
+});
+
+/**
+ * A copied note as `target` should hold it. A fretted note keeps its string
+ * wherever that string has the same open pitch; otherwise it travels by
+ * sounding pitch, like a track changing instrument.
+ */
+const revoice = (note: TabNote, tuning: number[] | undefined, target: TabTrack): TabNote[] => {
+  const fretted = isFretted(target);
+  const keeps = isFrettedNote(note)
+    ? fretted && target.tuning?.[note.stringIndex] === tuning?.[note.stringIndex]
+    : !fretted;
+  if (keeps) return [{ ...note }];
+  const midi = resolveNoteMidi(note, { tuning });
+  if (midi === undefined) return [];
+  // ponytail: each note is placed on its own, so two notes of a chord can land on one string.
+  return [fretted
+    ? { ...techniquesOf(note), ...placeMidiOnStrings(midi, target.tuning ?? []) }
+    : { ...techniquesOf(note), midi }];
+};
+
+/**
+ * Inserts a clip after the beat at `at` on one track: whole bars as new bars
+ * after its bar (every track gains them, so the score stays aligned), anything
+ * else as beats inside it. The cursor belongs on the last thing pasted.
+ */
+export const pasteClip = (
+  song: TabSong,
+  trackIndex: number,
+  at: BeatPosition,
+  clip: Clip,
+): { song: TabSong; cursor: BeatPosition } => {
+  const target = song.tracks[trackIndex];
+  const fresh = (beat: TabBeat): TabBeat => {
+    const notes = beat.notes.flatMap(note => revoice(note, clip.tuning, target));
+    return notes.length > 0 ? { ...beat, id: createId(), notes } : { ...beat, id: createId(), notes, isRest: true };
+  };
+
+  if (clip.wholeBars) {
+    const bars: TabMeasure[] = clip.bars.map(beats => ({ id: createId(), beats: beats.map(fresh) }));
+    const insertAt = at.measureIndex + 1;
+    const tracks = song.tracks.map((track, i) => {
+      const measures = [...track.measures];
+      measures.splice(insertAt, 0, ...(i === trackIndex ? bars : bars.map(() => createEmptyMeasure())));
+      return { ...track, measures };
+    });
+    return { song: { ...song, tracks }, cursor: { measureIndex: insertAt + bars.length - 1, beatIndex: 0 } };
+  }
+
+  const beats = clip.bars.flat().map(fresh);
+  const measures = target.measures.map((measure, m) => {
+    if (m !== at.measureIndex) return measure;
+    const next = [...measure.beats];
+    next.splice(at.beatIndex + 1, 0, ...beats);
+    return { ...measure, beats: next };
+  });
+  return {
+    song: { ...song, tracks: song.tracks.map((track, i) => (i === trackIndex ? { ...track, measures } : track)) },
+    cursor: { measureIndex: at.measureIndex, beatIndex: at.beatIndex + beats.length },
+  };
+};
+
+/**
+ * Deletes beats `from`..`to` from one track. Whole bars leave every track (the
+ * song keeps one bar at least); a bar the cut empties keeps a single rest.
+ */
+export const removeBeats = (song: TabSong, trackIndex: number, from: BeatPosition, to: BeatPosition): TabSong => {
+  const inside = (m: number): boolean => m >= from.measureIndex && m <= to.measureIndex;
+
+  if (coversWholeBars(song.tracks[trackIndex].measures, from, to)) {
+    return {
+      ...song,
+      tracks: song.tracks.map(track => {
+        const measures = track.measures.filter((_, m) => !inside(m));
+        return { ...track, measures: measures.length > 0 ? measures : [createEmptyMeasure()] };
+      }),
+    };
+  }
+
+  const cut = (measure: TabMeasure, m: number): TabMeasure => {
+    if (!inside(m)) return measure;
+    const [first, last] = beatSpan(m, measure.beats.length, from, to);
+    const beats = [...measure.beats.slice(0, first), ...measure.beats.slice(last + 1)];
+    const rest: TabBeat = { id: createId(), duration: measure.beats[first].duration, notes: [], isRest: true };
+    return { ...measure, beats: beats.length > 0 ? beats : [rest] };
+  };
+  return {
+    ...song,
+    tracks: song.tracks.map((track, i) => (i === trackIndex ? { ...track, measures: track.measures.map(cut) } : track)),
+  };
 };
 
 /** A cursor named by the song's stable ids; null where it sits on nothing yet. */

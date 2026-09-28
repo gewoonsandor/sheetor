@@ -3,7 +3,7 @@ import type {
   TabTrack, TimeSignature,
 } from './types';
 import {
-  DEFAULT_TRANSPOSE, DURATIONS, MAX_BPM, MAX_FRET, MIN_BPM, TECHNIQUE_KEYS, allStringPitches,
+  DEFAULT_TRANSPOSE, DURATIONS, MAX_BPM, MAX_FRET, MAX_REPEAT, MIN_BPM, MIN_REPEAT, TECHNIQUE_KEYS, allStringPitches,
   createId, createTrack, getStringPitches, normalizeTrackLengths, requiredStringCount, trackKind,
 } from './songUtils';
 
@@ -128,6 +128,11 @@ const parseMeasure = (value: unknown, index: number, prefix: string = 'Measure '
   if (isValidBpm(value.bpm)) measure.bpm = value.bpm;
   const timeSignature = parseTimeSignature(value.timeSignature);
   if (timeSignature) measure.timeSignature = timeSignature;
+  if (value.repeatStart === true) measure.repeatStart = true;
+  const times = value.repeatEnd;
+  if (typeof times === 'number' && Number.isInteger(times) && times >= MIN_REPEAT && times <= MAX_REPEAT) {
+    measure.repeatEnd = times;
+  }
   return measure;
 };
 
