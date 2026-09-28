@@ -200,6 +200,19 @@ describe('parseSong', () => {
     expect(result.song.tracks[0].display).toBe('notation');
   });
 
+  it('keeps a grand staff on a pitched track and never gives one to a guitar', () => {
+    const result = parseSong({
+      title: 'T', bpm: 100, timeSignature: { numerator: 4, denominator: 4 },
+      tracks: [
+        { instrument: 'piano', display: 'grand', measures: valid().measures },
+        { instrument: 'guitar', display: 'grand', measures: valid().measures },
+      ],
+    });
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.song.tracks.map(t => t.display)).toEqual(['grand', 'both']);
+  });
+
   it('drops a fret written onto a pitched track, which has no pitch, and keeps real notes', () => {
     const result = parseSong({
       title: 'T', bpm: 100, timeSignature: { numerator: 4, denominator: 4 },

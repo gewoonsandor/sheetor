@@ -43,13 +43,17 @@ export const STEM_TOP_PAD = 25;
 // Lower notes grow the row through the same per-row shift that pushes the TAB down.
 const NOTATION_ONLY_CLEARANCE = 30;
 
+/** Where a grand staff's bass staff starts below the treble staff's origin: four spaces between them. */
+export const GRAND_BASS_TOP = 80;
+
 export const computeRowHeight = (
   stringCount: number,
   includeTab: boolean = true,
   includeNotation: boolean = true,
+  grandStaff: boolean = false,
 ): number => {
   if (!includeTab) {
-    return STEM_TOP_PAD + 50 + NOTATION_ONLY_CLEARANCE;
+    return STEM_TOP_PAD + (grandStaff ? GRAND_BASS_TOP : 0) + 50 + NOTATION_ONLY_CLEARANCE;
   }
   const tabStaffHeight = stringCount * 10;
   return STEM_TOP_PAD + getTabStaffTop(includeNotation) + tabStaffHeight + 30;

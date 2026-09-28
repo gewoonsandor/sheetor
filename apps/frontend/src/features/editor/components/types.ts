@@ -27,8 +27,12 @@ export type InstrumentId =
   | 'square'
   | 'sawtooth';
 
-/** Which staves a track draws: standard notation, guitar TAB, or both stacked. */
-export type StaffDisplay = 'notation' | 'tab' | 'both';
+/**
+ * Which staves a track draws: standard notation, guitar TAB, or both stacked
+ * (fretted tracks); notation alone or a piano's grand staff, treble over bass
+ * with middle C and up on the treble (pitched tracks).
+ */
+export type StaffDisplay = 'notation' | 'tab' | 'both' | 'grand';
 
 /**
  * Fretted tracks address pitch as string + fret against a tuning; pitched

@@ -3,7 +3,8 @@ import type {
   TabTrack, TimeSignature,
 } from './types';
 import {
-  DEFAULT_TRANSPOSE, DURATIONS, MAX_BPM, MAX_FRET, MAX_REPEAT, MAX_STRINGS, MIN_BPM, MIN_REPEAT, TECHNIQUE_KEYS,
+  DEFAULT_TRANSPOSE, DURATIONS, MAX_BPM, MAX_FRET, MAX_REPEAT, MAX_STRINGS, MIN_BPM, MIN_REPEAT, STAFF_DISPLAYS,
+  TECHNIQUE_KEYS,
   createId, createTrack, defaultTuning, normalizeTrackLengths, pruneNotesToStringCount, requiredStringCount,
   resizeTuning, trackKind,
 } from './songUtils';
@@ -20,7 +21,6 @@ const INSTRUMENT_IDS: readonly InstrumentId[] = [
   'guitar', 'bass', 'piano', 'trumpet', 'strings', 'organ',
   'sine', 'triangle', 'square', 'sawtooth',
 ];
-const STAFF_DISPLAYS: readonly StaffDisplay[] = ['notation', 'tab', 'both'];
 
 /** The instrument's standard tuning, with strings added for any note that needs one. */
 const fallbackTuning = (instrument: InstrumentId, measures: TabMeasure[]): number[] => {
@@ -173,17 +173,16 @@ const parseTrack = (value: unknown, index: number): TabTrack | string => {
   // The instrument decides the kind; a stored `kind` is ignored so a file can
   // never describe a guitar track that renders without TAB.
   const kind = trackKind(instrument);
-  const display = STAFF_DISPLAYS.includes(value.display as StaffDisplay)
-    ? (value.display as StaffDisplay)
-    : (kind === 'fretted' ? 'both' : 'notation');
+  // A pitched track has no TAB and a guitar no grand staff, whatever the file claims.
+  const allowed = STAFF_DISPLAYS[kind];
+  const display = allowed.includes(value.display as StaffDisplay) ? (value.display as StaffDisplay) : allowed[0];
 
   const track: TabTrack = {
     id: parseId(value.id),
     name: typeof value.name === 'string' && value.name.trim().length > 0
       ? value.name
       : createTrack(instrument).name,
-    // A pitched staff has no TAB to draw, whatever the file claims.
-    display: kind === 'pitched' ? 'notation' : display,
+    display,
     instrument,
     transpose: typeof value.transpose === 'number' && Number.isFinite(value.transpose)
       ? value.transpose

@@ -7,6 +7,7 @@ import type {
   TabMeasure,
   TabNote,
   NoteTechniques,
+  StaffDisplay,
   TabSong,
   TabTrack,
   TrackKind,
@@ -282,6 +283,12 @@ const INSTRUMENT_KIND: Record<InstrumentId, TrackKind> = {
 export const trackKind = (instrument: InstrumentId): TrackKind => INSTRUMENT_KIND[instrument];
 
 export const isFretted = (track: TabTrack): boolean => trackKind(track.instrument) === 'fretted';
+
+/** The staves each kind can draw; the first is where a track of that kind starts. */
+export const STAFF_DISPLAYS: Record<TrackKind, readonly StaffDisplay[]> = {
+  fretted: ['both', 'notation', 'tab'],
+  pitched: ['notation', 'grand'],
+};
 
 export const createTrack = (
   instrument: InstrumentId,

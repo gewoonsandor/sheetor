@@ -43,6 +43,7 @@ import {
   orderRange,
   pasteClip,
   removeBeats,
+  STAFF_DISPLAYS,
 } from './songUtils';
 import type { CursorIds, CursorIndices } from './songUtils';
 import { getClip, setClip, subscribeClip } from '../clipboard';
@@ -75,12 +76,44 @@ import {
   TAB_STAFF_HEIGHT_PX,
   TAB_FRET_FONT_SIZE,
   REPEAT_PADDING,
+  GRAND_BASS_TOP,
 } from './layout';
 
 // Treble clef outline traced from the public-domain "Treble clef with empty staff.svg"
 // (Wikimedia Commons, author WarX), retargeted to staff units: top line y=10, 10 per space.
 const TREBLE_CLEF_PATH =
   'M 27.7 34.8 C 26.7 35 25.7 35.6 24.8 36.5 23.9 37.4 23.4 38.4 23.3 39.6 23.2 40.3 23.4 41.2 23.9 42.1 24.3 43.1 25 43.8 25.9 44.2 26.2 44.3 26.4 44.5 26.3 44.7 26.3 44.8 26.2 44.9 25.9 44.9 24.4 44.5 23.2 43.5 22.3 42.3 21.5 41 21.1 39.5 21.1 37.9 21.3 36.2 21.9 34.6 23 33.2 24.1 31.8 25.5 30.9 27.1 30.4 L 26.3 24.4 C 23.6 26.3 21.4 28.4 19.6 30.6 17.8 32.8 16.8 35.3 16.6 38 16.5 39.2 16.7 40.4 17.1 41.6 17.5 42.8 18.1 43.8 19 44.9 20.7 46.9 23.1 48 26.1 48.3 27.1 48.3 28.2 48.2 29.4 48 L 27.7 34.8 z M 28.9 34.7 L 30.6 47.7 C 33.3 46.8 34.7 44.7 35 41.2 34.9 40.1 34.6 39 34.1 38.1 33.6 37.1 33 36.3 32.1 35.7 31.2 35.1 30.1 34.8 28.9 34.7 z M 26.7 17.1 C 27.3 16.8 27.9 16.3 28.7 15.5 29.4 14.8 30.2 13.9 30.9 12.8 31.6 11.8 32.2 10.7 32.7 9.6 33.1 8.6 33.4 7.5 33.4 6.6 33.5 6.1 33.5 5.7 33.4 5.4 33.4 4.8 33.2 4.3 32.9 3.9 32.6 3.6 32.2 3.4 31.7 3.4 30.7 3.3 29.8 3.9 28.9 5 28.2 6.1 27.6 7.3 27.1 8.7 26.7 10.1 26.3 11.6 26.2 13 26.2 14.7 26.4 16 26.7 17.1 z M 25.6 18 C 25 15.3 24.8 12.5 24.9 9.7 25 7.9 25.3 6.2 25.8 4.7 26.2 3.1 26.8 1.8 27.5 0.7 28.2 -0.4 29 -1.3 29.8 -1.8 30.6 -2.3 31.1 -2.6 31.4 -2.5 31.6 -2.5 31.8 -2.4 32 -2.3 32.1 -2.1 32.3 -1.8 32.6 -1.5 34.4 1.5 35.1 4.9 34.9 8.9 34.7 10.8 34.4 12.6 33.7 14.4 33.1 16.2 32.3 17.9 31.2 19.4 30.1 21 28.9 22.3 27.5 23.5 L 28.4 30.1 C 29.1 30.1 29.6 30.1 29.9 30.1 31.2 30.2 32.3 30.5 33.3 31.1 34.4 31.7 35.2 32.5 35.9 33.5 36.5 34.4 37 35.5 37.4 36.7 37.7 37.9 37.8 39.1 37.7 40.4 37.6 42.3 36.9 44.1 35.8 45.7 34.6 47.2 33 48.3 30.9 48.9 30.9 49.7 31.1 50.9 31.3 52.5 31.6 54 31.7 55.3 31.8 56.2 31.9 57.1 32 58 31.9 58.8 31.8 60.1 31.4 61.3 30.7 62.3 30 63.2 29.1 64 27.9 64.5 26.8 65 25.6 65.2 24.3 65.1 22.4 64.9 20.9 64.3 19.6 63.2 18.3 62.1 17.6 60.6 17.7 58.9 17.8 58.1 18 57.4 18.4 56.7 18.8 56 19.3 55.5 19.9 55.1 20.5 54.7 21.2 54.5 22 54.5 22.6 54.5 23.2 54.8 23.8 55.2 24.3 55.6 24.8 56.1 25.1 56.7 25.4 57.4 25.5 58.1 25.4 58.8 25.4 59.8 25 60.6 24.3 61.2 23.6 61.9 22.7 62.2 21.7 62.1 L 21.3 62.1 C 21.9 63.1 22.9 63.7 24.4 63.8 25.1 63.8 25.9 63.7 26.7 63.5 27.5 63.2 28.2 62.9 28.8 62.4 29.4 61.9 29.8 61.3 30 60.7 30.3 60.1 30.5 59.1 30.6 57.9 30.6 57.1 30.6 56.3 30.5 55.5 30.4 54.7 30.3 53.7 30 52.3 29.8 51 29.6 50 29.5 49.3 28.5 49.5 27.5 49.6 26.4 49.5 24.6 49.4 22.9 48.9 21.3 48 19.7 47.2 18.4 46 17.2 44.6 16.1 43.2 15.3 41.6 14.7 39.9 14.1 38.1 13.9 36.4 14 34.5 14.2 32.8 14.6 31.2 15.3 29.7 16.1 28.2 16.9 26.8 18 25.5 19 24.2 20.1 23 21.2 22 22.3 20.9 23.8 19.6 25.6 18 z';
+
+// Bass (F) clef in the same staff units: the head sits on the F line (y=20),
+// the two dots straddle it.
+const BASS_CLEF_PATH =
+  'M 14.5 19 C 15 12.5 21 9.8 25.5 10.2 C 31 10.8 34 15 33.8 20.5 C 33.5 30 25 40.5 12.5 47.5 '
+  + 'L 12.3 46.6 C 22 39.5 28.5 30 28.4 21 C 28.3 15.5 26.3 12.2 23.2 12.1 C 19.8 12 17.5 14.2 17.3 16.6 Z '
+  + 'M 20.4 20 A 3.4 3.4 0 1 1 13.6 20 A 3.4 3.4 0 1 1 20.4 20 Z '
+  + 'M 39.7 15 A 1.9 1.9 0 1 1 35.9 15 A 1.9 1.9 0 1 1 39.7 15 Z '
+  + 'M 39.7 25 A 1.9 1.9 0 1 1 35.9 25 A 1.9 1.9 0 1 1 39.7 25 Z';
+
+// The brace that ties a grand staff's two staves together, from the treble's
+// top line to the bass's bottom line.
+const GRAND_BRACE_PATH =
+  'M -4 10 C -10 14 -6 58 -12 70 C -6 82 -10 126 -4 130 C -7 124 -2 84 -9 70 C -2 56 -7 16 -4 10 Z';
+
+/** One drawn staff: how far below the row's origin it sits, and how far its clef moves a note's step. */
+interface Staff {
+  top: number;
+  /** Diatonic steps added to a treble position; the bass clef's G2 sits where the treble's E4 does. */
+  shift: number;
+}
+
+const TREBLE: Staff = { top: 0, shift: 0 };
+const BASS: Staff = { top: GRAND_BASS_TOP, shift: 12 };
+
+/** Middle C: on a grand staff it and everything above go on the treble staff. */
+const GRAND_SPLIT = 60;
+
+const STAFF_LABELS: Record<StaffDisplay, string> = {
+  both: 'Both', notation: 'Notes', tab: 'TAB', grand: 'Grand staff',
+};
 
 // Keyboard span for pitched tracks, which have no tuning to derive one from.
 const PITCHED_KEYBOARD_LOW = 36;  // C2
@@ -130,6 +163,19 @@ export const TabSheetEditor: React.FC<TabSheetEditorProps> = ({ meta, channel })
   const isFrettedTrack = isFretted(activeTrack);
   const showTab = isFrettedTrack && activeTrack.display !== 'notation';
   const showNotation = activeTrack.display !== 'tab';
+  const grandStaff = activeTrack.display === 'grand';
+  const staves = grandStaff ? [TREBLE, BASS] : [TREBLE];
+
+  const noteMidi = (note: TabNote): number => resolveNoteMidi(note, activeTrack) ?? NaN;
+  /** The staff a pitch is drawn on: the bass staff only below middle C on a grand staff. */
+  const staffFor = (midi: number): Staff => (grandStaff && midi < GRAND_SPLIT ? BASS : TREBLE);
+  /** Where a pitch sits on its own staff, in the treble's steps (2 = bottom line, 10 = top line). */
+  const staffStep = (midi: number): number =>
+    midiToDiatonicAndAccidental(midi, transpose).diatonicStep + staffFor(midi).shift;
+  /** A bar as one staff draws it: only the notes that staff carries; any beat left empty is its rest. */
+  const staffView = (measure: TabMeasure, staff: Staff): TabMeasure => (grandStaff
+    ? { ...measure, beats: measure.beats.map(b => ({ ...b, notes: b.notes.filter(n => staffFor(noteMidi(n)) === staff) })) }
+    : measure);
 
   const [durationSelect, setDurationSelect] = useState<Duration>('4');
   const [dotSelect, setDotSelect] = useState<boolean>(false);
@@ -1071,24 +1117,26 @@ export const TabSheetEditor: React.FC<TabSheetEditorProps> = ({ meta, channel })
 
   // --- SVG MEASUREMENT & LAYOUT CALCULATION ---
 
-  const ROW_HEIGHT = computeRowHeight(stringCount, showTab, showNotation);
+  const ROW_HEIGHT = computeRowHeight(stringCount, showTab, showNotation, grandStaff);
   const tabTop = getTabStaffTop(showNotation);
 
   // Tempo, metre and repeat marks are song-wide, so they are read off the conductor.
   const conductorMeasures = song.tracks[0]?.measures ?? [];
   const measureLayouts: MLayout[] = computeMeasureLayouts(measures, conductorMeasures);
 
-  // Per-measure shift for notes below the notation staff: pushes the TAB down,
-  // or with the TAB hidden grows the row. Irrelevant with no notation staff.
+  // Per-measure shift for notes below the lowest notation staff: pushes the TAB
+  // down, or with the TAB hidden grows the row. Irrelevant with no notation staff.
+  const lowestStaff = staves[staves.length - 1];
   const measureTabOffsets: number[] = measures.map((measure) => {
     if (!showNotation) return 0;
     let minStep = 4;
     for (const beat of measure.beats) {
       if (beat.isRest) continue;
       for (const note of beat.notes) {
-        const midi = (resolveNoteMidi(note, activeTrack) ?? NaN);
-        const { diatonicStep } = midiToDiatonicAndAccidental(midi);
-        if (diatonicStep < minStep) minStep = diatonicStep;
+        const midi = noteMidi(note);
+        if (staffFor(midi) !== lowestStaff) continue;
+        const step = staffStep(midi);
+        if (step < minStep) minStep = step;
       }
     }
     const overlap = -minStep * 5 + 8;
@@ -1111,9 +1159,10 @@ export const TabSheetEditor: React.FC<TabSheetEditorProps> = ({ meta, channel })
     for (const beat of measure.beats) {
       if (beat.isRest || beat.notes.length === 0) continue;
       for (const note of beat.notes) {
-        const midi = (resolveNoteMidi(note, activeTrack) ?? NaN);
-        const { diatonicStep } = midiToDiatonicAndAccidental(midi);
-        const y = Y_of_step(diatonicStep);
+        const midi = noteMidi(note);
+        // Only the top staff can climb into the row above.
+        if (staffFor(midi) !== TREBLE) continue;
+        const y = Y_of_step(staffStep(midi));
         if (y < minNoteY) minNoteY = y;
       }
     }
@@ -1152,9 +1201,9 @@ export const TabSheetEditor: React.FC<TabSheetEditorProps> = ({ meta, channel })
 
   // Bottom boundary (offset from rowY) used for bar lines, selection highlight,
   // and the playback cursor. With the TAB staff hidden this is just below the
-  // standard staff instead of the bottom TAB line.
+  // lowest standard staff instead of the bottom TAB line.
   const getStaffBottom = (ts: number): number =>
-    showTab ? tabTop + ts + stringCount * TAB_STAFF_HEIGHT_PX - 10 : 50;
+    showTab ? tabTop + ts + stringCount * TAB_STAFF_HEIGHT_PX - 10 : lowestStaff.top + 50;
 
   /** Top boundary of the drawn staff block, for bar lines and the cursor. */
   const getStaffTop = (ts: number): number => (showNotation ? 10 : tabTop + ts);
@@ -1188,7 +1237,8 @@ export const TabSheetEditor: React.FC<TabSheetEditorProps> = ({ meta, channel })
     return measureX + padding + ((beatWeights[bIdx] || 0) / totalWeight) * usableWidth;
   };
 
-  // Determine the unified stem direction for a beam group
+  // Determine the unified stem direction for a beam group. `measure` is one
+  // staff's view of the bar, so every note in it sits on that staff.
   const getBeamStemUp = (measure: TabMeasure, beamGroup: BeamGroup): boolean => {
     let anyBelow = false;
     let anyAbove = false;
@@ -1198,8 +1248,7 @@ export const TabSheetEditor: React.FC<TabSheetEditorProps> = ({ meta, channel })
       const beat = measure.beats[i];
       if (!beat) continue;
       for (const note of beat.notes) {
-        const midi = (resolveNoteMidi(note, activeTrack) ?? NaN);
-        const { diatonicStep } = midiToDiatonicAndAccidental(midi);
+        const diatonicStep = staffStep(noteMidi(note));
         if (diatonicStep < 0) anyBelow = true;
         if (diatonicStep > 12) anyAbove = true;
         const dist = Math.abs(diatonicStep - 6);
@@ -1214,18 +1263,16 @@ export const TabSheetEditor: React.FC<TabSheetEditorProps> = ({ meta, channel })
     return dirUp;
   };
 
-  // Calculate beam Y position for a beam group (standard notation)
-  const getBeamY = (measure: TabMeasure, beamGroup: BeamGroup, stemUp: boolean): number => {
+  // Calculate beam Y position for a beam group (standard notation); `staffY` is
+  // the row's origin plus the staff's offset.
+  const getBeamY = (measure: TabMeasure, beamGroup: BeamGroup, stemUp: boolean, staffY: number): number => {
     let minY = Infinity;
     let maxY = -Infinity;
     for (let i = beamGroup.startIdx; i <= beamGroup.endIdx; i++) {
       const b = measure.beats[i];
       if (!b || b.isRest || b.notes.length === 0) continue;
-      const rowY = getRowY(measures.indexOf(measure));
       for (const n of b.notes) {
-        const midi = (resolveNoteMidi(n, activeTrack) ?? NaN);
-        const { diatonicStep } = midiToDiatonicAndAccidental(midi);
-        const y = rowY + Y_of_step(diatonicStep);
+        const y = staffY + Y_of_step(staffStep(noteMidi(n)));
         if (y < minY) minY = y;
         if (y > maxY) maxY = y;
       }
@@ -1260,14 +1307,14 @@ export const TabSheetEditor: React.FC<TabSheetEditorProps> = ({ meta, channel })
     if (canvas && view && (box.left < view.left || box.right > view.right)) {
       canvas.scrollBy({ left: box.left - view.left - view.width / 3, behavior: 'smooth' });
     }
-  }, [activeMeasureIndex, activeBeatIndex, activeTrackIndex, playback.playbackBeat, playback.isPlaying, showFretboard, showTab, showNotation]);
+  }, [activeMeasureIndex, activeBeatIndex, activeTrackIndex, playback.playbackBeat, playback.isPlaying, showFretboard, showTab, showNotation, grandStaff]);
 
   // A click on the staff writes the pitch under the pointer into the beat that was
   // clicked. The cursor moves there too, but only on the next render, so the write
   // names the beat itself.
-  const handleStandardStaffClick = (mIdx: number, beatId: string, clickY: number) => {
+  const handleStandardStaffClick = (mIdx: number, beatId: string, clickY: number, staff: Staff) => {
     const at = { measureIndex: mIdx, beatIndex: measures[mIdx].beats.findIndex(b => b.id === beatId) };
-    const clicked = staffStepToSoundingMidi(Math.round((60 - clickY) / 5), transpose);
+    const clicked = staffStepToSoundingMidi(Math.round((60 - clickY) / 5) - staff.shift, transpose);
     moveCursorTo(at.measureIndex, at.beatIndex, false);
     if (!isFrettedTrack) {
       setPitchForActiveNote(clicked, at);
@@ -1812,12 +1859,12 @@ export const TabSheetEditor: React.FC<TabSheetEditorProps> = ({ meta, channel })
                   />
                 )}
 
-                {/* Standard Notation 5 lines (Treble staff) */}
-                {showNotation && Array.from({ length: 5 }).map((_, lineIdx) => {
-                  const y = rowY + 10 + lineIdx * 10;
+                {/* Standard notation: five lines per staff, a second (bass) staff on a grand staff */}
+                {showNotation && staves.flatMap(staff => Array.from({ length: 5 }, (_, lineIdx) => {
+                  const y = rowY + staff.top + 10 + lineIdx * 10;
                   return (
                     <line
-                      key={`sl-${lineIdx}`}
+                      key={`sl-${staff.top}-${lineIdx}`}
                       x1={measureX}
                       y1={y}
                       x2={measureEnd}
@@ -1825,7 +1872,7 @@ export const TabSheetEditor: React.FC<TabSheetEditorProps> = ({ meta, channel })
                       className="staff-line"
                     />
                   );
-                })}
+                }))}
 
                 {/* TAB lines (TAB staff) */}
                 {showTab && Array.from({ length: stringCount }).map((_, lineIdx) => {
@@ -1947,6 +1994,12 @@ export const TabSheetEditor: React.FC<TabSheetEditorProps> = ({ meta, channel })
                 {(measureLayouts[mIdx]?.x === 0) && (
                   <g transform={`translate(${measureX}, ${rowY})`}>
                     {showNotation && <path d={TREBLE_CLEF_PATH} fillRule="evenodd" className="glyph-ink" />}
+                    {grandStaff && (
+                      <>
+                        <path d={BASS_CLEF_PATH} transform={`translate(0, ${BASS.top})`} className="glyph-ink" />
+                        <path d={GRAND_BRACE_PATH} className="glyph-ink" />
+                      </>
+                    )}
 
                     {/* Stacked TAB text */}
                     {showTab && (
@@ -1982,12 +2035,12 @@ export const TabSheetEditor: React.FC<TabSheetEditorProps> = ({ meta, channel })
                     {/* Time Signature (first-of-row measures) */}
                     {showTimingChange && (
                       <g>
-                        {showNotation && (
-                          <>
-                            <text x="50" y="25" className="music-text" fontSize="16" textAnchor="middle">{effectiveTimeSignature.numerator}</text>
-                            <text x="50" y="45" className="music-text" fontSize="16" textAnchor="middle">{effectiveTimeSignature.denominator}</text>
-                          </>
-                        )}
+                        {showNotation && staves.map(staff => (
+                          <React.Fragment key={staff.top}>
+                            <text x="50" y={staff.top + 25} className="music-text" fontSize="16" textAnchor="middle">{effectiveTimeSignature.numerator}</text>
+                            <text x="50" y={staff.top + 45} className="music-text" fontSize="16" textAnchor="middle">{effectiveTimeSignature.denominator}</text>
+                          </React.Fragment>
+                        ))}
 
                         {showTab && (
                           <>
@@ -2003,12 +2056,12 @@ export const TabSheetEditor: React.FC<TabSheetEditorProps> = ({ meta, channel })
                 {/* Big Time Signature for timing changes (non-first-of-row measures) */}
                 {showTimingChange && mIdx > 0 && measureLayouts[mIdx]?.x !== 0 && (
                   <g>
-                    {showNotation && (
-                      <>
-                        <text x={measureX + 12} y={rowY + 25} className="music-text" fontSize="16" textAnchor="middle">{effectiveTimeSignature.numerator}</text>
-                        <text x={measureX + 12} y={rowY + 45} className="music-text" fontSize="16" textAnchor="middle">{effectiveTimeSignature.denominator}</text>
-                      </>
-                    )}
+                    {showNotation && staves.map(staff => (
+                      <React.Fragment key={staff.top}>
+                        <text x={measureX + 12} y={rowY + staff.top + 25} className="music-text" fontSize="16" textAnchor="middle">{effectiveTimeSignature.numerator}</text>
+                        <text x={measureX + 12} y={rowY + staff.top + 45} className="music-text" fontSize="16" textAnchor="middle">{effectiveTimeSignature.denominator}</text>
+                      </React.Fragment>
+                    ))}
                     {showTab && (
                       <>
                         <text x={measureX + 12} y={rowY + tabTop + ts + stringCount * TAB_STAFF_HEIGHT_PX / 2 - 8} className="music-text" fontSize="16" textAnchor="middle">{effectiveTimeSignature.numerator}</text>
@@ -2025,11 +2078,12 @@ export const TabSheetEditor: React.FC<TabSheetEditorProps> = ({ meta, channel })
                   if (readOnly) return null;
                   return (
                     <g key={`clicks-${b.id}`}>
-                      {/* Clicking standard staff region triggers layout coordinate mapper */}
-                      {showNotation && (
+                      {/* Clicking a notation staff places the pitch under the pointer, read in that staff's clef */}
+                      {showNotation && staves.map(staff => (
                       <rect
+                        key={staff.top}
                         x={beatX - 10}
-                        y={rowY}
+                        y={rowY + staff.top}
                         width="20"
                         height="65"
                         fill="transparent"
@@ -2042,9 +2096,9 @@ export const TabSheetEditor: React.FC<TabSheetEditorProps> = ({ meta, channel })
                           const rect = e.currentTarget.getBoundingClientRect();
                           const relativeY = e.clientY - rect.top;
                           const designY = relativeY * (65 / rect.height);
-                          handleStandardStaffClick(mIdx, b.id, designY);
+                          handleStandardStaffClick(mIdx, b.id, designY, staff);
                         }}
-                      />)}
+                      />))}
 
                       {/* Clicking TAB staff region changes active beat/string */}
                       {showTab && Array.from({ length: stringCount }).map((_, stringIdx) => {
@@ -2174,23 +2228,28 @@ export const TabSheetEditor: React.FC<TabSheetEditorProps> = ({ meta, channel })
             });
           })}
 
-          {/* Render Notes & Rests */}
-          {measures.map((measure, mIdx) => {
+          {/* Render Notes & Rests, once per staff: each staff draws only its own
+              notes, and a beat with none on it is that staff's rest. */}
+          {staves.map(staff => measures.map((whole, mIdx) => {
+            const measure = staffView(whole, staff);
             const rowY = getRowY(mIdx);
+            const staffY = rowY + staff.top;
             const ts = getRowShift(mIdx);
             const beamGroups = computeBeamGroups(measure.beats, getEffectiveTimeSignature(song, mIdx));
             return (
-              <g key={`measure-${measure.id}`}>
+              <g key={`measure-${measure.id}-${staff.top}`}>
               {measure.beats.map((b, bIdx) => {
               const beatX = getBeatCoordinates(mIdx, bIdx);
               const beamInfo = beamGroups.find(g => g.startIdx <= bIdx && bIdx <= g.endIdx);
+              // The beat's notes on every staff, which is what the cursor addresses.
+              const beatNotes = whole.beats[bIdx].notes;
 
               // 1. Rests. They are decoration painted over the staff's click
               // targets, so they must not swallow clicks meant to place a note.
               if (b.isRest || b.notes.length === 0) {
                 const dur = b.duration;
                 return (
-                  <g key={`rest-${b.id}`} transform={`translate(0, ${rowY})`} style={{ pointerEvents: 'none' }}>
+                  <g key={`rest-${b.id}`} transform={`translate(0, ${staffY})`} style={{ pointerEvents: 'none' }}>
                     {showNotation && (<>
                     {/* Render Rest on Standard Staff */}
                     {dur === '1' && (
@@ -2236,21 +2295,21 @@ export const TabSheetEditor: React.FC<TabSheetEditorProps> = ({ meta, channel })
 
               // 2. Chords & Melodic Notes
               // Precalculate diatonic positions for standard staff rendering.
-              // noteIndex is the note's slot in the beat, which is what the
+              // noteIndex is the note's slot in the whole beat, which is what the
               // cursor addresses on a pitched track (there is no string there).
-              const calculatedNotes = b.notes.map((n, noteIndex) => {
-                const midi = (resolveNoteMidi(n, activeTrack) ?? NaN);
-                const { diatonicStep, accidental } = midiToDiatonicAndAccidental(midi, transpose);
+              const calculatedNotes = beatNotes.map((n, noteIndex) => {
+                const midi = noteMidi(n);
+                const step = staffStep(midi);
                 return {
                   note: n,
                   noteIndex,
                   midi,
                   dot: b.dot,
-                  step: diatonicStep,
-                  accidental,
-                  y: rowY + Y_of_step(diatonicStep)
+                  step,
+                  accidental: midiToDiatonicAndAccidental(midi, transpose).accidental,
+                  y: staffY + Y_of_step(step)
                 };
-              });
+              }).filter(n => staffFor(n.midi) === staff);
 
               // Sort notes by pitch to determine stems easily (ascending order, i.e., lowest y is highest pitch)
               calculatedNotes.sort((x, y) => x.y - y.y);
@@ -2269,8 +2328,8 @@ export const TabSheetEditor: React.FC<TabSheetEditorProps> = ({ meta, channel })
               const rawStemY = hasStem
                 ? (beamInfo
                   ? (stemUp
-                    ? getBeamY(measure, beamInfo, stemUp) - 2
-                    : getBeamY(measure, beamInfo, stemUp) + 2)
+                    ? getBeamY(measure, beamInfo, stemUp, staffY) - 2
+                    : getBeamY(measure, beamInfo, stemUp, staffY) + 2)
                   : (stemUp ? highestY - 30 : lowestY + 30))
                 : 0;
               const stemEndY = rawStemY;
@@ -2279,7 +2338,7 @@ export const TabSheetEditor: React.FC<TabSheetEditorProps> = ({ meta, channel })
                 <g key={`notes-${b.id}`}>
                   {/* A. Standard Notation noteheads & stems */}
                   {showNotation && calculatedNotes.map((n) => {
-                    const isSelected = isCursorNote(mIdx, bIdx, n.noteIndex, b.notes);
+                    const isSelected = isCursorNote(mIdx, bIdx, n.noteIndex, beatNotes);
 
                     // Skip notes that would render below the TAB staff area (or,
                     // with the TAB hidden, below the row's reserved space)
@@ -2303,7 +2362,7 @@ export const TabSheetEditor: React.FC<TabSheetEditorProps> = ({ meta, channel })
                             }
                           }
                           return lines.map(lineStep => {
-                            const lineY = rowY + Y_of_step(lineStep);
+                            const lineY = staffY + Y_of_step(lineStep);
                             return (
                               <line
                                 key={`ledg-${lineStep}`}
@@ -2360,7 +2419,7 @@ export const TabSheetEditor: React.FC<TabSheetEditorProps> = ({ meta, channel })
                           strokeWidth="1.4"
                           className={`notehead${isSelected ? ' is-selected' : ''}${b.duration === '1' || b.duration === '2' ? ' is-hollow' : ''}`}
                           onClick={(e) => {
-                            selectNote(mIdx, bIdx, n.noteIndex, b.notes, e.shiftKey);
+                            selectNote(mIdx, bIdx, n.noteIndex, beatNotes, e.shiftKey);
                           }}
                         />
                         {/* Dotted note dot */}
@@ -2536,7 +2595,7 @@ export const TabSheetEditor: React.FC<TabSheetEditorProps> = ({ meta, channel })
                 const firstX = getBeatCoordinates(mIdx, g.startIdx);
                 const lastX = getBeatCoordinates(mIdx, g.endIdx);
                 const mainStemUp = getBeamStemUp(measure, g);
-                const beamY = getBeamY(measure, g, mainStemUp);
+                const beamY = getBeamY(measure, g, mainStemUp, staffY);
                 const beamDir = mainStemUp ? 1 : -1;
                 const firstSX = mainStemUp ? firstX + 4 - 0.75 : firstX - 4 - 0.75;
                 const lastSX = mainStemUp ? lastX + 4 + 0.75 : lastX - 4 + 0.75;
@@ -2740,7 +2799,7 @@ export const TabSheetEditor: React.FC<TabSheetEditorProps> = ({ meta, channel })
               })}
               </g>
             );
-          })}
+          }))}
         </svg>
       </div>
 
@@ -3329,17 +3388,15 @@ export const TabSheetEditor: React.FC<TabSheetEditorProps> = ({ meta, channel })
               <div className="bottom-popover">
                 <span className="popover-title">Staff — {activeTrack.name}</span>
                 <div className="control-group">
-                  {(isFrettedTrack
-                    ? (['both', 'notation', 'tab'] as StaffDisplay[])
-                    : (['notation'] as StaffDisplay[])
-                  ).map(mode => (
+                  {STAFF_DISPLAYS[trackKind(activeTrack.instrument)].map(mode => (
                     <button
                       key={mode}
                       className={`btn ${activeTrack.display === mode ? 'btn-active' : ''}`}
                       onClick={() => updateActiveTrack({ display: mode })}
+                      title={mode === 'grand' ? 'Treble and bass clef: middle C and up on the treble, lower notes on the bass' : undefined}
                       style={{ flex: 1 }}
                     >
-                      {mode === 'both' ? 'Both' : mode === 'notation' ? 'Notes' : 'TAB'}
+                      {STAFF_LABELS[mode]}
                     </button>
                   ))}
                 </div>

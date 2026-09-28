@@ -19,6 +19,7 @@ interface TrackStripProps {
 const staffLabel = (track: TabTrack): string => {
   if (track.display === 'tab') return 'tab';
   if (track.display === 'both') return 'notes + tab';
+  if (track.display === 'grand') return 'grand staff';
   return 'notes';
 };
 
