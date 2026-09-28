@@ -189,8 +189,9 @@ export const TabSheetEditor: React.FC<TabSheetEditorProps> = ({ meta, channel })
 
   // --- LIVE SYNC ---
 
-  // The song as last received, so publishing never echoes a remote change back.
-  const lastRemote = useRef<TabSong | null>(null);
+  // The song as last received, so publishing never echoes a remote change back. The
+  // song opened with counts as received: opening a song is not an edit you can undo.
+  const lastRemote = useRef<TabSong | null>(song);
   const activeMeasureId = measures[activeMeasureIndex]?.id ?? null;
   const activeBeatId = measures[activeMeasureIndex]?.beats[activeBeatIndex]?.id ?? null;
   const cursor: CursorIds & CursorIndices = {
@@ -208,11 +209,12 @@ export const TabSheetEditor: React.FC<TabSheetEditorProps> = ({ meta, channel })
   });
 
   // A collaborator's change replaces the song, and the cursor follows its bar and
-  // beat by id, so bars inserted above it do not shift what you are editing.
-  useEffect(() => channel.onRemoteSong((fresh) => {
+  // beat by id, so bars inserted above it do not shift what you are editing. An undo
+  // or redo takes the cursor back to where that edit was made.
+  useEffect(() => channel.onRemoteSong((fresh, stepAt) => {
     lastRemote.current = fresh;
     setSong(fresh);
-    const at = locateCursor(fresh, cursorRef.current, cursorRef.current);
+    const at = locateCursor(fresh, stepAt ?? cursorRef.current, cursorRef.current);
     setActiveTrackIndex(at.trackIndex);
     setActiveMeasureIndex(at.measureIndex);
     setActiveBeatIndex(at.beatIndex);
@@ -837,12 +839,14 @@ export const TabSheetEditor: React.FC<TabSheetEditorProps> = ({ meta, channel })
     if (!measure) return;
     const beat = measure.beats[activeBeatIndex];
 
-    if ((e.ctrlKey || e.metaKey) && ['c', 'x', 'v'].includes(e.key.toLowerCase())) {
+    const key = e.key.toLowerCase();
+    if ((e.ctrlKey || e.metaKey) && ['c', 'x', 'v', 'z', 'y'].includes(key)) {
       e.preventDefault();
-      const key = e.key.toLowerCase();
       if (key === 'c') copySelection();
       else if (key === 'x') cutSelection();
-      else pasteClipboard();
+      else if (key === 'v') pasteClipboard();
+      else if (key === 'z' && !e.shiftKey) channel.undo();
+      else channel.redo();
       return;
     }
 
@@ -3264,6 +3268,12 @@ export const TabSheetEditor: React.FC<TabSheetEditorProps> = ({ meta, channel })
             </button>
             {openBottomMenu === 'edit' && (
               <div className="bottom-popover">
+              <span className="popover-title">History</span>
+              <div className="control-group">
+                <button className="btn" onClick={channel.undo} disabled={!live.canUndo} style={{ flex: 1 }}>Undo</button>
+                <button className="btn" onClick={channel.redo} disabled={!live.canRedo} style={{ flex: 1 }}>Redo</button>
+              </div>
+              <div className="popover-divider" />
               <span className="popover-title">Clipboard</span>
               <div className="control-group">
                 <button className="btn" onClick={copySelection} style={{ flex: 1 }}>Copy</button>
@@ -3387,6 +3397,8 @@ export const TabSheetEditor: React.FC<TabSheetEditorProps> = ({ meta, channel })
               <span><kbd>+</kbd><kbd>-</kbd> Duration</span>
               <span><kbd>Shift</kbd><kbd>←</kbd><kbd>→</kbd> Select beats</span>
               <span><kbd>Ctrl</kbd><kbd>C</kbd><kbd>X</kbd><kbd>V</kbd> Copy, cut, paste</span>
+              <span><kbd>Ctrl</kbd><kbd>Z</kbd> Undo</span>
+              <span><kbd>Ctrl</kbd><kbd>Shift</kbd><kbd>Z</kbd> Redo</span>
               <span className="shortcut-divider">Note techniques</span>
               <span><kbd>H</kbd> Slur</span>
               <span><kbd>S</kbd> Legato slide</span>

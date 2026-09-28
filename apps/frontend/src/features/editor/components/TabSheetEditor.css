@@ -1225,6 +1225,14 @@ input[type="range"] {
   cursor: not-allowed;
 }
 
+.bottom-popover .control-group > .btn:disabled {
+  background: var(--sheen), var(--surface-2);
+  border-color: var(--border);
+  color: var(--text-faint);
+  cursor: not-allowed;
+  transform: none;
+}
+
 /* Headings and fields line up with the row labels. */
 .bottom-popover > :not(.btn, .popover-divider) {
   padding-inline: var(--sp-2);

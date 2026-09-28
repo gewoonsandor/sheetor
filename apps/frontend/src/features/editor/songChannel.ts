@@ -4,7 +4,7 @@ import { isRole } from '../library/libraryStore';
 import type { Role } from '../library/libraryStore';
 import { isRecord } from './components/songSchema';
 import type { TabSong } from './components/types';
-import { REMOTE_ORIGIN, readSongDoc, writeSongDoc } from './songDoc';
+import { LOCAL_ORIGIN, REMOTE_ORIGIN, ROOT, readSongDoc, writeSongDoc } from './songDoc';
 
 export type ChannelStatus = 'connecting' | 'live' | 'reconnecting' | 'unavailable' | 'invalid';
 
@@ -27,6 +27,8 @@ export interface ChannelState {
   role: Role | null;
   peers: Peer[];
   error: string | null;
+  canUndo: boolean;
+  canRedo: boolean;
 }
 
 /// One song's live session: the shared document, the socket that keeps it in step
@@ -36,10 +38,15 @@ export interface SongChannel {
   disconnect: () => void;
   subscribe: (listener: () => void) => () => void;
   getState: () => ChannelState;
-  onRemoteSong: (listener: (song: TabSong) => void) => () => void;
+  /** A song that changed under the editor: a collaborator's edit (no cursor), or an undo or
+   *  redo with the cursor the step was made at. */
+  onRemoteSong: (listener: (song: TabSong, at: PeerCursor | null) => void) => () => void;
   snapshot: () => TabSong | null;
   publish: (song: TabSong) => void;
   sendCursor: (cursor: PeerCursor) => void;
+  /** Reverts this person's last edit. A collaborator's edits are never undone. */
+  undo: () => void;
+  redo: () => void;
 }
 
 const RETRY_DELAYS = [1000, 2000, 5000, 10000];
@@ -78,8 +85,10 @@ const liveUrl = (songId: string): string => {
 export const createSongChannel = (songId: string): SongChannel => {
   const doc = new Y.Doc();
   const listeners = new Set<() => void>();
-  const remoteListeners = new Set<(song: TabSong) => void>();
-  let state: ChannelState = { status: 'connecting', role: null, peers: [], error: null };
+  const remoteListeners = new Set<(song: TabSong, at: PeerCursor | null) => void>();
+  let state: ChannelState = {
+    status: 'connecting', role: null, peers: [], error: null, canUndo: false, canRedo: false,
+  };
   let socket: WebSocket | null = null;
   let retry: number | null = null;
   let stopped = true;
@@ -108,6 +117,32 @@ export const createSongChannel = (songId: string): SongChannel => {
   doc.on('update', (update: Uint8Array, origin: unknown) => {
     if (origin !== REMOTE_ORIGIN) send(update);
   });
+
+  const history = new Y.UndoManager(doc.getMap(ROOT), { trackedOrigins: new Set([LOCAL_ORIGIN]) });
+
+  const syncHistory = (): void => {
+    const canUndo = history.canUndo();
+    const canRedo = history.canRedo();
+    if (canUndo !== state.canUndo || canRedo !== state.canRedo) setState({ canUndo, canRedo });
+  };
+
+  // Every step remembers the cursor it was made at; undoing hands the step's cursor on
+  // to the redo step it becomes, and back.
+  history.on('stack-item-added', ({ stackItem }) => {
+    stackItem.meta.set('cursor', history.currStackItem?.meta.get('cursor') ?? cursor);
+    syncHistory();
+  });
+  history.on('stack-item-popped', syncHistory);
+  history.on('stack-cleared', syncHistory);
+
+  const travel = (direction: 'undo' | 'redo'): void => {
+    if (state.role === 'viewer') return;
+    const item = direction === 'undo' ? history.undo() : history.redo();
+    if (item === null) return;
+    const result = readSongDoc(doc);
+    const at: PeerCursor | null = item.meta.get('cursor') ?? null;
+    if (result.ok) remoteListeners.forEach((listener) => listener(result.song, at));
+  };
 
   const stop = (patch: Partial<ChannelState>): void => {
     stopped = true;
@@ -139,7 +174,7 @@ export const createSongChannel = (songId: string): SongChannel => {
     Y.applyUpdate(doc, bytes, REMOTE_ORIGIN);
     if (awaitingState && !onInitialState(bytes)) return;
     const result = readSongDoc(doc);
-    if (result.ok) remoteListeners.forEach((listener) => listener(result.song));
+    if (result.ok) remoteListeners.forEach((listener) => listener(result.song, null));
   };
 
   const onText = (text: string): void => {
@@ -247,7 +282,11 @@ export const createSongChannel = (songId: string): SongChannel => {
     },
     sendCursor: (at) => {
       cursor = at;
+      // A new spot starts a new undo step; edits made in one place in a burst share one.
+      history.stopCapturing();
       sendCursorNow(at);
     },
+    undo: () => travel('undo'),
+    redo: () => travel('redo'),
   };
 };
