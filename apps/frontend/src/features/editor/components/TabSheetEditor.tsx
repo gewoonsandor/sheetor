@@ -8,8 +8,6 @@ import type {
   TabNote, TabBeat, TabMeasure, TabSong, TabTrack, BeamGroup, MLayout,
 } from './types';
 import {
-
-  allStringPitches,
   getDurationVal,
   computeBeamGroups,
   createTrack,
@@ -24,6 +22,8 @@ import {
   resolveNoteMidi,
   retuneTrack,
   trackKind,
+  tuningPresets,
+  resizeTuning,
   GUITAR_NOTE_OPTIONS,
   midiToDiatonicAndAccidental,
   staffStepToSoundingMidi,
@@ -81,22 +81,6 @@ import {
 // (Wikimedia Commons, author WarX), retargeted to staff units: top line y=10, 10 per space.
 const TREBLE_CLEF_PATH =
   'M 27.7 34.8 C 26.7 35 25.7 35.6 24.8 36.5 23.9 37.4 23.4 38.4 23.3 39.6 23.2 40.3 23.4 41.2 23.9 42.1 24.3 43.1 25 43.8 25.9 44.2 26.2 44.3 26.4 44.5 26.3 44.7 26.3 44.8 26.2 44.9 25.9 44.9 24.4 44.5 23.2 43.5 22.3 42.3 21.5 41 21.1 39.5 21.1 37.9 21.3 36.2 21.9 34.6 23 33.2 24.1 31.8 25.5 30.9 27.1 30.4 L 26.3 24.4 C 23.6 26.3 21.4 28.4 19.6 30.6 17.8 32.8 16.8 35.3 16.6 38 16.5 39.2 16.7 40.4 17.1 41.6 17.5 42.8 18.1 43.8 19 44.9 20.7 46.9 23.1 48 26.1 48.3 27.1 48.3 28.2 48.2 29.4 48 L 27.7 34.8 z M 28.9 34.7 L 30.6 47.7 C 33.3 46.8 34.7 44.7 35 41.2 34.9 40.1 34.6 39 34.1 38.1 33.6 37.1 33 36.3 32.1 35.7 31.2 35.1 30.1 34.8 28.9 34.7 z M 26.7 17.1 C 27.3 16.8 27.9 16.3 28.7 15.5 29.4 14.8 30.2 13.9 30.9 12.8 31.6 11.8 32.2 10.7 32.7 9.6 33.1 8.6 33.4 7.5 33.4 6.6 33.5 6.1 33.5 5.7 33.4 5.4 33.4 4.8 33.2 4.3 32.9 3.9 32.6 3.6 32.2 3.4 31.7 3.4 30.7 3.3 29.8 3.9 28.9 5 28.2 6.1 27.6 7.3 27.1 8.7 26.7 10.1 26.3 11.6 26.2 13 26.2 14.7 26.4 16 26.7 17.1 z M 25.6 18 C 25 15.3 24.8 12.5 24.9 9.7 25 7.9 25.3 6.2 25.8 4.7 26.2 3.1 26.8 1.8 27.5 0.7 28.2 -0.4 29 -1.3 29.8 -1.8 30.6 -2.3 31.1 -2.6 31.4 -2.5 31.6 -2.5 31.8 -2.4 32 -2.3 32.1 -2.1 32.3 -1.8 32.6 -1.5 34.4 1.5 35.1 4.9 34.9 8.9 34.7 10.8 34.4 12.6 33.7 14.4 33.1 16.2 32.3 17.9 31.2 19.4 30.1 21 28.9 22.3 27.5 23.5 L 28.4 30.1 C 29.1 30.1 29.6 30.1 29.9 30.1 31.2 30.2 32.3 30.5 33.3 31.1 34.4 31.7 35.2 32.5 35.9 33.5 36.5 34.4 37 35.5 37.4 36.7 37.7 37.9 37.8 39.1 37.7 40.4 37.6 42.3 36.9 44.1 35.8 45.7 34.6 47.2 33 48.3 30.9 48.9 30.9 49.7 31.1 50.9 31.3 52.5 31.6 54 31.7 55.3 31.8 56.2 31.9 57.1 32 58 31.9 58.8 31.8 60.1 31.4 61.3 30.7 62.3 30 63.2 29.1 64 27.9 64.5 26.8 65 25.6 65.2 24.3 65.1 22.4 64.9 20.9 64.3 19.6 63.2 18.3 62.1 17.6 60.6 17.7 58.9 17.8 58.1 18 57.4 18.4 56.7 18.8 56 19.3 55.5 19.9 55.1 20.5 54.7 21.2 54.5 22 54.5 22.6 54.5 23.2 54.8 23.8 55.2 24.3 55.6 24.8 56.1 25.1 56.7 25.4 57.4 25.5 58.1 25.4 58.8 25.4 59.8 25 60.6 24.3 61.2 23.6 61.9 22.7 62.2 21.7 62.1 L 21.3 62.1 C 21.9 63.1 22.9 63.7 24.4 63.8 25.1 63.8 25.9 63.7 26.7 63.5 27.5 63.2 28.2 62.9 28.8 62.4 29.4 61.9 29.8 61.3 30 60.7 30.3 60.1 30.5 59.1 30.6 57.9 30.6 57.1 30.6 56.3 30.5 55.5 30.4 54.7 30.3 53.7 30 52.3 29.8 51 29.6 50 29.5 49.3 28.5 49.5 27.5 49.6 26.4 49.5 24.6 49.4 22.9 48.9 21.3 48 19.7 47.2 18.4 46 17.2 44.6 16.1 43.2 15.3 41.6 14.7 39.9 14.1 38.1 13.9 36.4 14 34.5 14.2 32.8 14.6 31.2 15.3 29.7 16.1 28.2 16.9 26.8 18 25.5 19 24.2 20.1 23 21.2 22 22.3 20.9 23.8 19.6 25.6 18 z';
-
-// Standard guitar tunings (MIDI pitches, high string first)
-const STANDARD_TUNINGS: Record<string, number[]> = {
-  'Standard': [64, 59, 55, 50, 45, 40],
-  'Drop D': [64, 59, 55, 50, 45, 38],
-  'Half step down': [63, 58, 54, 49, 44, 39],
-  'Full step down': [62, 57, 53, 48, 43, 38],
-  'Drop C#': [63, 58, 54, 49, 44, 37],
-  'Drop C': [62, 57, 53, 48, 43, 36],
-  'Open G': [62, 59, 55, 50, 43, 38],
-  'Open D': [62, 57, 54, 50, 45, 38],
-  'Open A': [64, 59, 55, 50, 47, 40],
-  'DADGAD': [62, 57, 55, 50, 45, 38],
-};
-
-const TUNING_PRESETS = Object.entries(STANDARD_TUNINGS);
 
 // Keyboard span for pitched tracks, which have no tuning to derive one from.
 const PITCHED_KEYBOARD_LOW = 36;  // C2
@@ -240,6 +224,16 @@ export const TabSheetEditor: React.FC<TabSheetEditorProps> = ({ meta, channel })
   };
 
   const updateActiveTrack = (patch: Partial<TabTrack>) => updateTrack(activeTrackIndex, patch);
+
+  /** Retunes the active track; notes on strings it no longer has are dropped. */
+  const setTuning = (next: number[]) => {
+    updateActiveTrack({ tuning: next });
+    setActiveStringIndex(prev => Math.min(prev, next.length - 1));
+    setMeasures(prev => pruneNotesToStringCount(prev, next.length));
+  };
+
+  const presets = tuningPresets(activeTrack.instrument);
+  const presetName = Object.keys(presets).find(name => presets[name].join() === tuning.join()) ?? '';
 
   const selectTrack = (index: number) => {
     setActiveTrackIndex(index);
@@ -1631,7 +1625,6 @@ export const TabSheetEditor: React.FC<TabSheetEditorProps> = ({ meta, channel })
               <span>Name</span>
               <input
                 className="control-input"
-                style={{ width: 130 }}
                 value={activeTrack.name}
                 onChange={(e) => updateActiveTrack({ name: e.target.value })}
               />
@@ -1677,17 +1670,14 @@ export const TabSheetEditor: React.FC<TabSheetEditorProps> = ({ meta, channel })
                   <span>Preset</span>
                   <select
                     className="control-select"
-                    value=""
+                    value={presetName}
                     onChange={(e) => {
-                      const pitches = STANDARD_TUNINGS[e.target.value];
-                      if (!pitches) return;
-                      updateActiveTrack({ tuning: pitches });
-                      setActiveStringIndex(prev => Math.min(prev, pitches.length - 1));
-                      setMeasures(prev => pruneNotesToStringCount(prev, pitches.length));
+                      const pitches = presets[e.target.value];
+                      if (pitches) setTuning([...pitches]);
                     }}
                   >
-                    <option value="">-- Select --</option>
-                    {TUNING_PRESETS.map(([name]) => (
+                    {presetName === '' && <option value="">Custom</option>}
+                    {Object.keys(presets).map(name => (
                       <option key={name} value={name}>{name}</option>
                     ))}
                   </select>
@@ -1697,42 +1687,27 @@ export const TabSheetEditor: React.FC<TabSheetEditorProps> = ({ meta, channel })
                   <select
                     className="control-select"
                     value={stringCount}
-                    onChange={(e) => {
-                      const count = parseInt(e.target.value) || 6;
-                      const next = tuning.length < count
-                        ? [...tuning, ...allStringPitches.slice(tuning.length, count)]
-                        : tuning.slice(0, count);
-                      updateActiveTrack({ tuning: next });
-                      setActiveStringIndex(prev => Math.min(prev, count - 1));
-                      setMeasures(prev => pruneNotesToStringCount(prev, count));
-                    }}
+                    onChange={(e) => setTuning(resizeTuning(tuning, Number(e.target.value)))}
                   >
                     {[4, 5, 6, 7, 8, 9, 10, 11, 12].map(n => (
                       <option key={n} value={n}>{n}</option>
                     ))}
                   </select>
                 </label>
-                <div className="popover-scroll">
+                <div className="tuning-grid">
                   {tuning.map((pitch, i) => (
-                    <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                      <span className="control-label" style={{ width: 12, textAlign: 'right' }}>{i + 1}</span>
+                    <label key={i} className="tuning-string">
+                      <span>{i + 1}</span>
                       <select
                         className="control-select"
-                        style={{ flex: 1, fontSize: '0.75rem' }}
                         value={midiToNoteOctave(pitch)}
-                        onChange={(e) => {
-                          const newMidi = noteOctaveToMidi(e.target.value);
-                          if (newMidi <= 0) return;
-                          const next = [...tuning];
-                          next[i] = newMidi;
-                          updateActiveTrack({ tuning: next });
-                        }}
+                        onChange={(e) => setTuning(tuning.map((p, j) => (j === i ? noteOctaveToMidi(e.target.value) : p)))}
                       >
                         {GUITAR_NOTE_OPTIONS.map(opt => (
                           <option key={opt} value={opt}>{opt}</option>
                         ))}
                       </select>
-                    </div>
+                    </label>
                   ))}
                 </div>
               </>

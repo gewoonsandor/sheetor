@@ -585,8 +585,7 @@ input[type="range"] {
 .sheetor-canvas-container::-webkit-scrollbar,
 .sheetor-fretboard::-webkit-scrollbar,
 .track-list::-webkit-scrollbar,
-.bottom-popover::-webkit-scrollbar,
-.popover-scroll::-webkit-scrollbar {
+.bottom-popover::-webkit-scrollbar {
   width: 10px;
   height: 10px;
 }
@@ -594,16 +593,14 @@ input[type="range"] {
 .sheetor-canvas-container::-webkit-scrollbar-track,
 .sheetor-fretboard::-webkit-scrollbar-track,
 .track-list::-webkit-scrollbar-track,
-.bottom-popover::-webkit-scrollbar-track,
-.popover-scroll::-webkit-scrollbar-track {
+.bottom-popover::-webkit-scrollbar-track {
   background: transparent;
 }
 
 .sheetor-canvas-container::-webkit-scrollbar-thumb,
 .sheetor-fretboard::-webkit-scrollbar-thumb,
 .track-list::-webkit-scrollbar-thumb,
-.bottom-popover::-webkit-scrollbar-thumb,
-.popover-scroll::-webkit-scrollbar-thumb {
+.bottom-popover::-webkit-scrollbar-thumb {
   background: var(--surface-4);
   border: 3px solid transparent;
   background-clip: padding-box;
@@ -613,8 +610,7 @@ input[type="range"] {
 .sheetor-canvas-container::-webkit-scrollbar-thumb:hover,
 .sheetor-fretboard::-webkit-scrollbar-thumb:hover,
 .track-list::-webkit-scrollbar-thumb:hover,
-.bottom-popover::-webkit-scrollbar-thumb:hover,
-.popover-scroll::-webkit-scrollbar-thumb:hover {
+.bottom-popover::-webkit-scrollbar-thumb:hover {
   background: var(--text-faint);
 }
 
@@ -941,13 +937,51 @@ input[type="range"] {
   flex: none;
 }
 
-/* A 12-string tuning list would otherwise run off the panel. */
-.popover-scroll {
-  display: flex;
-  flex-direction: column;
+/* One column of equal controls, lined up with the volume slider. */
+.track-popover .wide-field > :is(.control-select, .control-input) {
+  width: 140px;
+  text-align: left;
+}
+
+/* Every string at once, three to a row, so the tuning never scrolls on its own. */
+.tuning-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
   gap: var(--sp-2);
-  max-height: 190px;
-  overflow-y: auto;
+  padding-block: var(--sp-1) var(--sp-2);
+}
+
+/* Four strings sit two by two rather than three and a straggler. */
+.tuning-grid:has(> :nth-child(4):last-child) {
+  grid-template-columns: repeat(2, 1fr);
+}
+
+.tuning-string {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-1);
+  min-width: 0;
+}
+
+.tuning-string > span {
+  min-width: 2ch;
+  text-align: right;
+  color: var(--text-faint);
+  font-size: 0.6875rem;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.tuning-string > .control-select {
+  flex: 1;
+  min-width: 0;
+  justify-content: center;
+  font-size: 0.75rem;
+}
+
+/* Too narrow for a chevron: each string reads as a note chip. */
+.tuning-string > .control-select::picker-icon {
+  display: none;
 }
 
 /* --------------------------------------------------- Piano keyboard (sheet) */

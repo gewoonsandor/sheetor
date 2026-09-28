@@ -3,8 +3,8 @@ import type {
   TabTrack, TimeSignature,
 } from './types';
 import {
-  DEFAULT_TRANSPOSE, DURATIONS, MAX_BPM, MAX_FRET, MAX_REPEAT, MIN_BPM, MIN_REPEAT, TECHNIQUE_KEYS, allStringPitches,
-  createId, createTrack, getStringPitches, normalizeTrackLengths, requiredStringCount, trackKind,
+  DEFAULT_TRANSPOSE, DURATIONS, MAX_BPM, MAX_FRET, MAX_REPEAT, MAX_STRINGS, MIN_BPM, MIN_REPEAT, TECHNIQUE_KEYS,
+  createId, createTrack, defaultTuning, normalizeTrackLengths, requiredStringCount, resizeTuning, trackKind,
 } from './songUtils';
 
 export type ParseSongResult =
@@ -20,6 +20,12 @@ const INSTRUMENT_IDS: readonly InstrumentId[] = [
   'sine', 'triangle', 'square', 'sawtooth',
 ];
 const STAFF_DISPLAYS: readonly StaffDisplay[] = ['notation', 'tab', 'both'];
+
+/** The instrument's standard tuning, with strings added for any note that needs one. */
+const fallbackTuning = (instrument: InstrumentId, measures: TabMeasure[]): number[] => {
+  const standard = defaultTuning(instrument);
+  return resizeTuning(standard, requiredStringCount(measures, standard.length));
+};
 
 // Technique flags are copied only when explicitly true, so a stored `false`
 // or a stray non-boolean never survives into the model. TECHNIQUE_KEYS lives
@@ -65,7 +71,7 @@ const parseNote = (value: unknown, where: string): TabNote | string => {
       typeof stringIndex !== 'number' ||
       !Number.isInteger(stringIndex) ||
       stringIndex < 0 ||
-      stringIndex >= allStringPitches.length
+      stringIndex >= MAX_STRINGS
     ) {
       return `${where} has a note on an invalid string.`;
     }
@@ -195,7 +201,7 @@ const parseTrack = (value: unknown, index: number): TabTrack | string => {
     // Tuning must still cover every note the track actually contains.
     track.tuning = valid
       ? (raw as number[])
-      : getStringPitches(requiredStringCount(measures, 6));
+      : fallbackTuning(instrument, measures);
   }
   if (value.muted === true) track.muted = true;
   if (value.soloed === true) track.soloed = true;
@@ -234,7 +240,7 @@ export const parseSong = (value: unknown): ParseSongResult => {
     if (typeof measures === 'string') return { ok: false, error: measures };
     tracks = [{
       ...createTrack('guitar'),
-      tuning: getStringPitches(requiredStringCount(measures, 6)),
+      tuning: fallbackTuning('guitar', measures),
       measures,
     }];
   }

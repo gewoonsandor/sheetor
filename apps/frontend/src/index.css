@@ -269,6 +269,74 @@ body {
   color: var(--text);
 }
 
+/* The open list of a <select> matches the app's popovers instead of the OS menu.
+   Customizable select is Chromium-only for now; other browsers keep their
+   native list, and the closed control is styled either way. */
+@supports (appearance: base-select) {
+  select,
+  ::picker(select) {
+    appearance: base-select;
+  }
+
+  select {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--sp-2);
+  }
+
+  /* A drawn chevron, the same stroke as the app's icons, not the UA triangle. */
+  select::picker-icon {
+    content: '';
+    inline-size: 0.4em;
+    block-size: 0.4em;
+    margin-block-start: -0.25em;
+    margin-inline-end: var(--sp-1);
+    border-inline-end: 1.5px solid var(--text-faint);
+    border-block-end: 1.5px solid var(--text-faint);
+    rotate: 45deg;
+    transition: rotate var(--t) var(--ease), margin var(--t) var(--ease);
+  }
+
+  select:open::picker-icon {
+    margin-block-start: 0.25em;
+    rotate: 225deg;
+  }
+
+  ::picker(select) {
+    max-block-size: min(50vh, 320px);
+    margin-block: var(--sp-1);
+    padding: var(--sp-1);
+    background: var(--surface-2);
+    border: 1px solid var(--border-strong);
+    border-radius: var(--r-md);
+    box-shadow: inset 0 1px 0 var(--edge-hi), var(--shadow-2);
+    color: var(--text);
+  }
+
+  option {
+    min-block-size: var(--ctl-h-sm);
+    padding-inline: var(--sp-2);
+    border-radius: var(--r-sm);
+    font-size: 0.8125rem;
+    font-weight: 500;
+  }
+
+  option:hover,
+  option:focus-visible {
+    background: var(--surface-3);
+    outline: none;
+  }
+
+  option:checked {
+    color: var(--accent);
+    font-weight: 600;
+  }
+
+  option::checkmark {
+    color: var(--accent);
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   *,
   *::before,

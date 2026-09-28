@@ -9,7 +9,6 @@ import {
   getDurationVal,
   getEffectiveBpm,
   getEffectiveTimeSignature,
-  getStringPitches,
   isAudible,
   isFretted,
   isFrettedNote,
@@ -26,6 +25,7 @@ import {
   requiredStringCount,
   resolveNoteMidi,
   noteOctaveToMidi,
+  resizeTuning,
   retuneTrack,
   trackKind,
   pruneNotesToStringCount,
@@ -53,9 +53,18 @@ const song = (measures: TabMeasure[], extra: Partial<TabSong> = {}): TabSong => 
   ...extra,
 });
 
-describe('tuning pool', () => {
-  it('slices the six standard guitar pitches', () => {
-    expect(getStringPitches(6)).toEqual([64, 59, 55, 50, 45, 40]);
+describe('resizeTuning', () => {
+  it('adds each new string a fourth below the lowest, whatever the instrument', () => {
+    expect(resizeTuning([64, 59, 55, 50, 45, 40], 8)).toEqual([64, 59, 55, 50, 45, 40, 35, 30]);
+    expect(resizeTuning([43, 38, 33, 28], 5)).toEqual([43, 38, 33, 28, 23]);
+  });
+
+  it('removes strings from the low end', () => {
+    expect(resizeTuning([43, 38, 33, 28, 23], 4)).toEqual([43, 38, 33, 28]);
+  });
+
+  it('never goes below the lowest note a string can be tuned to', () => {
+    expect(resizeTuning([20], 4)).toEqual([20, 15, 10, 10]);
   });
 });
 
@@ -367,6 +376,7 @@ describe('track defaults', () => {
 
   it('gives fretted tracks a tuning and pitched tracks none', () => {
     expect(createTrack('guitar').tuning).toEqual([64, 59, 55, 50, 45, 40]);
+    expect(createTrack('bass').tuning).toEqual([43, 38, 33, 28]);
     expect(createTrack('trumpet').tuning).toBeUndefined();
   });
 
@@ -405,8 +415,13 @@ describe('switching a track instrument', () => {
   });
 
   it('leaves the staff alone when the kind does not change', () => {
-    const patch = retuneTrack(createTrack('piano'), 'organ');
+    const patch = retuneTrack({ ...createTrack('piano'), name: 'Keys' }, 'organ');
     expect(patch).toEqual({ instrument: 'organ', transpose: 0 });
+  });
+
+  it('renames a track only while it still has its default name', () => {
+    expect(retuneTrack(createTrack('guitar'), 'bass').name).toBe('Bass');
+    expect(retuneTrack({ ...createTrack('guitar'), name: 'Rhythm' }, 'bass').name).toBeUndefined();
   });
 
   it('rewrites pitched notes onto strings at the same sounding pitch', () => {
@@ -433,6 +448,15 @@ describe('switching a track instrument', () => {
     const [note] = notesOf(retuneTrack(piano, 'guitar'));
     expect(isFrettedNote(note)).toBe(true);
     expect(note).toEqual({ stringIndex: 0, fret: 24 });
+  });
+
+  it('gives a guitar track switched to bass the four bass strings, keeping every pitch', () => {
+    const guitar = withNotes(createTrack('guitar'), [{ stringIndex: 4, fret: 2 }, { stringIndex: 5, fret: 0 }]);
+    const patch = retuneTrack(guitar, 'bass');
+    const bass = { ...createTrack('bass'), measures: [] };
+    expect(patch.tuning).toEqual([43, 38, 33, 28]);
+    expect(patch.display).toBeUndefined();
+    expect(notesOf(patch).map(n => resolveNoteMidi(n, bass))).toEqual([47, 40]);
   });
 });
 

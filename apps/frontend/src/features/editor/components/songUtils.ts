@@ -14,10 +14,48 @@ import type {
   TimeSignature,
 } from './types';
 
-// Full 12-string tuning pool (high to low)
-// Strings 1-6: standard guitar  [E4, B3, G3, D3, A2, E2]
-// Strings 7-12: extended range   [B1, F#1, C#1, G#0, Eb0, Bb-1]
-export const allStringPitches = [64, 59, 55, 50, 45, 40, 35, 30, 25, 20, 15, 10];
+/** Most strings a fretted track may have. */
+export const MAX_STRINGS = 12;
+
+/** Lowest open-string pitch a tuning can be set to (A#-1). */
+const LOWEST_TUNING_NOTE = 10;
+
+// Named tunings, open strings high to low. `Standard` is where a new track starts.
+const GUITAR_TUNINGS: Record<string, number[]> = {
+  'Standard': [64, 59, 55, 50, 45, 40],
+  'Drop D': [64, 59, 55, 50, 45, 38],
+  'Half step down': [63, 58, 54, 49, 44, 39],
+  'Full step down': [62, 57, 53, 48, 43, 38],
+  'Drop C#': [63, 58, 54, 49, 44, 37],
+  'Drop C': [62, 57, 53, 48, 43, 36],
+  'Open G': [62, 59, 55, 50, 43, 38],
+  'Open D': [62, 57, 54, 50, 45, 38],
+  'Open A': [64, 59, 55, 50, 47, 40],
+  'DADGAD': [62, 57, 55, 50, 45, 38],
+};
+
+const BASS_TUNINGS: Record<string, number[]> = {
+  'Standard': [43, 38, 33, 28],
+  'Drop D': [43, 38, 33, 26],
+  'Half step down': [42, 37, 32, 27],
+  'Full step down': [41, 36, 31, 26],
+  '5-string': [43, 38, 33, 28, 23],
+  '6-string': [48, 43, 38, 33, 28, 23],
+};
+
+export const tuningPresets = (instrument: InstrumentId): Record<string, number[]> =>
+  instrument === 'bass' ? BASS_TUNINGS : GUITAR_TUNINGS;
+
+export const defaultTuning = (instrument: InstrumentId): number[] => [...tuningPresets(instrument).Standard];
+
+/** A tuning cut or extended to `count` strings; each added string is a fourth below the last. */
+export const resizeTuning = (tuning: number[], count: number): number[] => {
+  const next = tuning.slice(0, count);
+  while (next.length < count) {
+    next.push(Math.max(LOWEST_TUNING_NOTE, (next[next.length - 1] ?? 69) - 5));
+  }
+  return next;
+};
 
 /** Highest fret the model accepts on any string. */
 export const MAX_FRET = 24;
@@ -47,10 +85,6 @@ export const TECHNIQUE_KEYS = [
   'legatoSlide',
   'bend',
 ] as const;
-
-export const getStringPitches = (count: number): number[] => {
-  return allStringPitches.slice(0, count);
-};
 
 // Helper to convert duration string to beat multiplier (relative to quarter note)
 export const getDurationVal = (dur: Duration, dot?: boolean): number => {
@@ -148,7 +182,7 @@ export const noteOctaveToMidi = (noteOctave: string): number => {
 export const GUITAR_NOTE_OPTIONS: string[] = (() => {
   const names = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
   const options: string[] = [];
-  for (let midi = 10; midi <= 79; midi++) {
+  for (let midi = LOWEST_TUNING_NOTE; midi <= 79; midi++) {
     const octave = Math.floor(midi / 12) - 1;
     options.push(`${names[midi % 12]}${octave}`);
   }
@@ -259,7 +293,7 @@ export const createTrack = (
     name: DEFAULT_TRACK_NAME[instrument],
     display: fretted ? 'both' : 'notation',
     instrument,
-    ...(fretted ? { tuning: getStringPitches(6) } : {}),
+    ...(fretted ? { tuning: defaultTuning(instrument) } : {}),
     transpose: DEFAULT_TRANSPOSE[instrument],
     volume: 1,
     measures: Array.from({ length: Math.max(1, barCount) }, () => createEmptyMeasure()),
@@ -287,17 +321,20 @@ export const placeMidiOnStrings = (midi: number, tuning: number[]): FrettedNote 
 };
 
 /**
- * Everything that must change when a track's instrument changes. Crossing the
- * fretted/pitched boundary rewrites every note through its sounding pitch, so
- * the switch can never strand a note the new staff cannot resolve.
+ * Everything that must change when a track's instrument changes. A fretted
+ * instrument brings its own strings (a bass its four), and every note is
+ * rewritten through its sounding pitch, so the switch can never strand a note
+ * the new staff cannot resolve.
  */
 export const retuneTrack = (track: TabTrack, instrument: InstrumentId): Partial<TabTrack> => {
   const patch: Partial<TabTrack> = { instrument, transpose: DEFAULT_TRANSPOSE[instrument] };
+  // A name nobody chose follows the instrument; one the user typed stays.
+  if (track.name === DEFAULT_TRACK_NAME[track.instrument]) patch.name = DEFAULT_TRACK_NAME[instrument];
   const fretted = trackKind(instrument) === 'fretted';
-  if (fretted === isFretted(track)) return patch;
+  if (!fretted && !isFretted(track)) return patch;
 
-  const tuning = fretted ? (track.tuning ?? getStringPitches(6)) : undefined;
-  patch.display = fretted ? 'both' : 'notation';
+  const tuning = fretted ? defaultTuning(instrument) : undefined;
+  if (fretted !== isFretted(track)) patch.display = fretted ? 'both' : 'notation';
   patch.tuning = tuning;
   patch.measures = track.measures.map(measure => ({
     ...measure,
@@ -309,16 +346,11 @@ export const retuneTrack = (track: TabTrack, instrument: InstrumentId): Partial<
   return patch;
 };
 
-/** One note across the fretted/pitched boundary; dropped only if unresolvable. */
+/** One note onto new strings, or off strings altogether; dropped only if unresolvable. */
 const convertNote = (note: TabNote, track: TabTrack, tuning?: number[]): TabNote[] => {
-  if (tuning) {
-    if (isFrettedNote(note)) return [note];
-    return [{ ...techniquesOf(note), ...placeMidiOnStrings(note.midi, tuning) }];
-  }
-  if (!isFrettedNote(note)) return [note];
   const midi = resolveNoteMidi(note, track);
   if (midi === undefined) return [];
-  return [{ ...techniquesOf(note), midi }];
+  return [{ ...techniquesOf(note), ...(tuning ? placeMidiOnStrings(midi, tuning) : { midi }) }];
 };
 
 /** The technique flags only — the two note shapes share nothing else. */
@@ -387,7 +419,7 @@ export const requiredStringCount = (measures: TabMeasure[], minimum: number): nu
       }
     }
   }
-  return Math.min(allStringPitches.length, Math.max(minimum, highest + 1));
+  return Math.min(MAX_STRINGS, Math.max(minimum, highest + 1));
 };
 
 // Drops fretted notes stranded above the current string count. Returns the same
