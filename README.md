@@ -190,3 +190,7 @@ The React app talks to the axum server over REST for the library and over one We
 song. The server keeps each open song as a live Yjs document, relays updates between the people
 in it, and writes it to PostgreSQL. Conventions and layout for contributors are in
 [`AGENTS.md`](AGENTS.md).
+
+## License
+
+[MIT](LICENSE) © 2026 Sandor van Wieringen
