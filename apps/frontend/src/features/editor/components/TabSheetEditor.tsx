@@ -2961,7 +2961,7 @@ export const TabSheetEditor: React.FC<TabSheetEditorProps> = ({ meta, channel })
             {grand && (
               // Which hand the keys, the keyboard and MIDI write to: its keys are the solid ones.
               <div className="control-group" role="group" aria-label="Hand">
-                {(['right', 'left'] as const).map(hand => (
+                {(['left', 'right'] as const).map(hand => (
                   <button
                     key={hand}
                     className={`btn ${activeHand === hand ? 'btn-active' : ''}`}
