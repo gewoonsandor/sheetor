@@ -112,10 +112,6 @@
   --instr-key-black-hover-top: #4d433a;
   --instr-key-black-hover-bottom: #241d18;
   --instr-key-shadow: rgb(0 0 0 / 0.5);
-  /* A grand staff's two hands, on the keys and wherever a hand is picked. Fixed
-     hues like the rest of the instrument, so both read on white and black keys. */
-  --instr-hand-right-rgb: 236 134 62;
-  --instr-hand-left-rgb: 72 156 226;
 
   /* Spacing scale */
   --sp-hair: 2px;

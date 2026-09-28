@@ -1532,13 +1532,9 @@ export const TabSheetEditor: React.FC<TabSheetEditorProps> = ({ meta, channel })
     return new Set(beat?.notes.map(n => resolveNoteMidi(n, other) ?? NaN));
   })();
 
-  /** A key's highlight: on a grand staff, the colour of the hand holding it. */
+  /** A key's highlight. On a grand staff the hand you write to is lit in the accent, the other hand in a pale tint of it. */
   const keyClass = (midi: number): string => {
-    if (grand) {
-      const otherHand: Hand = activeHand === 'left' ? 'right' : 'left';
-      const hand = activeMidis.has(midi) ? activeHand : otherHandMidis.has(midi) ? otherHand : null;
-      return hand ? ` is-hand hand-${hand}` : '';
-    }
+    if (grand) return activeMidis.has(midi) ? ' active' : otherHandMidis.has(midi) ? ' other-hand' : '';
     return `${activeMidis.has(midi) ? ' active' : ''}${playbackMidis.has(midi) ? ' playback-active' : ''}`;
   };
 
@@ -2895,16 +2891,15 @@ export const TabSheetEditor: React.FC<TabSheetEditorProps> = ({ meta, channel })
               Keyboard
             </div>
             {grand && (
-              // Which hand the keys, the keyboard and MIDI write to, in the colours the keys light up in.
-              <div className="control-group hand-switch" role="group" aria-label="Hand">
+              // Which hand the keys, the keyboard and MIDI write to: its keys are the solid ones.
+              <div className="control-group" role="group" aria-label="Hand">
                 {(['right', 'left'] as const).map(hand => (
                   <button
                     key={hand}
-                    className={`btn hand-${hand} ${activeHand === hand ? 'btn-active' : ''}`}
+                    className={`btn ${activeHand === hand ? 'btn-active' : ''}`}
                     onClick={() => switchHand(hand)}
                     aria-pressed={activeHand === hand}
                   >
-                    <span className="hand-dot" aria-hidden="true" />
                     {HAND_LABELS[hand]}
                   </button>
                 ))}
