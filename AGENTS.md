@@ -116,6 +116,7 @@ npm run lint                # eslint (frontend) + cargo clippy -D warnings
 npm run typecheck           # tsc -b (frontend) + cargo check --all-targets
 npm test                    # vitest run (pure modules) + cargo test
 npm run start:backend       # cargo run --release — one port, :4000
+npm run release -- minor    # gate, then one version everywhere, dated changelog, commit + tag vX.Y.Z; never pushes
 ```
 
 Every command needs the dev shell for `cargo`/`cargo-watch`. `.envrc` is `use flake`, so with direnv allowed they work in a plain shell; without it, prefix with `nix develop --command`.
@@ -238,6 +239,8 @@ docker build -t sheetor .                       # the release image (needs a cur
 | `apps/frontend/src/features/editor/components/songUtils.ts` | Music theory, beaming, MIDI ↔ note names, `createId`/`createEmptySong`, beat-position walking |
 | `apps/frontend/vite.config.ts` | `port: 5173, strictPort: true` + the dev proxy of `/api` (with `ws: true`) and `/docs` to `:4000` |
 | `Dockerfile` | Node build of `dist`, `SQLX_OFFLINE` release build, slim runtime with both |
+| `scripts/release.mjs` | `npm run release -- <patch\|minor\|major\|X.Y.Z>`: the only thing that changes the version or makes a tag |
+| `CHANGELOG.md` | Keep a Changelog; `## [Unreleased]` collects notes until a release dates them |
 | `apps/frontend/vitest.config.ts` | `include: ['test/**/*.test.ts']`, `environment: 'node'` |
 | `apps/frontend/eslint.config.js` | ESLint 9 flat config (frontend only) |
 
@@ -279,7 +282,9 @@ docker build -t sheetor .                       # the release image (needs a cur
 - **Never `git push`.** Pushing happens only on an explicit request from the user. Same for anything that rewrites shared history (`rebase`, `push --force`, `commit --amend` on an already-pushed commit).
 - **Message style is plain and free-form**, matching the existing history (`initial commit`, `made monorepo`) — no Conventional Commits prefixes. Short imperative subject ≤72 chars; add a body only when the *why* is not obvious from the diff.
 - **Stage deliberately** (`git add <path>`), never `git add -A`. The working tree may hold unrelated in-progress edits; keep them out of your commit and say so if they are inseparable.
-- Do not create branches or tags unless asked; commit onto the current branch.
+- Do not create branches unless asked; commit onto the current branch. A tag is made only by `npm run release`.
+- **Changelog as you go.** A user-visible change adds a line under `## [Unreleased]` in `CHANGELOG.md` (under `### Added`, `Changed`, `Fixed` or `Removed`), in the same commit as the change. Refactors, tests and docs need none.
+- **Releases** follow SemVer, tagged `vX.Y.Z` on the main branch. `npm run release -- <patch|minor|major|X.Y.Z>` runs the gate, refuses a dirty tree, an existing tag or empty Unreleased notes, then writes the version into `package.json`, `apps/frontend/package.json`, `package-lock.json`, `apps/backend/Cargo.toml` and `Cargo.lock` (the Docker build is `--locked`), turns Unreleased into `## [X.Y.Z] - date`, commits `release X.Y.Z` and makes an annotated tag whose message is the notes. Publishing is the user's `git push origin master --follow-tags`, then a release from the tag on Codeberg. While the version is `0.x`, a minor release may break the song format or the API.
 
 ## Testing & QA
 

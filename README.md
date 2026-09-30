@@ -187,6 +187,27 @@ build uses:
 cargo sqlx prepare --workspace -- --all-targets
 ```
 
+## Releases
+
+Each release is a git tag, `vX.Y.Z`, numbered by [Semantic Versioning](https://semver.org/), and
+[`CHANGELOG.md`](CHANGELOG.md) says what changed in it. To run a release instead of the latest
+commit, build its tag:
+
+```bash
+git clone --branch v0.1.0 https://codeberg.org/gewoonsandor/sheetor.git
+docker build -t sheetor:0.1.0 sheetor
+```
+
+To cut one, note each change under `## [Unreleased]` in the changelog as you go, then:
+
+```bash
+npm run release -- minor    # or patch, major, or an exact version such as 1.0.0-rc.1
+git push origin master --follow-tags
+```
+
+`release` runs the checks, sets the version everywhere, dates the notes, commits and tags;
+nothing leaves your machine until the push.
+
 ## Architecture
 
 ```mermaid
