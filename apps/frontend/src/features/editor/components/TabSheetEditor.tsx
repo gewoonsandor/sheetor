@@ -168,11 +168,14 @@ const KEY_OPTIONS = [
   return { key, label: `${major} / ${minor}m${count}` };
 });
 
-/** Techniques marked over the TAB per run: a label, how far above the staff, and where its dashes start. */
+/** Techniques marked over the TAB per run, on one shared line (a beat holds only one): the label, and where its dashes start. */
 const RUN_MARKS = [
-  { technique: 'palmMute', label: 'P.M.', lift: 4, dashFrom: 7 },
-  { technique: 'letRing', label: 'let ring', lift: 14, dashFrom: 17 },
+  { technique: 'palmMute', label: 'P.M.', dashFrom: 7 },
+  { technique: 'letRing', label: 'let ring', dashFrom: 17 },
 ] as const;
+
+/** Palm mute and let ring share that line, so turning one on clears the other from the whole beat. */
+const EXCLUDES: Partial<Record<keyof NoteTechniques, keyof NoteTechniques>> = { palmMute: 'letRing', letRing: 'palmMute' };
 
 /** Which hand of a grand staff: the treble staff's track is the right. */
 type Hand = 'right' | 'left';
@@ -765,7 +768,15 @@ export const TabSheetEditor: React.FC<TabSheetEditorProps> = ({ meta, channel })
     updateActiveBeatNotes(currentNotes => {
       const idx = cursorNoteIndex(currentNotes);
       if (idx === -1) return currentNotes;
-      return currentNotes.map((n, i) => (i === idx ? { ...n, [technique]: !n[technique] } : n));
+      const on = !currentNotes[idx][technique];
+      const other = on ? EXCLUDES[technique] : undefined;
+      return currentNotes.map((n, i) => {
+        const next = i === idx ? { ...n, [technique]: on } : n;
+        if (!other || !next[other]) return next;
+        const cleared = { ...next };
+        delete cleared[other];
+        return cleared;
+      });
     });
   };
 
@@ -3048,7 +3059,7 @@ export const TabSheetEditor: React.FC<TabSheetEditorProps> = ({ meta, channel })
 
           {/* Palm mute and let ring: the label over a lone note; a run of them opens with the label, then a
               dashed line to a bar halfway between its last note and the next. A run that wraps restates it on each row. */}
-          {showTab && RUN_MARKS.flatMap(({ technique, label, lift, dashFrom }) => (
+          {showTab && RUN_MARKS.flatMap(({ technique, label, dashFrom }) => (
             beatRuns(measures, b => !b.isRest && b.notes.some(n => n[technique])).flatMap(run => {
               const rowOf = (at: BeatPosition) => measureLayouts[at.measureIndex]?.row;
               const pieces: BeatPosition[][] = [];
@@ -3060,7 +3071,7 @@ export const TabSheetEditor: React.FC<TabSheetEditorProps> = ({ meta, channel })
               return pieces.map((piece, i) => {
                 const first = piece[0];
                 const last = piece[piece.length - 1];
-                const y = getRowY(first.measureIndex) + tabTop + getRowShift(first.measureIndex) - lift;
+                const y = getRowY(first.measureIndex) + tabTop + getRowShift(first.measureIndex) - 9;
                 const x = getBeatCoordinates(first.measureIndex, first.beatIndex);
                 const lastX = getBeatCoordinates(last.measureIndex, last.beatIndex);
                 const barEnd = getMeasureX(last.measureIndex) + getMeasureWidth(last.measureIndex);
