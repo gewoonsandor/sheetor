@@ -283,6 +283,8 @@ export const TabSheetEditor: React.FC<TabSheetEditorProps> = ({ meta, channel })
   const [showShortcuts, setShowShortcuts] = useState<boolean>(false);
   const [showNoteOptions, setShowNoteOptions] = useState<boolean>(false);
   const [openBottomMenu, setOpenBottomMenu] = useState<'song' | 'edit' | 'output' | 'view' | 'track' | null>(null);
+  /** A grand staff waiting on "delete the left hand?": the menu that asked, and the instrument the part becomes. */
+  const [leavingGrand, setLeavingGrand] = useState<{ menu: 'view' | 'track'; instrument: InstrumentId } | null>(null);
 
   const [playbackSpeed, setPlaybackSpeed] = useState<number>(settings.playbackSpeed);
   const [loopPlayback, setLoopPlayback] = useState<boolean>(settings.loopPlayback);
@@ -462,23 +464,44 @@ export const TabSheetEditor: React.FC<TabSheetEditorProps> = ({ meta, channel })
     setOpenBottomMenu(null);
   };
 
-  /** On splits the active pitched track into two hands; off keeps both tracks, just no longer braced. */
-  const setGrandStaff = (on: boolean) => {
-    if (on) {
-      editSong(prev => addBassStaff(prev, activeTrackIndex));
+  /**
+   * Leaves a grand staff for one staff, the part becoming `instrument`. The left hand is deleted
+   * rather than living on as a track of its own; when it holds notes, `menu` asks first (null: confirmed).
+   */
+  const leaveGrandStaff = (instrument: InstrumentId, menu: 'view' | 'track' | null) => {
+    if (!grand) return;
+    const leftNotes = song.tracks[grand.bass].measures.some(m => m.beats.some(b => b.notes.length > 0));
+    if (leftNotes && menu) {
+      setLeavingGrand({ menu, instrument });
       return;
     }
-    if (!grand) return;
+    setLeavingGrand(null);
     editSong(prev => ({
       ...prev,
-      tracks: prev.tracks.map((t, i) => {
-        if (i !== grand.treble) return t;
-        const next = { ...t };
-        delete next.bassTrack;
-        return next;
+      tracks: prev.tracks.flatMap((t, i) => {
+        if (i === grand.bass) return [];
+        if (i !== grand.treble) return [t];
+        const single = { ...t, ...(instrument === t.instrument ? {} : retuneTrack(t, instrument)) };
+        delete single.bassTrack;
+        return [single];
       }),
     }));
+    switchHand('right');
+    setActiveTrackIndex(grand.treble - (grand.bass < grand.treble ? 1 : 0));
   };
+
+  /** The warning `leaveGrandStaff` raises, shown in the menu that asked. */
+  const leftHandWarning = (menu: 'view' | 'track') => grand && leavingGrand?.menu === menu && (
+    <>
+      <span className="popover-hint">One staff: the left hand and its notes will be deleted.</span>
+      <div className="control-group">
+        <button className="btn btn-danger" onClick={() => leaveGrandStaff(leavingGrand.instrument, null)} style={{ flex: 1 }}>
+          Delete left hand
+        </button>
+        <button className="btn" onClick={() => setLeavingGrand(null)} style={{ flex: 1 }}>Cancel</button>
+      </div>
+    </>
+  );
 
   /** Rewrites only one track's bars: the active one unless a click on the other hand's staff names it. */
   const setMeasures = (updater: (measures: TabMeasure[]) => TabMeasure[], trackIndex: number = activeTrackIndex) => {
@@ -1899,6 +1922,11 @@ export const TabSheetEditor: React.FC<TabSheetEditorProps> = ({ meta, channel })
                 value={activeTrack.instrument}
                 onChange={(e) => {
                   const instrument = e.target.value as InstrumentId;
+                  // No grand staff on a TAB staff: the left hand goes, after asking.
+                  if (grand && trackKind(instrument) === 'fretted') {
+                    leaveGrandStaff(instrument, 'track');
+                    return;
+                  }
                   // The instrument decides whether this is a TAB staff, so
                   // switching it can add or remove strings and rewrites the
                   // notes through their sounding pitch.
@@ -1912,6 +1940,7 @@ export const TabSheetEditor: React.FC<TabSheetEditorProps> = ({ meta, channel })
                 ))}
               </select>
             </label>
+            {leftHandWarning('track')}
             <label className="compact-field wide-field">
               <span>Key</span>
               <select
@@ -3681,10 +3710,7 @@ export const TabSheetEditor: React.FC<TabSheetEditorProps> = ({ meta, channel })
                     <button
                       key={mode}
                       className={`btn ${activeTrack.display === mode && !grand ? 'btn-active' : ''}`}
-                      onClick={() => {
-                        setGrandStaff(false);
-                        updateActiveTrack({ display: mode });
-                      }}
+                      onClick={() => (grand ? leaveGrandStaff(activeTrack.instrument, 'view') : updateActiveTrack({ display: mode }))}
                       style={{ flex: 1 }}
                     >
                       {STAFF_LABELS[mode]}
@@ -3693,7 +3719,7 @@ export const TabSheetEditor: React.FC<TabSheetEditorProps> = ({ meta, channel })
                   {!isFrettedTrack && (
                     <button
                       className={`btn ${grand ? 'btn-active' : ''}`}
-                      onClick={() => setGrandStaff(true)}
+                      onClick={() => editSong(prev => addBassStaff(prev, activeTrackIndex))}
                       title="Treble and bass clef, one track per hand: the notes below middle C move to a new left-hand track with its own rhythm"
                       style={{ flex: 1 }}
                     >
@@ -3701,6 +3727,7 @@ export const TabSheetEditor: React.FC<TabSheetEditorProps> = ({ meta, channel })
                     </button>
                   )}
                 </div>
+                {leftHandWarning('view')}
                 <div className="popover-divider" />
                 <button
                   className={`btn ${showFretboard ? 'btn-active' : ''}`}
