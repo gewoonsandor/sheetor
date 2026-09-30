@@ -525,16 +525,12 @@ input[type="range"] {
   fill: var(--warn-wash);
 }
 
-.technique-pm {
+.technique-mark {
   fill: var(--accent);
 }
 
-.technique-pm-line {
+.technique-mark-line {
   stroke: var(--accent);
-}
-
-.technique-ring {
-  fill: var(--ok);
 }
 
 .notehead {
