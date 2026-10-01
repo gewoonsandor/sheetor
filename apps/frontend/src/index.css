@@ -55,8 +55,8 @@
 
   /* Text */
   --text: hsl(var(--tint-h) 30% 92%);
-  --text-dim: hsl(var(--tint-h) 10% 62%);
-  --text-faint: hsl(var(--tint-h) 8% 41%);
+  --text-dim: hsl(var(--tint-h) 10% 68%);
+  --text-faint: hsl(var(--tint-h) 8% 58%);
 
   /* Accent, derived from the palette triplet */
   --accent: rgb(var(--accent-rgb));
@@ -64,6 +64,9 @@
   --accent-soft: rgb(var(--accent-rgb) / 0.14);
   --accent-glow: rgb(var(--accent-rgb) / 0.28);
   --accent-wash: rgb(var(--accent-rgb) / 0.12);
+  /* Accent-coloured text on a tinted fill: pressed buttons, badges, the active chip. */
+  --accent-text: var(--accent);
+  --focus-ring: var(--accent);
 
   /* Semantic, derived the same way */
   --danger-rgb: 219 118 108;
@@ -138,7 +141,7 @@
 
   /* Command bar height — every clearance below the fold derives from it.
      The bar floats as a dock, so this includes its gap to the window edge. */
-  --cmdbar-h: 68px;
+  --cmdbar-h: calc(var(--ctl-h) + var(--sp-6));
 
   /* The sticky app header; the editor keeps what it scrolls to below it. */
   --header-h: 56px;
@@ -159,6 +162,19 @@
   --font: 'Inter', system-ui, -apple-system, sans-serif;
   --font-display: 'Fraunces', Georgia, serif;
   --font-mono: 'JetBrains Mono', ui-monospace, 'SF Mono', monospace;
+
+  /* Type scale. --fs-2xs is for uppercase eyebrows, key caps and instrument
+     labels only; running text starts at --fs-xs. */
+  --fs-2xs: 0.6875rem;
+  --fs-xs: 0.75rem;
+  --fs-sm: 0.8125rem;
+  --fs-md: 0.875rem;
+  --fs-lg: 1.0625rem;
+  --fs-xl: 1.25rem;
+  --fs-2xl: 1.625rem;
+  --fs-display: 2.125rem;
+  --lh-tight: 1.2;
+  --lh: 1.5;
 
   --ease: cubic-bezier(0.16, 1, 0.3, 1);
 
@@ -193,20 +209,21 @@
   --border-strong: hsl(var(--tint-h) 20% 20% / 0.22);
 
   --text: hsl(var(--tint-h) 25% 13%);
-  --text-dim: hsl(var(--tint-h) 12% 38%);
-  --text-faint: hsl(var(--tint-h) 10% 55%);
+  --text-dim: hsl(var(--tint-h) 12% 33%);
+  --text-faint: hsl(var(--tint-h) 10% 40%);
+  --accent-text: var(--accent-hover);
 
   --danger-rgb: 176 62 54;
   --warn-rgb: 158 108 16;
   --ok-rgb: 20 122 88;
   --danger-hover-text: rgb(var(--danger-rgb));
 
-  --peer-0: hsl(199 89% 38%);
-  --peer-1: hsl(142 60% 38%);
-  --peer-2: hsl(271 76% 38%);
-  --peer-3: hsl(24 94% 38%);
-  --peer-4: hsl(330 81% 38%);
-  --peer-5: hsl(48 96% 38%);
+  --peer-0: hsl(199 89% 32%);
+  --peer-1: hsl(142 60% 32%);
+  --peer-2: hsl(271 76% 32%);
+  --peer-3: hsl(24 94% 32%);
+  --peer-4: hsl(330 81% 32%);
+  --peer-5: hsl(48 96% 32%);
 
   --edge-hi: rgb(255 255 255 / 0.85);
   --sheen: linear-gradient(180deg, rgb(255 255 255 / 0.6), rgb(255 255 255 / 0) 60%);
@@ -243,7 +260,7 @@
 body {
   margin: 0;
   min-width: 320px;
-  min-height: 100vh;
+  min-height: 100dvh;
   background: var(--ambient) no-repeat, var(--bg);
   color: var(--text);
   font-family: var(--font);
@@ -261,10 +278,10 @@ body {
   scrollbar-color: var(--surface-4) transparent;
 }
 
-/* Shared focus treatment: amber ring, never the default blue halo */
-:where(button, input, select, textarea, [tabindex]):focus-visible {
-  outline: 2px solid var(--border-focus);
-  outline-offset: 1px;
+/* Shared focus treatment: the accent ring, never the default blue halo */
+:where(a, button, input, select, textarea, [tabindex]):focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 2px;
 }
 
 ::selection {
@@ -320,7 +337,7 @@ body {
     min-block-size: var(--ctl-h-sm);
     padding-inline: var(--sp-2);
     border-radius: var(--r-sm);
-    font-size: 0.8125rem;
+    font-size: var(--fs-sm);
     font-weight: 500;
   }
 

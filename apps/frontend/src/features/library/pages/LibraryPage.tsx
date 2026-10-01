@@ -275,7 +275,7 @@ export const LibraryPage = () => {
     return (
       <li
         key={folder.id}
-        className={`library-card library-folder ${drop.className}`}
+        className={`library-card card library-folder ${drop.className}`}
         {...dragProps(item, movable)}
         onDragEnter={drop.onDragEnter}
         onDragOver={drop.onDragOver}
@@ -309,7 +309,7 @@ export const LibraryPage = () => {
               <span className="library-folder-name">{folder.name}</span>
             </button>
           )}
-          {badge !== null && <span className="library-card-badge popover-title">{badge}</span>}
+          {badge !== null && <span className="library-card-badge eyebrow">{badge}</span>}
         </div>
 
         <p className="library-card-meta">
@@ -436,14 +436,14 @@ export const LibraryPage = () => {
       </header>
 
       {error !== null && (
-        <p className="library-error" role="alert">
+        <p className="form-error" role="alert">
           {error}
         </p>
       )}
 
       {isEmpty ? (
         <div className="library-empty">
-          <span className="popover-title">{here ? 'Empty folder' : 'Empty library'}</span>
+          <span className="eyebrow">{here ? 'Empty folder' : 'Empty library'}</span>
           <h2 className="library-empty-title">
             {here ? `Nothing in ${here.name} yet` : 'Start your first song'}
           </h2>
@@ -460,18 +460,18 @@ export const LibraryPage = () => {
         </div>
       ) : (
         <>
-          {folders.length > 0 && <h2 className="library-section popover-title">Folders</h2>}
+          {folders.length > 0 && <h2 className="library-section eyebrow">Folders</h2>}
           <ul className="library-grid library-grid-folders">{folders.map(folderCard)}</ul>
 
           {sharedWithMe.length > 0 && (
             <>
-              <h2 className="library-section popover-title">Shared with me</h2>
+              <h2 className="library-section eyebrow">Shared with me</h2>
               <ul className="library-grid library-grid-folders">{sharedWithMe.map(folderCard)}</ul>
             </>
           )}
 
           {(folders.length > 0 || sharedWithMe.length > 0) && songs.length > 0 && (
-            <h2 className="library-section popover-title">Songs</h2>
+            <h2 className="library-section eyebrow">Songs</h2>
           )}
           <ul className="library-grid">
             {songs.map((entry) => {
@@ -483,12 +483,12 @@ export const LibraryPage = () => {
               return (
                 <li
                   key={entry.id}
-                  className={`library-card ${isCurrent ? 'is-current' : ''}`}
+                  className={`library-card card ${isCurrent ? 'is-current' : ''}`}
                   {...dragProps(item, editable)}
                 >
                   <div className="library-card-head">
                     <h2 className="library-card-title">{entry.title || 'Untitled'}</h2>
-                    {isCurrent && <span className="library-card-badge popover-title">Current</span>}
+                    {isCurrent && <span className="library-card-badge eyebrow">Current</span>}
                   </div>
                   <p className="library-card-artist">{entry.artist || 'Unknown artist'}</p>
 

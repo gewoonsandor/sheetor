@@ -81,9 +81,9 @@ export const SettingsPage = () => {
 
       <div className="settings-sections">
         <section className="settings-section">
-          <h2 className="settings-section-title">Account</h2>
+          <h2 className="eyebrow">Account</h2>
           <p className="settings-section-note">Your account on this server.</p>
-          <div className="settings-card">
+          <div className="settings-card card">
             <SettingsRow name="Avatar" description="Initials are taken from your display name.">
               <span className="app-user-avatar app-user-avatar-lg">{deriveInitials(user.name)}</span>
             </SettingsRow>
@@ -105,7 +105,7 @@ export const SettingsPage = () => {
                 }}
               />
               {nameError !== null && (
-                <p className="settings-error" role="alert">
+                <p className="form-error" role="alert">
                   {nameError}
                 </p>
               )}
@@ -127,16 +127,16 @@ export const SettingsPage = () => {
         </section>
 
         <section className="settings-section">
-          <h2 className="settings-section-title">Appearance</h2>
+          <h2 className="eyebrow">Appearance</h2>
           <p className="settings-section-note">How Sheetor looks. Saved to your account and applied instantly.</p>
-          <div className="settings-card">
+          <div className="settings-card card">
             <SettingsRow name="Theme" description="System follows your operating system setting.">
               <div className="settings-choices" role="group" aria-label="Theme">
                 {THEME_PREFERENCES.map((preference) => (
                   <button
                     key={preference}
                     type="button"
-                    className={`btn${user.theme === preference ? ' btn-active' : ''}`}
+                    className="btn"
                     aria-pressed={user.theme === preference}
                     onClick={() => changeAppearance({ theme: preference })}
                   >
@@ -164,7 +164,7 @@ export const SettingsPage = () => {
             </SettingsRow>
           </div>
           {appearanceError !== null && (
-            <p className="settings-error" role="alert">
+            <p className="form-error" role="alert">
               {appearanceError}
             </p>
           )}

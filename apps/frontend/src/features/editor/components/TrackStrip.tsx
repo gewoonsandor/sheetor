@@ -37,7 +37,7 @@ export const TrackStrip: React.FC<TrackStripProps> = ({
   const anySoloed = tracks.some(t => t.soloed);
 
   return (
-    <div className="sheetor-tracks">
+    <div className="sheetor-tracks card">
       <div className="track-list" role="tablist" aria-label="Tracks">
         {tracks.map((track, index) => {
           const grand = grandStaffOf(tracks, index);
@@ -95,7 +95,8 @@ export const TrackStrip: React.FC<TrackStripProps> = ({
       <div className="track-settings-anchor">
         <button
           type="button"
-          className={`btn ${settingsOpen ? 'btn-active' : ''}`}
+          className="btn"
+          aria-expanded={settingsOpen}
           onClick={onOpenSettings}
           title="Track settings"
         >

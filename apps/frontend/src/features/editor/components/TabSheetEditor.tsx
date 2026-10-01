@@ -498,10 +498,10 @@ export const TabSheetEditor: React.FC<TabSheetEditorProps> = ({ meta, channel })
     <>
       <span className="popover-hint">One staff: the left hand and its notes will be deleted.</span>
       <div className="control-group">
-        <button className="btn btn-danger" onClick={() => leaveGrandStaff(leavingGrand.instrument, null)} style={{ flex: 1 }}>
+        <button className="btn btn-danger" onClick={() => leaveGrandStaff(leavingGrand.instrument, null)}>
           Delete left hand
         </button>
-        <button className="btn" onClick={() => setLeavingGrand(null)} style={{ flex: 1 }}>Cancel</button>
+        <button className="btn" onClick={() => setLeavingGrand(null)}>Cancel</button>
       </div>
     </>
   );
@@ -1773,9 +1773,6 @@ export const TabSheetEditor: React.FC<TabSheetEditorProps> = ({ meta, channel })
           <path d="M 15 11 C 18 13, 20 17, 18 20 C 17.5 17, 16 14, 15 13" />
         </svg>
       )}
-      <span className="duration-label">
-        {dur === '1' ? '1/1' : dur === '2' ? '1/2' : dur === '4' ? '1/4' : dur === '8' ? '1/8' : dur === '16' ? '1/16' : '1/32'}
-      </span>
     </button>
   ));
 
@@ -1792,7 +1789,6 @@ export const TabSheetEditor: React.FC<TabSheetEditorProps> = ({ meta, channel })
         <ellipse cx="10" cy="14" rx="5" ry="3.5" transform="rotate(-20 10 14)" />
         <line x1="15" y1="14" x2="15" y2="4" stroke="currentColor" strokeWidth="2.2" />
       </svg>
-      <span className="duration-label">.</span>
     </button>
   );
 
@@ -1835,7 +1831,7 @@ export const TabSheetEditor: React.FC<TabSheetEditorProps> = ({ meta, channel })
             placeholder="Artist"
           />
           {notice !== null && (
-            <p className="editor-notice" role="alert">
+            <p className="form-error" role="alert">
               {notice}
             </p>
           )}
@@ -1917,7 +1913,7 @@ export const TabSheetEditor: React.FC<TabSheetEditorProps> = ({ meta, channel })
       >
         {openBottomMenu === 'track' && (
           <div className="bottom-popover track-popover">
-            <span className="popover-title">Track settings</span>
+            <span className="eyebrow">Track settings</span>
             <label className="compact-field wide-field">
               <span>Name</span>
               <input
@@ -1983,7 +1979,7 @@ export const TabSheetEditor: React.FC<TabSheetEditorProps> = ({ meta, channel })
             {isFrettedTrack && (
               <>
                 <div className="popover-divider" />
-                <span className="popover-title">Tuning</span>
+                <span className="eyebrow">Tuning</span>
                 <label className="compact-field wide-field">
                   <span>Preset</span>
                   <select
@@ -3102,9 +3098,9 @@ export const TabSheetEditor: React.FC<TabSheetEditorProps> = ({ meta, channel })
       {/* Piano keyboard — replaces the fretboard in sheet-only mode, where
           string/fret input makes no sense but pitch input does. */}
       {showFretboard && !showTab && (
-        <div className="sheetor-fretboard">
+        <div className="sheetor-fretboard card">
           <div className="fretboard-header">
-            <div className="fretboard-title">
+            <div className="fretboard-title eyebrow">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" width="15" height="15">
                 <rect x="3" y="4" width="18" height="16" rx="2" />
                 <path d="M9 4v9M15 4v9" />
@@ -3117,9 +3113,8 @@ export const TabSheetEditor: React.FC<TabSheetEditorProps> = ({ meta, channel })
                 {(['left', 'right'] as const).map(hand => (
                   <button
                     key={hand}
-                    className={`btn ${activeHand === hand ? 'btn-active' : ''}`}
+                    className="btn" aria-pressed={activeHand === hand}
                     onClick={() => switchHand(hand)}
-                    aria-pressed={activeHand === hand}
                   >
                     {HAND_LABELS[hand]}
                   </button>
@@ -3129,7 +3124,7 @@ export const TabSheetEditor: React.FC<TabSheetEditorProps> = ({ meta, channel })
             <div className="sheet-controls">
               <div className="duration-selector">{durationButtons}{dotButton}</div>
               <button
-                className={`btn ${activeBeat?.isRest ? 'btn-active' : ''}`}
+                className="btn" aria-pressed={activeBeat?.isRest}
                 onClick={toggleActiveBeatRest}
                 title="Toggle rest on the selected beat"
               >
@@ -3184,9 +3179,9 @@ export const TabSheetEditor: React.FC<TabSheetEditorProps> = ({ meta, channel })
 
       {/* Virtual Fretboard */}
       {showFretboard && showTab && (
-        <div className="sheetor-fretboard">
+        <div className="sheetor-fretboard card">
           <div className="fretboard-header">
-            <div className="fretboard-title">
+            <div className="fretboard-title eyebrow">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" width="15" height="15">
                 <path d="M12 2a3 3 0 0 0-3 3v2.5c0 .5-.2 1-.6 1.4L5 12.5V16l1.5.5L5 21h14l-1.5-4.5L19 16v-3.5l-3.4-3.6c-.4-.4-.6-.9-.6-1.4V5a3 3 0 0 0-3-3Z" />
                 <circle cx="8" cy="18" r="1" />
@@ -3447,7 +3442,7 @@ export const TabSheetEditor: React.FC<TabSheetEditorProps> = ({ meta, channel })
                 id="transport-bpm"
                 type="text"
                 inputMode="numeric"
-                className="control-input stepper-input"
+                className="control-input control-input-num stepper-input"
                 value={transportBpmText}
                 onChange={(e) => setBpmDraft(e.target.value)}
                 onFocus={(e) => e.target.select()}
@@ -3472,7 +3467,8 @@ export const TabSheetEditor: React.FC<TabSheetEditorProps> = ({ meta, channel })
           </div>
           <div className="bottom-menu">
             <button
-              className={`bottom-menu-trigger ${openBottomMenu === 'output' ? 'active' : ''}`}
+              className="btn"
+              aria-expanded={openBottomMenu === 'output'}
               onClick={() => setOpenBottomMenu(prev => prev === 'output' ? null : 'output')}
               title="Speed, master volume and looping"
             >
@@ -3484,14 +3480,13 @@ export const TabSheetEditor: React.FC<TabSheetEditorProps> = ({ meta, channel })
             </button>
             {openBottomMenu === 'output' && (
               <div className="bottom-popover" style={{ left: 0, right: 'auto', minWidth: 200 }}>
-                <span className="popover-title">Speed</span>
-                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+                <span className="eyebrow">Speed</span>
+                <div className="speed-choices">
                   {[0.5, 0.75, 1, 1.25, 1.5, 2].map(speed => (
                     <button
                       key={speed}
-                      className={`btn ${playbackSpeed === speed ? 'btn-active' : ''}`}
+                      className="btn" aria-pressed={playbackSpeed === speed}
                       onClick={() => setPlaybackSpeed(speed)}
-                      style={{ flex: 1, minWidth: 48 }}
                     >{speed}x</button>
                   ))}
                 </div>
@@ -3509,7 +3504,7 @@ export const TabSheetEditor: React.FC<TabSheetEditorProps> = ({ meta, channel })
                 </label>
                 <div className="popover-divider" />
                 <button
-                  className={`btn ${loopPlayback ? 'btn-active' : ''}`}
+                  className="btn" aria-pressed={loopPlayback}
                   onClick={() => setLoopPlayback(prev => !prev)}
                 >
                   {loopPlayback ? 'Loop on' : 'Loop off'}
@@ -3524,7 +3519,8 @@ export const TabSheetEditor: React.FC<TabSheetEditorProps> = ({ meta, channel })
         <div className="bottom-cluster">
           <div className="bottom-menu">
             <button
-              className={`bottom-menu-trigger ${openBottomMenu === 'song' ? 'active' : ''}`}
+              className="btn"
+              aria-expanded={openBottomMenu === 'song'}
               onClick={() => setOpenBottomMenu(prev => prev === 'song' ? null : 'song')}
             >
               <svg viewBox="0 0 24 24" fill="currentColor">
@@ -3539,9 +3535,9 @@ export const TabSheetEditor: React.FC<TabSheetEditorProps> = ({ meta, channel })
               <div className="bottom-popover">
               {!readOnly && (
               <>
-              <span className="popover-title">Measure {activeMeasureIndex + 1}</span>
+              <span className="eyebrow">Measure {activeMeasureIndex + 1}</span>
               <div className="control-group">
-                <span className="control-label">Sig</span>
+                <span className="eyebrow">Sig</span>
                 <select
                   className="control-select"
                   value={activeMeasureTimeSignature.numerator}
@@ -3571,13 +3567,12 @@ export const TabSheetEditor: React.FC<TabSheetEditorProps> = ({ meta, channel })
               {/* Each staff's clef from this bar on: a grand staff's hands are set apart. */}
               {showNotation && staves.map((staff, i) => (
                 <div className="control-group" key={`clef-${staff.top}`}>
-                  <span className="control-label">{grand ? `${i === 0 ? 'R.H.' : 'L.H.'} clef` : 'Clef'}</span>
+                  <span className="eyebrow">{grand ? `${i === 0 ? 'R.H.' : 'L.H.'} clef` : 'Clef'}</span>
                   {(['treble', 'bass'] as const).map(clef => (
                     <button
                       key={clef}
-                      className={`btn ${staff.clefs[activeMeasureIndex] === clef ? 'btn-active' : ''}`}
+                      className="btn" aria-pressed={staff.clefs[activeMeasureIndex] === clef}
                       onClick={() => setClef(staff, clef)}
-                      aria-pressed={staff.clefs[activeMeasureIndex] === clef}
                     >
                       {CLEF_LABELS[clef]}
                     </button>
@@ -3585,16 +3580,16 @@ export const TabSheetEditor: React.FC<TabSheetEditorProps> = ({ meta, channel })
                 </div>
               ))}
               <div className="control-group">
-                <span className="control-label">Repeat</span>
+                <span className="eyebrow">Repeat</span>
                 <button
-                  className={`btn ${conductorMeasures[activeMeasureIndex]?.repeatStart ? 'btn-active' : ''}`}
+                  className="btn" aria-pressed={conductorMeasures[activeMeasureIndex]?.repeatStart}
                   onClick={toggleRepeatStart}
                   title="Start a repeated section at this bar"
                 >
                   Start
                 </button>
                 <button
-                  className={`btn ${activeRepeat !== undefined ? 'btn-active' : ''}`}
+                  className="btn" aria-pressed={activeRepeat !== undefined}
                   onClick={() => setRepeatEnd(activeRepeat !== undefined ? null : MIN_REPEAT)}
                   title="End a repeated section at this bar"
                 >
@@ -3603,7 +3598,7 @@ export const TabSheetEditor: React.FC<TabSheetEditorProps> = ({ meta, channel })
               </div>
               {activeRepeat !== undefined && (
                 <div className="control-group">
-                  <span className="control-label">Plays</span>
+                  <span className="eyebrow">Plays</span>
                   <div className="stepper">
                     <button
                       type="button"
@@ -3634,13 +3629,13 @@ export const TabSheetEditor: React.FC<TabSheetEditorProps> = ({ meta, channel })
               <div className="popover-divider" />
               </>
               )}
-              <span className="popover-title">Library</span>
+              <span className="eyebrow">Library</span>
               <button className="btn btn-primary" onClick={() => void startNewSong()}>New song</button>
               <Link className="btn" to="/library" onClick={() => setOpenBottomMenu(null)}>
                 Open library
               </Link>
               <div className="popover-divider" />
-              <span className="popover-title">Song file</span>
+              <span className="eyebrow">Song file</span>
               <button className="btn" onClick={handleExport}>Export JSON</button>
               {!readOnly && <button className="btn" onClick={handleImport}>Import JSON</button>}
               {!readOnly && <div className="popover-divider" />}
@@ -3652,7 +3647,8 @@ export const TabSheetEditor: React.FC<TabSheetEditorProps> = ({ meta, channel })
           {!readOnly && (
           <div className="bottom-menu">
             <button
-              className={`bottom-menu-trigger ${openBottomMenu === 'edit' ? 'active' : ''}`}
+              className="btn"
+              aria-expanded={openBottomMenu === 'edit'}
               onClick={() => setOpenBottomMenu(prev => prev === 'edit' ? null : 'edit')}
             >
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -3662,32 +3658,32 @@ export const TabSheetEditor: React.FC<TabSheetEditorProps> = ({ meta, channel })
             </button>
             {openBottomMenu === 'edit' && (
               <div className="bottom-popover">
-              <span className="popover-title">History</span>
+              <span className="eyebrow">History</span>
               <div className="control-group">
-                <button className="btn" onClick={channel.undo} disabled={!live.canUndo} style={{ flex: 1 }}>Undo</button>
-                <button className="btn" onClick={channel.redo} disabled={!live.canRedo} style={{ flex: 1 }}>Redo</button>
+                <button className="btn" onClick={channel.undo} disabled={!live.canUndo}>Undo</button>
+                <button className="btn" onClick={channel.redo} disabled={!live.canRedo}>Redo</button>
               </div>
               <div className="popover-divider" />
-              <span className="popover-title">Clipboard</span>
+              <span className="eyebrow">Clipboard</span>
               <div className="control-group">
-                <button className="btn" onClick={copySelection} style={{ flex: 1 }}>Copy</button>
-                <button className="btn" onClick={cutSelection} style={{ flex: 1 }}>Cut</button>
-                <button className="btn" onClick={pasteClipboard} disabled={!clip} style={{ flex: 1 }}>Paste</button>
+                <button className="btn" onClick={copySelection}>Copy</button>
+                <button className="btn" onClick={cutSelection}>Cut</button>
+                <button className="btn" onClick={pasteClipboard} disabled={!clip}>Paste</button>
               </div>
               <div className="popover-divider" />
-              <span className="popover-title">Beat {activeBeatIndex + 1}</span>
+              <span className="eyebrow">Beat {activeBeatIndex + 1}</span>
               <button className="btn btn-primary" onClick={insertBeatAfterActive}>Insert beat</button>
               <button className="btn btn-danger" onClick={deleteActiveBeat}>Delete beat</button>
               <div className="popover-divider" />
-              <span className="popover-title">Measure {activeMeasureIndex + 1}</span>
+              <span className="eyebrow">Measure {activeMeasureIndex + 1}</span>
               <button className="btn" onClick={addMeasure}>Add measure</button>
               <button className="btn" onClick={insertMeasureAfterActive}>Insert measure</button>
               <button className="btn" onClick={duplicateActiveMeasure}>Duplicate measure</button>
               <button className="btn btn-danger" onClick={deleteActiveMeasure}>Delete measure</button>
               <div className="popover-divider" />
-              <span className="popover-title">MIDI keyboard</span>
+              <span className="eyebrow">MIDI keyboard</span>
               <button
-                className={`btn ${midiInput ? 'btn-active' : ''}`}
+                className="btn" aria-pressed={midiInput}
                 onClick={() => setMidiInput(prev => !prev)}
                 disabled={!midiSupported()}
               >
@@ -3699,11 +3695,12 @@ export const TabSheetEditor: React.FC<TabSheetEditorProps> = ({ meta, channel })
           </div>
           )}
 
-          <div className="cmd-divider" />
+          <div className="toolbar-divider" />
 
           <div className="bottom-menu">
             <button
-              className={`bottom-menu-trigger ${openBottomMenu === 'view' ? 'active' : ''}`}
+              className="btn"
+              aria-expanded={openBottomMenu === 'view'}
               onClick={() => setOpenBottomMenu(prev => prev === 'view' ? null : 'view')}
               title="View options"
             >
@@ -3715,24 +3712,24 @@ export const TabSheetEditor: React.FC<TabSheetEditorProps> = ({ meta, channel })
             </button>
             {openBottomMenu === 'view' && (
               <div className="bottom-popover">
-                <span className="popover-title">Staff — {part.name}</span>
+                <span className="eyebrow">Staff — {part.name}</span>
                 <div className="control-group">
                   {STAFF_DISPLAYS[trackKind(activeTrack.instrument)].map(mode => (
                     <button
                       key={mode}
-                      className={`btn ${activeTrack.display === mode && !grand ? 'btn-active' : ''}`}
+                      className="btn" aria-pressed={activeTrack.display === mode && !grand}
                       onClick={() => (grand ? leaveGrandStaff(activeTrack.instrument, 'view') : updateActiveTrack({ display: mode }))}
-                      style={{ flex: 1 }}
+                     
                     >
                       {STAFF_LABELS[mode]}
                     </button>
                   ))}
                   {!isFrettedTrack && (
                     <button
-                      className={`btn ${grand ? 'btn-active' : ''}`}
+                      className="btn" aria-pressed={grand !== null}
                       onClick={() => editSong(prev => addBassStaff(prev, activeTrackIndex))}
                       title="Treble and bass clef, one track per hand: the notes below middle C move to a new left-hand track with its own rhythm"
-                      style={{ flex: 1 }}
+                     
                     >
                       Grand staff
                     </button>
@@ -3741,18 +3738,18 @@ export const TabSheetEditor: React.FC<TabSheetEditorProps> = ({ meta, channel })
                 {leftHandWarning('view')}
                 <div className="popover-divider" />
                 <button
-                  className={`btn ${showFretboard ? 'btn-active' : ''}`}
+                  className="btn" aria-pressed={showFretboard}
                   onClick={() => setShowFretboard(prev => !prev)}
                 >
                   {showTab ? 'Fretboard' : 'Keyboard'}
                 </button>
                 {role === 'viewer' ? (
-                  <button className="btn btn-active" disabled>
+                  <button className="btn" aria-pressed disabled>
                     View only
                   </button>
                 ) : (
                   <button
-                    className={`btn ${viewMode ? 'btn-active' : ''}`}
+                    className="btn" aria-pressed={viewMode}
                     onClick={() => {
                       setViewMode(prev => {
                         if (!prev) {
@@ -3848,7 +3845,7 @@ export const TabSheetEditor: React.FC<TabSheetEditorProps> = ({ meta, channel })
             </p>
 
             <textarea
-              className="sheetor-modal-textarea"
+              className="control-input sheetor-modal-textarea"
               value={jsonText}
               onChange={(e) => setJsonText(e.target.value)}
               readOnly={modalOpen === 'export'}

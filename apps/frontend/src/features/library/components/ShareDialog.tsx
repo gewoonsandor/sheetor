@@ -113,7 +113,7 @@ export const ShareDialog = ({ folder, onClose }: { folder: LibraryFolder; onClos
         </form>
 
         {error !== null && (
-          <p className="share-error" role="alert">
+          <p className="form-error" role="alert">
             {error}
           </p>
         )}

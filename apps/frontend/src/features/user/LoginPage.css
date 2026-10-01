@@ -13,10 +13,6 @@
   gap: var(--sp-4);
   width: min(380px, 100%);
   padding: var(--sp-5);
-  border: 1px solid var(--border);
-  border-radius: var(--r-lg);
-  background: var(--sheen), var(--surface-1);
-  box-shadow: inset 0 1px 0 var(--edge-hi), var(--shadow-3);
 }
 
 .login-brand {
@@ -28,7 +24,7 @@
 .login-title {
   margin: 0;
   font-family: var(--font-display);
-  font-size: 1.625rem;
+  font-size: var(--fs-2xl);
   font-weight: 600;
   letter-spacing: -0.01em;
   color: var(--text);
@@ -41,35 +37,16 @@
 }
 
 .login-label {
-  font-size: 0.75rem;
+  font-size: var(--fs-xs);
   font-weight: 600;
   color: var(--text-dim);
 }
 
-/* .control-input is the 64px centred numeric field; a credential field wants
-   the full width and normal text alignment. */
-.login-input {
-  width: 100%;
-  text-align: left;
-  font-variant-numeric: normal;
-}
-
 .login-hint {
   margin: 0;
-  font-size: 0.75rem;
-  line-height: 1.5;
+  font-size: var(--fs-xs);
+  line-height: var(--lh);
   color: var(--text-dim);
-}
-
-.login-error {
-  margin: 0;
-  padding: var(--sp-2) var(--sp-3);
-  border: 1px solid var(--danger-border);
-  border-radius: var(--r-md);
-  background: var(--danger-soft);
-  color: var(--danger);
-  font-size: 0.8125rem;
-  line-height: 1.5;
 }
 
 .login-submit,
@@ -87,7 +64,7 @@
   align-items: center;
   gap: var(--sp-3);
   color: var(--text-faint);
-  font-size: 0.75rem;
+  font-size: var(--fs-xs);
 }
 
 .login-divider::before,
@@ -105,7 +82,7 @@
   background: none;
   color: var(--text-dim);
   font: inherit;
-  font-size: 0.8125rem;
+  font-size: var(--fs-sm);
   cursor: pointer;
 }
 
@@ -126,5 +103,5 @@
   place-items: center;
   min-height: 100dvh;
   color: var(--text-faint, var(--text-dim));
-  font-size: 0.8125rem;
+  font-size: var(--fs-sm);
 }

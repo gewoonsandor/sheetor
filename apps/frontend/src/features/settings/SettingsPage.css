@@ -4,28 +4,15 @@
   gap: var(--sp-6);
 }
 
-.settings-section-title {
-  margin: 0;
-  font-size: 0.6875rem;
-  font-weight: 700;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  color: var(--text-faint);
-}
-
 .settings-section-note {
   margin: var(--sp-1) 0 var(--sp-3);
-  font-size: 0.8125rem;
-  line-height: 1.5;
+  font-size: var(--fs-sm);
+  line-height: var(--lh);
   color: var(--text-dim);
 }
 
 .settings-card {
   width: min(760px, 100%);
-  background: var(--sheen), var(--surface-1);
-  border: 1px solid var(--border);
-  border-radius: var(--r-lg);
-  box-shadow: inset 0 1px 0 var(--edge-hi), var(--shadow-1);
 }
 
 .settings-row {
@@ -49,14 +36,14 @@
 }
 
 .settings-row-name {
-  font-size: 0.875rem;
+  font-size: var(--fs-md);
   font-weight: 600;
   color: var(--text);
 }
 
 .settings-row-description {
-  font-size: 0.75rem;
-  line-height: 1.5;
+  font-size: var(--fs-xs);
+  line-height: var(--lh);
   color: var(--text-dim);
 }
 
@@ -69,20 +56,12 @@
 
 .settings-row-control .settings-text-input {
   width: min(260px, 46vw);
-  text-align: left;
-  font-variant-numeric: normal;
 }
 
 /* A refused rename stacks its message under the field it belongs to. */
-.settings-row-control:has(.settings-error) {
+.settings-row-control:has(.form-error) {
   flex-direction: column;
   align-items: flex-end;
-}
-
-.settings-error {
-  margin: 0;
-  color: var(--danger);
-  font-size: 0.8125rem;
 }
 
 .settings-value {

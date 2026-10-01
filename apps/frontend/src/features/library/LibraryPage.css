@@ -1,33 +1,3 @@
-/* .page-header / .page-title / .page-subtitle are shared page chrome: the
-   settings page reuses them from this stylesheet and must not redefine them. */
-.page-header {
-  display: grid;
-  grid-template-columns: 1fr auto;
-  align-items: end;
-  gap: var(--sp-2) var(--sp-4);
-  margin: 0;
-  padding-bottom: var(--sp-4);
-  border-bottom: 1px solid var(--border);
-}
-
-.page-title {
-  grid-column: 1;
-  margin: 0;
-  font-family: var(--font-display);
-  font-size: 2.125rem;
-  font-weight: 600;
-  letter-spacing: -0.02em;
-  line-height: 1.2;
-}
-
-.page-subtitle {
-  grid-column: 1;
-  margin: 0;
-  font-size: 0.8125rem;
-  color: var(--text-dim);
-  line-height: 1.5;
-}
-
 .library-header-actions {
   display: flex;
   flex-wrap: wrap;
@@ -50,7 +20,7 @@
 .library-crumb-sep {
   padding: 0 var(--sp-1);
   color: var(--text-faint);
-  font-size: 0.8125rem;
+  font-size: var(--fs-sm);
 }
 
 .library-crumb {
@@ -63,7 +33,7 @@
   border-radius: var(--r-sm);
   color: var(--text-dim);
   font-family: inherit;
-  font-size: 0.8125rem;
+  font-size: var(--fs-sm);
   cursor: pointer;
   transition: background var(--t-fast) var(--ease), color var(--t-fast) var(--ease),
     border-color var(--t-fast) var(--ease);
@@ -104,10 +74,6 @@
   display: flex;
   flex-direction: column;
   padding: var(--sp-4);
-  background: var(--sheen), var(--surface-1);
-  border: 1px solid var(--border);
-  border-radius: var(--r-lg);
-  box-shadow: inset 0 1px 0 var(--edge-hi), var(--shadow-1);
   /* Every card is a drag source: songs and folders both move by dropping. */
   cursor: grab;
   transition: background var(--t) var(--ease), border-color var(--t) var(--ease),
@@ -149,9 +115,9 @@
   border: none;
   color: var(--text);
   font-family: inherit;
-  font-size: 0.9375rem;
+  font-size: var(--fs-md);
   font-weight: 600;
-  line-height: 1.35;
+  line-height: var(--lh-tight);
   text-align: left;
   cursor: pointer;
   transition: color var(--t-fast) var(--ease);
@@ -187,7 +153,7 @@
   border-radius: var(--r-sm);
   color: var(--text);
   font-family: inherit;
-  font-size: 0.9375rem;
+  font-size: var(--fs-md);
   font-weight: 600;
   cursor: text;
 }
@@ -218,9 +184,9 @@
 
 .library-card-title {
   margin: 0;
-  font-size: 0.9375rem;
+  font-size: var(--fs-md);
   font-weight: 600;
-  line-height: 1.35;
+  line-height: var(--lh-tight);
   overflow-wrap: anywhere;
 }
 
@@ -233,12 +199,12 @@
   background: var(--accent-soft);
   border: 1px solid var(--border-focus);
   border-radius: var(--r-pill);
-  color: var(--accent);
+  color: var(--accent-text);
 }
 
 .library-card-artist {
   margin: var(--sp-1) 0 0;
-  font-size: 0.8125rem;
+  font-size: var(--fs-sm);
   color: var(--text-dim);
   overflow-wrap: anywhere;
 }
@@ -248,7 +214,7 @@
   flex-wrap: wrap;
   align-items: baseline;
   margin: var(--sp-3) 0 var(--sp-4);
-  font-size: 0.75rem;
+  font-size: var(--fs-xs);
   color: var(--text-faint);
   font-variant-numeric: tabular-nums;
 }
@@ -278,7 +244,7 @@
   border-radius: var(--r-md);
   color: var(--text);
   font-family: inherit;
-  font-size: 0.8125rem;
+  font-size: var(--fs-sm);
   font-weight: 600;
   cursor: pointer;
   transition: background var(--t-fast) var(--ease), border-color var(--t-fast) var(--ease);
@@ -293,9 +259,9 @@
 .library-confirm {
   flex: 1 1 100%;
   margin: 0;
-  font-size: 0.75rem;
+  font-size: var(--fs-xs);
   color: var(--text-dim);
-  line-height: 1.45;
+  line-height: var(--lh);
 }
 
 .library-empty {
@@ -313,22 +279,15 @@
 
 .library-empty-title {
   margin: var(--sp-2) 0 0;
-  font-size: 1.0625rem;
+  font-size: var(--fs-lg);
   font-weight: 600;
 }
 
 .library-empty-body {
   margin: var(--sp-2) 0 var(--sp-5);
-  font-size: 0.875rem;
+  font-size: var(--fs-md);
   color: var(--text-dim);
-  line-height: 1.55;
-}
-
-.library-error,
-.share-error {
-  margin: 0 0 var(--sp-4);
-  color: var(--danger);
-  font-size: 0.8125rem;
+  line-height: var(--lh);
 }
 
 /* ----------------------------------------------------------------- Sharing */
@@ -337,13 +296,6 @@
   display: flex;
   gap: var(--sp-2);
   margin-bottom: var(--sp-4);
-}
-
-/* .control-input is the narrow centred numeric field; an address wants room. */
-.share-form .control-input {
-  flex: 1;
-  width: auto;
-  text-align: left;
 }
 
 .share-list {
@@ -368,19 +320,19 @@
 }
 
 .share-name {
-  font-size: 0.875rem;
+  font-size: var(--fs-md);
   font-weight: 600;
 }
 
 .share-email {
   overflow: hidden;
-  font-size: 0.75rem;
+  font-size: var(--fs-xs);
   color: var(--text-dim);
   text-overflow: ellipsis;
 }
 
 .share-empty {
   margin: 0;
-  font-size: 0.8125rem;
+  font-size: var(--fs-sm);
   color: var(--text-dim);
 }

@@ -82,7 +82,7 @@ export const LoginPage = () => {
 
   return (
     <div className="login-screen">
-      <form className="login-card" onSubmit={submit}>
+      <form className="login-card card" onSubmit={submit}>
         <div className="login-brand">
           <span className="logo-mark" aria-hidden="true">
             <svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor">
@@ -112,7 +112,7 @@ export const LoginPage = () => {
             </label>
             <input
               id="login-username"
-              className="control-input login-input"
+              className="control-input"
               type="text"
               autoComplete="nickname"
               required
@@ -130,7 +130,7 @@ export const LoginPage = () => {
             </label>
             <input
               id="login-email"
-              className="control-input login-input"
+              className="control-input"
               type="email"
               autoComplete="email"
               required
@@ -147,7 +147,7 @@ export const LoginPage = () => {
             </label>
             <input
               id="login-password"
-              className="control-input login-input"
+              className="control-input"
               type="password"
               autoComplete={signup ? 'new-password' : 'current-password'}
               required
@@ -163,7 +163,7 @@ export const LoginPage = () => {
         )}
 
         {shownError !== null && (
-          <p className="login-error" role="alert">
+          <p className="form-error" role="alert">
             {shownError}
           </p>
         )}

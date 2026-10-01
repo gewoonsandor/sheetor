@@ -50,14 +50,14 @@
 
 .sheetor-title-input {
   font-family: var(--font-display);
-  font-size: 2.125rem;
+  font-size: var(--fs-display);
   font-weight: 600;
   letter-spacing: -0.02em;
-  line-height: 1.15;
+  line-height: var(--lh-tight);
 }
 
 .sheetor-artist-input {
-  font-size: 0.9375rem;
+  font-size: var(--fs-md);
   font-weight: 500;
   color: var(--text-dim);
 }
@@ -68,24 +68,9 @@
   border-color: var(--border);
 }
 
-.sheetor-title-input:focus,
-.sheetor-artist-input:focus {
-  background: var(--surface-1);
-  border-color: var(--border-focus);
-  box-shadow: 0 0 0 2px var(--accent-soft);
-  outline: none;
-}
-
 .sheetor-title-input::placeholder,
 .sheetor-artist-input::placeholder {
   color: var(--text-faint);
-}
-
-
-.editor-notice {
-  margin: var(--sp-1) 0 0;
-  color: var(--danger);
-  font-size: 0.8125rem;
 }
 
 /* ------------------------------------------------------------- Collaboration */
@@ -110,7 +95,7 @@
   align-items: center;
   gap: var(--sp-2);
   margin-right: var(--sp-2);
-  font-size: 0.75rem;
+  font-size: var(--fs-xs);
   color: var(--text-dim);
   white-space: nowrap;
 }
@@ -137,7 +122,7 @@
   border-radius: 50%;
   background: var(--peer);
   color: var(--bg);
-  font-size: 0.625rem;
+  font-size: var(--fs-2xs);
   font-weight: 700;
   box-shadow: 0 0 0 2px var(--bg);
   cursor: default;
@@ -177,7 +162,7 @@
 
 .readout-chip dd {
   margin: 0;
-  font-size: 0.85rem;
+  font-size: var(--fs-sm);
   font-weight: 600;
   color: var(--text);
   font-variant-numeric: tabular-nums;
@@ -185,181 +170,6 @@
 
 .readout-chip.is-accent dd {
   color: var(--accent);
-}
-
-/* ------------------------------------------------------------------- Buttons */
-
-/* One silhouette for every command: buttons and menu triggers are the same
-   object, so they share one rule. */
-.btn,
-.bottom-menu-trigger {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: var(--sp-2);
-  flex: none;
-  height: var(--ctl-h);
-  padding: 0 var(--sp-3);
-  background: var(--sheen), var(--surface-2);
-  border: 1px solid var(--border);
-  border-radius: var(--r-md);
-  box-shadow: inset 0 1px 0 var(--edge-hi), var(--shadow-1);
-  color: var(--text);
-  font-family: inherit;
-  font-size: 0.8125rem;
-  font-weight: 600;
-  white-space: nowrap;
-  cursor: pointer;
-  user-select: none;
-  transition: background var(--t) var(--ease), border-color var(--t) var(--ease), color var(--t) var(--ease), box-shadow var(--t) var(--ease), transform var(--t-fast) var(--ease);
-}
-
-.btn svg,
-.bottom-menu-trigger svg {
-  width: 16px;
-  height: 16px;
-  flex: none;
-}
-
-.btn:hover,
-.bottom-menu-trigger:hover {
-  background: var(--sheen), var(--surface-3);
-  border-color: var(--border-strong);
-}
-
-.btn:active,
-.bottom-menu-trigger:active {
-  background: var(--surface-3);
-  box-shadow: inset 0 1px 2px rgb(0 0 0 / 0.2);
-  transform: scale(0.98);
-}
-
-.btn-primary {
-  background: linear-gradient(180deg, var(--accent-hover), var(--accent));
-  border-color: rgb(var(--accent-rgb) / 0.9);
-  box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.28), 0 1px 1px rgb(0 0 0 / 0.2), 0 8px 20px -8px var(--accent-glow);
-  color: var(--accent-ink);
-  padding: 0 var(--sp-4);
-}
-
-.btn-primary:hover {
-  background: linear-gradient(180deg, var(--accent-hover), var(--accent-hover));
-  border-color: var(--accent-hover);
-  box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.32), 0 1px 1px rgb(0 0 0 / 0.2), 0 10px 26px -8px var(--accent-glow);
-}
-
-.btn-primary:active {
-  background: var(--accent);
-}
-
-/* Destructive, but not shouting: a normal button with red text that only
-   fills when the pointer commits to it. */
-.btn-danger {
-  color: var(--danger);
-}
-
-.btn-danger:hover {
-  background: var(--danger-soft);
-  border-color: var(--danger-border);
-  color: var(--danger-hover-text);
-}
-
-/* A toggle that is on, in either silhouette. */
-.btn-active,
-.btn.btn-active:hover,
-.bottom-menu-trigger.active {
-  background: var(--accent-soft);
-  border-color: var(--border-focus);
-  box-shadow: inset 0 0 12px -4px var(--accent-glow);
-  color: var(--accent);
-}
-
-/* --------------------------------------------------------- Fields and labels */
-
-.control-group,
-.compact-field {
-  display: flex;
-  align-items: center;
-  gap: var(--sp-2);
-  min-width: 0;
-}
-
-.control-label,
-.compact-field > span,
-.popover-title,
-.fretboard-title,
-.readout-chip dt,
-.shortcut-button-grid span.shortcut-divider {
-  font-size: 0.6875rem;
-  font-weight: 700;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  color: var(--text-faint);
-  white-space: nowrap;
-}
-
-.control-input,
-.control-select,
-.sheetor-modal-textarea {
-  height: var(--ctl-h);
-  padding: 0 var(--sp-2);
-  background: var(--bg);
-  border: 1px solid var(--border);
-  border-radius: var(--r-sm);
-  box-shadow: inset 0 1px 2px rgb(0 0 0 / 0.15);
-  color: var(--text);
-  font-family: inherit;
-  font-size: 0.8125rem;
-  font-weight: 600;
-  transition: border-color var(--t) var(--ease), box-shadow var(--t) var(--ease);
-}
-
-.control-input {
-  width: 64px;
-  text-align: center;
-  font-variant-numeric: tabular-nums;
-}
-
-/* `.control-input` is 64px at its widest, and the native spinner reserves a
-   column out of that: the arrows land on the digits and the centred text sits
-   off-centre even when they are hidden. This rule covers the settings page's
-   tempo field too, which shares the class. Arrow keys still step; the
-   transport pairs its field with explicit buttons. */
-.control-input[type="number"] {
-  appearance: textfield;
-}
-
-.control-input[type="number"]::-webkit-outer-spin-button,
-.control-input[type="number"]::-webkit-inner-spin-button {
-  appearance: none;
-  margin: 0;
-}
-
-.control-select {
-  padding-right: var(--sp-1);
-  cursor: pointer;
-}
-
-.control-input:focus,
-.control-select:focus,
-.sheetor-modal-textarea:focus {
-  border-color: var(--border-focus);
-  box-shadow: 0 0 0 2px var(--accent-soft);
-  outline: none;
-}
-
-.wide-field {
-  justify-content: space-between;
-  width: 100%;
-}
-
-input[type="range"] {
-  accent-color: var(--accent);
-  height: var(--ctl-h-xs);
-}
-
-.compact-field input[type="range"] {
-  width: 140px;
 }
 
 /* ---------------------------------------------------------------- Score card */
@@ -377,8 +187,9 @@ input[type="range"] {
   box-shadow: var(--shadow-2), inset 0 1px 0 var(--edge-hi);
 }
 
-.sheetor-canvas-container:focus-visible {
-  outline: none;
+/* The score card lights up while keys go to the score. */
+.sheetor-container:focus-visible .sheetor-canvas-container {
+  box-shadow: 0 0 0 2px var(--focus-ring), var(--shadow-2);
 }
 
 .music-svg {
@@ -443,22 +254,11 @@ input[type="range"] {
   border-radius: var(--r-sm);
   color: var(--text);
   font-family: var(--font);
+  /* The mark's own fontSize="10": score geometry, not the type scale. */
   font-size: 0.625rem;
   font-weight: 700;
   font-variant-numeric: tabular-nums;
   user-select: text;
-}
-
-.tempo-input:focus {
-  outline: none;
-  box-shadow: 0 0 0 2px var(--accent-soft);
-}
-
-.staff-label {
-  fill: var(--text-faint);
-  font-family: var(--font);
-  font-weight: 700;
-  letter-spacing: 0.06em;
 }
 
 .measure-number {
@@ -582,38 +382,6 @@ input[type="range"] {
   stroke-width: 1;
 }
 
-.sheetor-canvas-container::-webkit-scrollbar,
-.sheetor-fretboard::-webkit-scrollbar,
-.track-list::-webkit-scrollbar,
-.bottom-popover::-webkit-scrollbar {
-  width: 10px;
-  height: 10px;
-}
-
-.sheetor-canvas-container::-webkit-scrollbar-track,
-.sheetor-fretboard::-webkit-scrollbar-track,
-.track-list::-webkit-scrollbar-track,
-.bottom-popover::-webkit-scrollbar-track {
-  background: transparent;
-}
-
-.sheetor-canvas-container::-webkit-scrollbar-thumb,
-.sheetor-fretboard::-webkit-scrollbar-thumb,
-.track-list::-webkit-scrollbar-thumb,
-.bottom-popover::-webkit-scrollbar-thumb {
-  background: var(--surface-4);
-  border: 3px solid transparent;
-  background-clip: padding-box;
-  border-radius: var(--r-pill);
-}
-
-.sheetor-canvas-container::-webkit-scrollbar-thumb:hover,
-.sheetor-fretboard::-webkit-scrollbar-thumb:hover,
-.track-list::-webkit-scrollbar-thumb:hover,
-.bottom-popover::-webkit-scrollbar-thumb:hover {
-  background: var(--text-faint);
-}
-
 /* ----------------------------------------------------------------- Fretboard */
 
 /* The input panel floats over the score, just above the command bar, whenever
@@ -629,9 +397,6 @@ input[type="range"] {
   gap: var(--sp-3);
   max-height: 45vh;
   padding: var(--sp-4);
-  background: var(--sheen), var(--surface-1);
-  border: 1px solid var(--border-strong);
-  border-radius: var(--r-lg);
   box-shadow: inset 0 1px 0 var(--edge-hi), var(--shadow-3);
   overflow: auto;
   overscroll-behavior: contain;
@@ -684,7 +449,7 @@ input[type="range"] {
 
 /* Panel hint: the same slot as a title, but sentence case and quiet. */
 .fretboard-hint {
-  font-size: 0.6875rem;
+  font-size: var(--fs-xs);
   font-weight: 500;
   color: var(--text-faint);
   white-space: nowrap;
@@ -785,7 +550,7 @@ input[type="range"] {
   border-radius: 50%;
   background: var(--surface-3);
   color: var(--text-dim);
-  font-size: 0.625rem;
+  font-size: var(--fs-2xs);
   font-weight: 700;
   opacity: 0;
   transition: opacity var(--t-fast) var(--ease), background var(--t-fast) var(--ease), color var(--t-fast) var(--ease);
@@ -819,7 +584,7 @@ input[type="range"] {
 
 .fret-label {
   text-align: center;
-  font-size: 0.6875rem;
+  font-size: var(--fs-2xs);
   font-weight: 600;
   color: var(--text-faint);
   font-variant-numeric: tabular-nums;
@@ -832,10 +597,6 @@ input[type="range"] {
   align-items: stretch;
   gap: var(--sp-3);
   padding: var(--sp-2) var(--sp-3);
-  background: var(--sheen), var(--surface-1);
-  border: 1px solid var(--border);
-  border-radius: var(--r-lg);
-  box-shadow: inset 0 1px 0 var(--edge-hi), var(--shadow-1);
 }
 
 .track-list {
@@ -884,17 +645,17 @@ input[type="range"] {
 }
 
 .track-chip-name {
-  font-size: 0.8125rem;
+  font-size: var(--fs-sm);
   font-weight: 600;
   color: var(--text);
 }
 
 .track-chip.is-active .track-chip-name {
-  color: var(--accent);
+  color: var(--accent-text);
 }
 
 .track-chip-meta {
-  font-size: 0.625rem;
+  font-size: var(--fs-xs);
   color: var(--text-faint);
 }
 
@@ -914,7 +675,7 @@ input[type="range"] {
   border-radius: var(--r-sm);
   cursor: pointer;
   font-family: inherit;
-  font-size: 0.6875rem;
+  font-size: var(--fs-2xs);
   font-weight: 700;
   transition: background var(--t-fast) var(--ease), color var(--t-fast) var(--ease);
 }
@@ -949,7 +710,7 @@ input[type="range"] {
   border-radius: var(--r-md);
   cursor: pointer;
   font-family: inherit;
-  font-size: 0.75rem;
+  font-size: var(--fs-xs);
   font-weight: 600;
   white-space: nowrap;
   transition: color var(--t-fast) var(--ease), border-color var(--t-fast) var(--ease);
@@ -976,7 +737,6 @@ input[type="range"] {
 /* One column of equal controls, lined up with the volume slider. */
 .track-popover .wide-field > :is(.control-select, .control-input) {
   width: 140px;
-  text-align: left;
 }
 
 /* Every string at once, three to a row, so the tuning never scrolls on its own. */
@@ -1003,7 +763,7 @@ input[type="range"] {
   min-width: 2ch;
   text-align: right;
   color: var(--text-faint);
-  font-size: 0.6875rem;
+  font-size: var(--fs-xs);
   font-weight: 700;
   font-variant-numeric: tabular-nums;
 }
@@ -1012,7 +772,7 @@ input[type="range"] {
   flex: 1;
   min-width: 0;
   justify-content: center;
-  font-size: 0.75rem;
+  font-size: var(--fs-xs);
 }
 
 /* Too narrow for a chevron: each string reads as a note chip. */
@@ -1063,7 +823,7 @@ input[type="range"] {
   background: linear-gradient(180deg, var(--instr-key-white-top) 0%, var(--instr-key-white-bottom) 100%);
   border-right: 1px solid var(--instr-key-white-edge);
   color: var(--instr-key-label);
-  font-size: 0.5625rem;
+  font-size: var(--fs-2xs);
   font-weight: 600;
 }
 
@@ -1160,14 +920,6 @@ input[type="range"] {
 .cmd-spacer {
   flex: 1;
   min-width: var(--sp-3);
-}
-
-.cmd-divider {
-  width: 1px;
-  height: var(--ctl-h-xs);
-  background: var(--border);
-  flex: none;
-  margin: 0 var(--sp-1);
 }
 
 /* The BPM field reads as part of the transport, not a stray input */
@@ -1278,13 +1030,13 @@ input[type="range"] {
   transform: none;
 }
 
-.bottom-popover > .btn:hover {
+.bottom-popover > .btn:hover:not(:disabled) {
   background: var(--surface-3);
   border-color: transparent;
 }
 
 .bottom-popover > .btn-primary {
-  color: var(--accent);
+  color: var(--accent-text);
   font-weight: 600;
 }
 
@@ -1297,24 +1049,9 @@ input[type="range"] {
   color: var(--danger-hover-text);
 }
 
-.bottom-popover > .btn-active,
-.bottom-popover > .btn-active:hover {
+.bottom-popover > .btn[aria-pressed='true'] {
   background: var(--accent-soft);
-  color: var(--accent);
-}
-
-.bottom-popover > .btn:disabled {
-  background: transparent;
-  color: var(--text-faint);
-  cursor: not-allowed;
-}
-
-.bottom-popover .control-group > .btn:disabled {
-  background: var(--sheen), var(--surface-2);
-  border-color: var(--border);
-  color: var(--text-faint);
-  cursor: not-allowed;
-  transform: none;
+  color: var(--accent-text);
 }
 
 /* Headings and fields line up with the row labels. */
@@ -1322,9 +1059,8 @@ input[type="range"] {
   padding-inline: var(--sp-2);
 }
 
-.bottom-popover > .popover-title {
+.bottom-popover > .eyebrow {
   padding-block: var(--sp-2) var(--sp-1);
-  font-size: 0.625rem;
 }
 
 /* Wraps to the popover's width instead of widening it. */
@@ -1333,8 +1069,19 @@ input[type="range"] {
   min-width: 100%;
   padding-block: var(--sp-1);
   color: var(--text-dim);
-  font-size: 0.75rem;
-  line-height: 1.4;
+  font-size: var(--fs-xs);
+  line-height: var(--lh);
+}
+
+/* The speed segmented choice wraps inside the popover's width. */
+.speed-choices {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sp-1);
+}
+
+.speed-choices > .btn {
+  flex: 1;
 }
 
 /* The track menu hangs off the strip at the top of the page, so it opens
@@ -1409,12 +1156,12 @@ input[type="range"] {
   gap: var(--sp-hair);
   padding-right: var(--sp-3);
   border-right: 1px solid var(--border);
-  font-size: 0.8125rem;
+  font-size: var(--fs-sm);
   white-space: nowrap;
 }
 
 .note-options-summary span {
-  font-size: 0.6875rem;
+  font-size: var(--fs-xs);
   color: var(--text-dim);
 }
 
@@ -1456,10 +1203,6 @@ input[type="range"] {
   color: var(--accent-ink);
 }
 
-.duration-label {
-  display: none;
-}
-
 .technique-row {
   display: flex;
   align-items: center;
@@ -1475,7 +1218,7 @@ input[type="range"] {
   border-radius: var(--r-sm);
   color: var(--text-dim);
   font-family: inherit;
-  font-size: 0.6875rem;
+  font-size: var(--fs-xs);
   font-weight: 700;
   cursor: pointer;
   transition: background var(--t-fast) var(--ease), color var(--t-fast) var(--ease), border-color var(--t-fast) var(--ease);
@@ -1529,7 +1272,7 @@ input[type="range"] {
   justify-content: space-between;
   gap: var(--sp-3);
   margin-bottom: var(--sp-4);
-  font-size: 1rem;
+  font-size: var(--fs-lg);
   font-weight: 700;
 }
 
@@ -1547,7 +1290,7 @@ input[type="range"] {
   gap: var(--sp-1);
   padding: var(--sp-2) 0;
   border-bottom: 1px solid var(--border);
-  font-size: 0.8125rem;
+  font-size: var(--fs-sm);
   color: var(--text-dim);
 }
 
@@ -1560,20 +1303,6 @@ input[type="range"] {
   justify-content: flex-start;
   border: none;
   padding: var(--sp-4) 0 var(--sp-1);
-}
-
-kbd {
-  min-width: 26px;
-  padding: var(--sp-hair) var(--sp-1);
-  background: var(--surface-3);
-  border: 1px solid var(--border-strong);
-  border-radius: var(--r-sm);
-  box-shadow: inset 0 -1px 0 rgba(0, 0, 0, 0.35);
-  color: var(--text);
-  font-family: var(--font-mono);
-  font-size: 0.6875rem;
-  font-weight: 600;
-  text-align: center;
 }
 
 /* --------------------------------------------------------------------- Modal */
@@ -1591,7 +1320,7 @@ kbd {
   justify-content: space-between;
   align-items: center;
   gap: var(--sp-3);
-  font-size: 1.05rem;
+  font-size: var(--fs-lg);
   font-weight: 700;
 }
 
@@ -1604,7 +1333,7 @@ kbd {
   border: none;
   border-radius: var(--r-sm);
   color: var(--text-dim);
-  font-size: 1.15rem;
+  font-size: var(--fs-lg);
   cursor: pointer;
   transition: background var(--t) var(--ease), color var(--t) var(--ease);
 }
@@ -1616,19 +1345,18 @@ kbd {
 
 .sheetor-modal-desc {
   margin: var(--sp-2) 0 var(--sp-4);
-  font-size: 0.85rem;
-  line-height: 1.55;
+  font-size: var(--fs-sm);
+  line-height: var(--lh);
   color: var(--text-dim);
 }
 
 .sheetor-modal-textarea {
-  width: 100%;
   height: 260px;
   padding: var(--sp-3);
   font-family: var(--font-mono);
-  font-size: 0.75rem;
+  font-size: var(--fs-xs);
   font-weight: 400;
-  line-height: 1.6;
+  line-height: var(--lh);
   resize: vertical;
 }
 
@@ -1641,16 +1369,16 @@ kbd {
 
 .sheetor-modal-status {
   margin-top: var(--sp-3);
-  font-size: 0.8125rem;
+  font-size: var(--fs-sm);
   font-weight: 600;
-  color: var(--accent);
+  color: var(--accent-text);
 }
 
 /* ------------------------------------------------------------- Narrow screens */
 
 /* Let the bar wrap onto a second row rather than squeezing labels away. The
    clearance token moves with it, so nothing below the fold has to be retuned. */
-@media (max-width: 620px) {
+@media (max-width: 640px) {
   :root {
     --cmdbar-h: 116px;
   }
@@ -1665,7 +1393,7 @@ kbd {
   }
 }
 
-@media (max-width: 768px) {
+@media (max-width: 640px) {
   .sheetor-container {
     padding: var(--sp-4) var(--sp-3) calc(var(--cmdbar-h) + var(--sp-5));
   }
