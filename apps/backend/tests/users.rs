@@ -2,8 +2,10 @@
 
 mod common;
 
-use common::{pool, unique};
+use common::{pool, unique, user};
+use sheetor_backend::database::queries::appearance::{find_appearance, upsert_appearance};
 use sheetor_backend::database::queries::users::insert_user;
+use sheetor_backend::database::schemas::appearance::{Accent, Appearance, Theme};
 use sheetor_backend::error::users::InsertUserError;
 
 #[tokio::test]
@@ -117,4 +119,36 @@ async fn only_one_of_many_racing_signups_wins() {
 
     assert_eq!(created, 1, "exactly one signup may take an address");
     assert_eq!(taken, 7);
+}
+
+#[tokio::test]
+async fn appearance_is_saved_per_user() {
+    let Some(pool) = pool().await else {
+        eprintln!("skipped: TEST_DATABASE_URL unset");
+        return;
+    };
+
+    let ada = user(&pool).await;
+    let bob = user(&pool).await;
+    assert_eq!(find_appearance(&pool, ada.id).await.unwrap(), None);
+
+    let light = Appearance {
+        theme: Theme::Light,
+        accent: Accent::Teal,
+        paper_score: false,
+    };
+    assert_eq!(
+        upsert_appearance(&pool, ada.id, light).await.unwrap(),
+        light
+    );
+    assert_eq!(find_appearance(&pool, ada.id).await.unwrap(), Some(light));
+
+    let paper = Appearance {
+        theme: Theme::Dark,
+        accent: Accent::Rose,
+        paper_score: true,
+    };
+    upsert_appearance(&pool, ada.id, paper).await.unwrap();
+    assert_eq!(find_appearance(&pool, ada.id).await.unwrap(), Some(paper));
+    assert_eq!(find_appearance(&pool, bob.id).await.unwrap(), None);
 }

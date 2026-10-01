@@ -65,6 +65,8 @@ const ACCOUNT = {
   provider_id: null,
 };
 
+const SAVED = { theme: 'light', accent: 'teal', paper_score: true };
+
 const stored = (): User => {
   const raw = storage.getItem(STORAGE_KEY);
   if (raw === null) throw new Error('nothing stored');
@@ -144,6 +146,7 @@ describe('register', () => {
     expect(calls.map((call) => call.url)).toEqual([
       '/api/v1/users/create',
       '/api/v1/users/login',
+      '/api/v1/users/me/appearance',
     ]);
     expect(body(0)).toEqual({
       username: 'Ada Lovelace',
@@ -194,13 +197,13 @@ describe('fetchSession', () => {
 
 describe('logout', () => {
   it('clears the session and returns the profile to the local default', async () => {
-    answer(ok(ACCOUNT), { status: 204, body: '' });
+    answer(ok(ACCOUNT), ok(SAVED), { status: 204, body: '' });
     await api.login('ada@example.com', 'Str0ng-Passw0rd!');
 
     await api.logout();
 
-    expect(calls[1].url).toBe('/api/v1/users/logout');
-    expect(calls[1].init?.method).toBe('POST');
+    expect(calls[2].url).toBe('/api/v1/users/logout');
+    expect(calls[2].init?.method).toBe('POST');
     expect(session.getSessionStatus()).toBe('out');
     expect(stored().name).toBe(store.DEFAULT_USER.name);
     expect(stored().email).toBe(store.DEFAULT_USER.email);
@@ -253,5 +256,47 @@ describe('renameAccount', () => {
     answer(ok({ message: 'display names must be 1 to 64 characters' }, 400));
 
     await expect(api.renameAccount(' ')).rejects.toThrow('display names must be 1 to 64 characters');
+  });
+});
+
+describe('syncAppearance', () => {
+  it('applies the appearance saved on the account', async () => {
+    answer(ok(SAVED));
+
+    await api.syncAppearance();
+
+    expect(calls[0].url).toBe('/api/v1/users/me/appearance');
+    expect(stored()).toMatchObject({ theme: 'light', accent: 'teal', paperScore: true });
+  });
+
+  it("uploads this browser's appearance when the account has none", async () => {
+    store.saveUser({ ...store.DEFAULT_USER, theme: 'dark', accent: 'violet', paperScore: true });
+    answer(ok(null), ok({ theme: 'dark', accent: 'violet', paper_score: true }));
+
+    await api.syncAppearance();
+
+    expect(calls[1].url).toBe('/api/v1/users/me/appearance');
+    expect(calls[1].init?.method).toBe('PUT');
+    expect(body(1)).toEqual({ theme: 'dark', accent: 'violet', paper_score: true });
+  });
+
+  it.each([ok({ message: 'boom' }, 500), 'network-error' as const])(
+    "keeps the browser's appearance when the server cannot answer",
+    async (failure) => {
+      store.saveUser({ ...store.DEFAULT_USER, accent: 'indigo' });
+      answer(failure);
+
+      await expect(api.syncAppearance()).resolves.toBeUndefined();
+      expect(stored().accent).toBe('indigo');
+    },
+  );
+});
+
+describe('saveAppearance', () => {
+  it('applies the change even when the account refuses it', async () => {
+    answer(ok({ message: 'database unavailable' }, 500));
+
+    await expect(api.saveAppearance({ accent: 'rose' })).rejects.toThrow('database unavailable');
+    expect(stored().accent).toBe('rose');
   });
 });

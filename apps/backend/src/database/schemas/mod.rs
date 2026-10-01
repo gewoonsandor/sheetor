@@ -1,3 +1,4 @@
+pub mod appearance;
 pub mod folders;
 pub mod roles;
 pub mod shares;

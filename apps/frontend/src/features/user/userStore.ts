@@ -31,7 +31,10 @@ export interface User {
   email: string;
   theme: ThemePreference;
   accent: AccentId;
+  paperScore: boolean;
 }
+
+export type Appearance = Pick<User, 'theme' | 'accent' | 'paperScore'>;
 
 export const DEFAULT_USER: User = {
   id: 'local-user',
@@ -39,6 +42,7 @@ export const DEFAULT_USER: User = {
   email: '',
   theme: 'system',
   accent: 'amber',
+  paperScore: false,
 };
 
 type UserSource = { [K in keyof User]?: unknown };
@@ -46,10 +50,10 @@ type UserSource = { [K in keyof User]?: unknown };
 const isUserSource = (value: unknown): value is UserSource =>
   typeof value === 'object' && value !== null && !Array.isArray(value);
 
-const isThemePreference = (value: unknown): value is ThemePreference =>
+export const isThemePreference = (value: unknown): value is ThemePreference =>
   THEME_PREFERENCES.some((preference) => preference === value);
 
-const isAccentId = (value: unknown): value is AccentId =>
+export const isAccentId = (value: unknown): value is AccentId =>
   ACCENTS.some((accent) => accent === value);
 
 const readLabel = (value: unknown, max: number, fallback: string): string => {
@@ -59,13 +63,14 @@ const readLabel = (value: unknown, max: number, fallback: string): string => {
 };
 
 const readUser = (source: UserSource): User => {
-  const { id, name, email, theme, accent } = source;
+  const { id, name, email, theme, accent, paperScore } = source;
   return {
     id: readLabel(id, MAX_NAME_LENGTH, DEFAULT_USER.id),
     name: readLabel(name, MAX_NAME_LENGTH, DEFAULT_USER.name),
     email: typeof email === 'string' ? email.trim().slice(0, MAX_EMAIL_LENGTH) : DEFAULT_USER.email,
     theme: isThemePreference(theme) ? theme : DEFAULT_USER.theme,
     accent: isAccentId(accent) ? accent : DEFAULT_USER.accent,
+    paperScore: typeof paperScore === 'boolean' ? paperScore : DEFAULT_USER.paperScore,
   };
 };
 

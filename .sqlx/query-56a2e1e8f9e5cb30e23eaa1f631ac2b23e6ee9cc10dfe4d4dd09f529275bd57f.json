@@ -1,0 +1,37 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO user_appearance (user_id, theme, accent, paper_score)\n           VALUES ($1, $2, $3, $4)\n           ON CONFLICT (user_id) DO UPDATE SET\n               theme = EXCLUDED.theme,\n               accent = EXCLUDED.accent,\n               paper_score = EXCLUDED.paper_score\n           RETURNING theme AS \"theme: Theme\", accent AS \"accent: Accent\", paper_score",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "theme: Theme",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 1,
+        "name": "accent: Accent",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 2,
+        "name": "paper_score",
+        "type_info": "Bool"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Int4",
+        "Text",
+        "Text",
+        "Bool"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "56a2e1e8f9e5cb30e23eaa1f631ac2b23e6ee9cc10dfe4d4dd09f529275bd57f"
+}

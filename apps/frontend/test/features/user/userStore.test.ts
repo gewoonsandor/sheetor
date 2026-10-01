@@ -75,6 +75,7 @@ describe('loadUser', () => {
       email: 'ada@example.com',
       theme: 'light',
       accent: 'teal',
+      paperScore: true,
     };
     seed(saved);
     expect(store.loadUser()).toEqual(saved);
@@ -94,6 +95,17 @@ describe('loadUser', () => {
       email: 'ada@example.com',
       theme: 'system',
       accent: 'teal',
+      paperScore: false,
+    });
+  });
+
+  it('reads a paper score that is not a boolean as off and keeps the rest', () => {
+    seed({ name: 'Ada', theme: 'dark', accent: 'rose', paperScore: 'yes' });
+    expect(store.loadUser()).toMatchObject({
+      name: 'Ada',
+      theme: 'dark',
+      accent: 'rose',
+      paperScore: false,
     });
   });
 

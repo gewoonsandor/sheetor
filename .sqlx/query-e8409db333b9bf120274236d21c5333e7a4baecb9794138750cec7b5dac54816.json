@@ -1,0 +1,34 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT theme AS \"theme: Theme\", accent AS \"accent: Accent\", paper_score\n           FROM user_appearance WHERE user_id = $1",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "theme: Theme",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 1,
+        "name": "accent: Accent",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 2,
+        "name": "paper_score",
+        "type_info": "Bool"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Int4"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "e8409db333b9bf120274236d21c5333e7a4baecb9794138750cec7b5dac54816"
+}

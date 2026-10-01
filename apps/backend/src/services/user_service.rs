@@ -1,6 +1,8 @@
+use crate::database::queries::appearance::{find_appearance, upsert_appearance};
 use crate::database::queries::users::{insert_user, update_username};
+use crate::database::schemas::appearance::Appearance;
 use crate::database::schemas::users::User;
-use crate::error::users::{InsertUserError, UpdateUserError};
+use crate::error::users::{AppearanceError, InsertUserError, UpdateUserError};
 use crate::helpers::users::password::{check_password_requirements, hash_password};
 use sqlx::PgPool;
 
@@ -28,4 +30,16 @@ pub async fn rename(pool: &PgPool, id: i32, username: &str) -> Result<User, Upda
         return Err(UpdateUserError::InvalidUsername);
     }
     Ok(update_username(pool, id, username).await?)
+}
+
+pub async fn appearance(pool: &PgPool, id: i32) -> Result<Option<Appearance>, AppearanceError> {
+    Ok(find_appearance(pool, id).await?)
+}
+
+pub async fn save_appearance(
+    pool: &PgPool,
+    id: i32,
+    appearance: Appearance,
+) -> Result<Appearance, AppearanceError> {
+    Ok(upsert_appearance(pool, id, appearance).await?)
 }

@@ -1,10 +1,12 @@
 import { FALLBACK_MESSAGE, failWith, request, sendJson } from '../../app/http';
 import type { Reply } from '../../app/http';
-import { DEFAULT_USER, updateUser } from './userStore';
-import type { User } from './userStore';
+import { DEFAULT_USER, isAccentId, isThemePreference, loadUser, updateUser } from './userStore';
+import type { Appearance, User } from './userStore';
 import { setSessionStatus } from './session';
 
 const BASE = '/api/v1/users';
+
+const APPEARANCE_URL = `${BASE}/me/appearance`;
 
 export const SSO_LOGIN_URL = '/api/v1/auth/sso/login';
 
@@ -32,6 +34,43 @@ const readAuthConfig = (body: unknown): AuthConfig | null => {
   const ssoName = body.sso_name;
   if (ssoName !== null && typeof ssoName !== 'string') return null;
   return { localEnabled: body.local_enabled, ssoName };
+};
+
+const readAppearance = (body: unknown): Appearance | null => {
+  if (typeof body !== 'object' || body === null) return null;
+  if (!('theme' in body) || !isThemePreference(body.theme)) return null;
+  if (!('accent' in body) || !isAccentId(body.accent)) return null;
+  if (!('paper_score' in body) || typeof body.paper_score !== 'boolean') return null;
+  return { theme: body.theme, accent: body.accent, paperScore: body.paper_score };
+};
+
+const uploadAppearance = ({ theme, accent, paperScore }: Appearance): Promise<Reply> =>
+  sendJson('PUT', APPEARANCE_URL, { theme, accent, paper_score: paperScore });
+
+/// Applies the appearance saved on the account. An account with nothing saved
+/// takes this browser's, so the first sign-in after the upgrade resets nobody.
+/// Never throws: on any failure the browser's copy stays in force.
+export const syncAppearance = async (): Promise<void> => {
+  try {
+    const reply = await request(APPEARANCE_URL);
+    if (!reply.ok) return;
+    if (reply.body === null) {
+      await uploadAppearance(loadUser());
+      return;
+    }
+    const appearance = readAppearance(reply.body);
+    if (appearance !== null) updateUser(appearance);
+  } catch {
+    // The browser's copy stays in force.
+  }
+};
+
+/// Applies the change at once, then saves it to the account. A failed save
+/// rejects but leaves the change applied in this browser.
+export const saveAppearance = async (patch: Partial<Appearance>): Promise<void> => {
+  const user = updateUser(patch);
+  const reply = await uploadAppearance(user);
+  if (!reply.ok) failWith(reply);
 };
 
 /// Mirrors the account into the local profile, leaving the appearance
@@ -69,6 +108,7 @@ export const fetchSession = async (): Promise<void> => {
       return;
     }
     adopt(account);
+    void syncAppearance();
   } catch {
     setSessionStatus('out');
   }
@@ -87,7 +127,10 @@ export const fetchAuthConfig = async (): Promise<AuthConfig> => {
 
 export const login = async (email: string, password: string): Promise<User> => {
   const reply = await sendJson('POST', `${BASE}/login`, { email, password });
-  return reply.ok ? succeed(reply) : failWith(reply);
+  if (!reply.ok) failWith(reply);
+  const user = succeed(reply);
+  void syncAppearance();
+  return user;
 };
 
 /// Creating an account does not issue a cookie - `POST /users/create` only
@@ -109,7 +152,7 @@ export const renameAccount = async (name: string): Promise<User> => {
 };
 
 /// Clears the server session and returns the profile to the local default,
-/// keeping the theme and accent, which were never the server's to begin with.
+/// keeping the last appearance in this browser for the sign-in screen.
 export const logout = async (): Promise<void> => {
   try {
     await fetch(`${BASE}/logout`, { method: 'POST' });

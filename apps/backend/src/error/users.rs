@@ -33,3 +33,9 @@ pub enum UpdateUserError {
     #[error(transparent)]
     Database(#[from] sqlx::Error),
 }
+
+#[derive(Debug, thiserror::Error, ApiError)]
+pub enum AppearanceError {
+    #[error(transparent)]
+    Database(#[from] sqlx::Error),
+}

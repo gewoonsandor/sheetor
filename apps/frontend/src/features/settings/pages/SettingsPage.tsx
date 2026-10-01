@@ -8,9 +8,9 @@ import {
   deriveInitials,
   getUserSnapshot,
   subscribeUser,
-  updateUser,
 } from '../../user/userStore';
-import { logout, renameAccount } from '../../user/authApi';
+import type { Appearance } from '../../user/userStore';
+import { logout, renameAccount, saveAppearance } from '../../user/authApi';
 import '../SettingsPage.css';
 
 type SettingsRowProps = {
@@ -40,6 +40,7 @@ export const SettingsPage = () => {
   const user = useSyncExternalStore(subscribeUser, getUserSnapshot);
   const [nameDraft, setNameDraft] = useState<string>(user.name);
   const [nameError, setNameError] = useState<string | null>(null);
+  const [appearanceError, setAppearanceError] = useState<string | null>(null);
 
   const commitName = async (): Promise<void> => {
     if (nameDraft === user.name) return;
@@ -50,6 +51,15 @@ export const SettingsPage = () => {
       setNameError(err instanceof Error ? err.message : 'Could not rename your account.');
       setNameDraft(user.name);
     }
+  };
+
+  const changeAppearance = (patch: Partial<Appearance>): void => {
+    setAppearanceError(null);
+    saveAppearance(patch).catch((err: unknown) => {
+      setAppearanceError(
+        err instanceof Error ? err.message : 'Could not save your appearance to your account.',
+      );
+    });
   };
 
   const signOut = (): void => {
@@ -63,16 +73,16 @@ export const SettingsPage = () => {
       <header className="page-header">
         <h1 className="page-title">User settings</h1>
         <p className="page-subtitle">
-          Signed in as {user.name}. Your account identifies you to the server; the appearance
-          below is kept in this browser only. Playback and editor settings live in the editor's
-          own command bar.
+          Signed in as {user.name}. Your account and your appearance are saved on the server and
+          follow you to every browser. Playback and editor settings live in the editor's own
+          command bar.
         </p>
       </header>
 
       <div className="settings-sections">
         <section className="settings-section">
           <h2 className="settings-section-title">Account</h2>
-          <p className="settings-section-note">Your account, and how it appears in this browser.</p>
+          <p className="settings-section-note">Your account on this server.</p>
           <div className="settings-card">
             <SettingsRow name="Avatar" description="Initials are taken from your display name.">
               <span className="app-user-avatar app-user-avatar-lg">{deriveInitials(user.name)}</span>
@@ -118,7 +128,7 @@ export const SettingsPage = () => {
 
         <section className="settings-section">
           <h2 className="settings-section-title">Appearance</h2>
-          <p className="settings-section-note">How Sheetor looks. The choice applies instantly and survives a reload.</p>
+          <p className="settings-section-note">How Sheetor looks. Saved to your account and applied instantly.</p>
           <div className="settings-card">
             <SettingsRow name="Theme" description="System follows your operating system setting.">
               <div className="settings-choices" role="group" aria-label="Theme">
@@ -128,7 +138,7 @@ export const SettingsPage = () => {
                     type="button"
                     className={`btn${user.theme === preference ? ' btn-active' : ''}`}
                     aria-pressed={user.theme === preference}
-                    onClick={() => updateUser({ theme: preference })}
+                    onClick={() => changeAppearance({ theme: preference })}
                   >
                     {THEME_LABELS[preference]}
                   </button>
@@ -147,12 +157,17 @@ export const SettingsPage = () => {
                     aria-pressed={user.accent === accent}
                     aria-label={ACCENT_LABELS[accent]}
                     title={ACCENT_LABELS[accent]}
-                    onClick={() => updateUser({ accent })}
+                    onClick={() => changeAppearance({ accent })}
                   />
                 ))}
               </div>
             </SettingsRow>
           </div>
+          {appearanceError !== null && (
+            <p className="settings-error" role="alert">
+              {appearanceError}
+            </p>
+          )}
         </section>
       </div>
     </div>
