@@ -7,6 +7,14 @@ export const MIN_16TH_WIDTH = 38;
 export const MIN_32ND_WIDTH = 46;
 export const MIN_MEASURE_WIDTH = 100;
 export const MAX_ROW_WIDTH = 980;
+/* Below this a row stops being readable: a narrower screen scales the score down. */
+export const MIN_ROW_WIDTH = 320;
+/* The room left of x = 0 for the brace and the string names. */
+export const SCORE_GUTTER = 25;
+
+/** The row width that fits a score card `containerWidth` CSS pixels wide. */
+export const scoreRowWidth = (containerWidth: number): number =>
+  Math.max(MIN_ROW_WIDTH, Math.min(MAX_ROW_WIDTH, Math.floor(containerWidth) - SCORE_GUTTER));
 
 /* How far a row may be stretched to fill the line, and how full the final row
    must be before it is stretched at all. */
@@ -118,13 +126,15 @@ export const CLEF_CHANGE_ROOM = 24;
  * `widths` is each bar's content width (`alignBars`); metre and repeat marks come from the
  * conductor. `keyRoom` is what the key signature adds to the clef area at the start of every row;
  * `clefChanges` marks the bars where some staff changes clef, which reprint the clefs and the key
- * signature there, unless the bar opens a row and already shows them.
+ * signature there, unless the bar opens a row and already shows them. Rows break and justify at
+ * `rowWidth`.
  */
 export const computeMeasureLayouts = (
   widths: number[],
   conductor: TabMeasure[],
   keyRoom: number = 0,
   clefChanges: boolean[] = [],
+  rowWidth: number = MAX_ROW_WIDTH,
 ): MLayout[] => {
   const infos = widths.map((contentWidth, i) => {
     const marks = conductor[i];
@@ -147,7 +157,7 @@ export const computeMeasureLayouts = (
     const padding = (isFirstInRow ? ROW_START_PADDING + keyRoom : 18 + metreRoom + clefRoom) + repeatRoom;
     const totalWidth = padding + contentWidth + 20;
 
-    if (!isFirstInRow && curX + totalWidth > MAX_ROW_WIDTH) {
+    if (!isFirstInRow && curX + totalWidth > rowWidth) {
       curRow++;
       curX = 0;
       const newPadding = ROW_START_PADDING + keyRoom + repeatRoom;
@@ -169,14 +179,14 @@ export const computeMeasureLayouts = (
   });
 
   rowTotals.forEach((totalRowWidth, row) => {
-    if (totalRowWidth >= MAX_ROW_WIDTH) return;
-    if (row === curRow && totalRowWidth < MAX_ROW_WIDTH * MIN_JUSTIFY_FILL) return;
+    if (totalRowWidth >= rowWidth) return;
+    if (row === curRow && totalRowWidth < rowWidth * MIN_JUSTIFY_FILL) return;
 
     const rowLayouts = layouts.filter(l => l.row === row);
-    const factor = Math.min(MAX_ROW_WIDTH / totalRowWidth, MAX_JUSTIFY_STRETCH);
+    const factor = Math.min(rowWidth / totalRowWidth, MAX_JUSTIFY_STRETCH);
     // Anything the stretch cap leaves over is shared out, never dumped on the
     // last bar of the row.
-    const share = Math.max(0, MAX_ROW_WIDTH - totalRowWidth * factor) / rowLayouts.length;
+    const share = Math.max(0, rowWidth - totalRowWidth * factor) / rowLayouts.length;
     let newX = 0;
     rowLayouts.forEach(l => {
       l.x = newX;

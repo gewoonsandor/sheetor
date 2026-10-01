@@ -460,14 +460,14 @@ export const CommandBar = ({
             <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
               <rect x="6" y="6" width="12" height="12" rx="1" />
             </svg>
-            Stop
+            <span className="cmd-label">Stop</span>
           </button>
         ) : (
           <button type="button" className="btn btn-primary" onClick={transport.startPlaybackFromCursor}>
             <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
               <path d="M8 5v14l11-7z" />
             </svg>
-            Play
+            <span className="cmd-label">Play</span>
           </button>
         )}
         <TempoField {...transport} />

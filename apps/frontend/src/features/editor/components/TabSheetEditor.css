@@ -148,7 +148,7 @@
   /* The score is the document: it takes whatever height the page has spare. */
   flex: 1 1 auto;
   width: 100%;
-  overflow-x: auto;
+  overflow-x: hidden;
   overflow-y: hidden;
   padding: var(--sp-2) 0;
   background: var(--paper);
@@ -164,8 +164,6 @@
 
 .music-svg {
   display: block;
-  /* Below this the staff stops being readable: scroll the score, don't shrink it. */
-  min-width: 720px;
   user-select: none;
   background: var(--paper);
   border-radius: var(--r-lg);
@@ -558,6 +556,7 @@
 
 .track-chip {
   display: flex;
+  flex: none;
   align-items: center;
   gap: var(--sp-1);
   padding: var(--sp-1) var(--sp-1) var(--sp-1) var(--sp-2);
@@ -962,11 +961,27 @@
 
 /* ------------------------------------------------------------- Narrow screens */
 
+/* Below a desktop width the menus show their icons only; the label stays each
+   trigger's accessible name and its tooltip. */
+@media (max-width: 1024px) {
+  .bottom-command-bar .menu-label {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    margin: -1px;
+    padding: 0;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+    border: 0;
+  }
+}
+
 /* Let the bar wrap onto a second row rather than squeezing labels away. The
    clearance token moves with it, so nothing below the fold has to be retuned. */
 @media (max-width: 640px) {
   :root {
-    --cmdbar-h: 116px;
+    --cmdbar-h: calc(2 * var(--ctl-h) + var(--sp-2) + var(--sp-6) + var(--sp-1));
   }
 
   .bottom-command-bar {
@@ -989,9 +1004,38 @@
     padding: var(--sp-4) var(--sp-3) calc(var(--cmdbar-h) + var(--sp-5));
   }
 
+  .song-title {
+    flex-basis: 100%;
+    flex-wrap: wrap;
+  }
+
   .song-title-input,
   .song-artist-input {
     width: 100%;
+  }
+
+  .song-bar .presence {
+    margin-left: 0;
+  }
+
+  /* The track menu keeps its gear, and Play its triangle; the labels stay their accessible names. */
+  .sheetor-tracks .menu-label,
+  .bottom-command-bar .cmd-label {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    margin: -1px;
+    padding: 0;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+    border: 0;
+  }
+
+  /* The neck keeps its width and scrolls inside the panel. */
+  .sheetor-fretboard {
+    max-height: 35dvh;
+    padding: var(--sp-3);
   }
 
   .shortcut-button-grid {

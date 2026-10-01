@@ -41,7 +41,7 @@ export const MenuButton = ({
         aria-haspopup="dialog"
         aria-expanded={open}
         aria-controls={open ? id : undefined}
-        title={iconOnly ? label : undefined}
+        title={label}
         onClick={onToggle}
       >
         {icon}

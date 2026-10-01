@@ -84,6 +84,8 @@ import {
   computeKeyboardRange,
   FRET_COUNT as fretCount,
   MAX_ROW_WIDTH,
+  SCORE_GUTTER,
+  scoreRowWidth,
   STEM_TOP_PAD,
   getTabStaffTop,
   TAB_STAFF_HEIGHT_PX,
@@ -273,6 +275,16 @@ export const TabSheetEditor: React.FC<TabSheetEditorProps> = ({ meta, channel })
   const lastKeyTimeRef = useRef<number>(0);
   const lastKeyStringRef = useRef<string>('');
   const containerRef = useRef<HTMLDivElement>(null);
+  const canvasRef = useRef<HTMLDivElement>(null);
+  // The score reflows to its card: a narrow screen breaks rows narrower instead of scrolling.
+  const [canvasWidth, setCanvasWidth] = useState<number>(MAX_ROW_WIDTH + SCORE_GUTTER);
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const observer = new ResizeObserver(([entry]) => setCanvasWidth(entry.contentRect.width));
+    observer.observe(canvas);
+    return () => observer.disconnect();
+  }, []);
 
   const playback = usePlayback(
     { song, volume, loop: loopPlayback, speed: playbackSpeed, activeTrackIndex, otherHandIndex },
@@ -1262,8 +1274,9 @@ export const TabSheetEditor: React.FC<TabSheetEditorProps> = ({ meta, channel })
   // A staff that changes clef partway through a row writes the new clef, smaller, where it changes.
   const clefChanges = measures.map((_, mIdx) =>
     showNotation && mIdx > 0 && staves.some(staff => staff.clefs[mIdx] !== staff.clefs[mIdx - 1]));
+  const rowWidth = scoreRowWidth(canvasWidth);
   const measureLayouts: MLayout[] = computeMeasureLayouts(
-    aligned.map(a => a.minWidth), conductorMeasures, keyRoom, clefChanges,
+    aligned.map(a => a.minWidth), conductorMeasures, keyRoom, clefChanges, rowWidth,
   );
 
   // Per-measure shift for notes below the lowest notation staff: pushes the TAB
@@ -1329,6 +1342,8 @@ export const TabSheetEditor: React.FC<TabSheetEditorProps> = ({ meta, channel })
 
   /* The last row needs no headroom for a row that never follows it. */
   const totalSVGHeight = cumY + 10 - STEM_TOP_PAD;
+  // A single bar wider than the row scales the score down rather than being cut off.
+  const contentWidth = Math.max(rowWidth, ...measureLayouts.map(l => l.x + l.width));
 
   const getMeasureWidth = (index: number): number => measureLayouts[index]?.width ?? 0;
   const getMeasurePadding = (index: number): number => measureLayouts[index]?.padding ?? 18;
@@ -1429,12 +1444,6 @@ export const TabSheetEditor: React.FC<TabSheetEditorProps> = ({ meta, channel })
       window.scrollBy({ top: box.top - top, behavior: 'smooth' });
     } else if (box.bottom > bottom) {
       window.scrollBy({ top: box.bottom - bottom, behavior: 'smooth' });
-    }
-    // A narrow window scrolls the score sideways instead.
-    const canvas = root.querySelector('.sheetor-canvas-container');
-    const view = canvas?.getBoundingClientRect();
-    if (canvas && view && (box.left < view.left || box.right > view.right)) {
-      canvas.scrollBy({ left: box.left - view.left - view.width / 3, behavior: 'smooth' });
     }
   }, [activeMeasureIndex, activeBeatIndex, activeTrackIndex, playback.playbackBeat, playback.isPlaying, showFretboard, showTab, showNotation, grandStaff]);
 
@@ -1801,6 +1810,7 @@ export const TabSheetEditor: React.FC<TabSheetEditorProps> = ({ meta, channel })
 
       {/* Editor Canvas */}
       <div
+        ref={canvasRef}
         className="sheetor-canvas-container"
         // A light page in any theme: the light tokens apply to the score card alone.
         data-theme={user.paperScore ? 'light' : undefined}
@@ -1809,16 +1819,16 @@ export const TabSheetEditor: React.FC<TabSheetEditorProps> = ({ meta, channel })
           containerRef.current?.focus();
         }}
       >
-        <svg 
-          viewBox={`-25 0 ${MAX_ROW_WIDTH + 25} ${totalSVGHeight}`}
+        <svg
+          viewBox={`-${SCORE_GUTTER} 0 ${contentWidth + SCORE_GUTTER} ${totalSVGHeight}`}
           className="music-svg"
           style={{ width: '100%', height: 'auto', display: 'block' }}
         >
           {/* Background Interactivity Catcher */}
-          <rect 
-            x="-25"
-            width={MAX_ROW_WIDTH + 25} 
-            height={totalSVGHeight} 
+          <rect
+            x={-SCORE_GUTTER}
+            width={contentWidth + SCORE_GUTTER}
+            height={totalSVGHeight}
             fill="transparent" 
             className="svg-interactive-bg"
             onClick={() => containerRef.current?.focus()}

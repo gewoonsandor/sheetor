@@ -27,6 +27,8 @@ still change the song format or the API; from `1.0.0` on, only a major release w
   own. Clearing a song asks first.
 - A read-only song can still be played, walked with the arrow keys and copied from.
 - `?` opens the keyboard shortcuts, which now list every key.
+- On phones and tablets the score reflows to the screen's width instead of scrolling sideways, and
+  on a touch screen every control grows to a finger's size.
 
 ## [1.0.0] - 2026-10-01
 

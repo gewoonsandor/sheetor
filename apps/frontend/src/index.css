@@ -273,6 +273,14 @@
 [data-theme='light'][data-accent='violet'], [data-theme='light'] [data-accent='violet'], [data-accent='violet'] [data-theme='light'] { --accent-rgb: 120 74 202; --accent-hover-rgb: 103 60 180; --accent-ink: hsl(275 60% 98%); }
 [data-theme='light'][data-accent='rose'], [data-theme='light'] [data-accent='rose'], [data-accent='rose'] [data-theme='light'] { --accent-rgb: 198 46 106; --accent-hover-rgb: 174 36 92; --accent-ink: hsl(345 60% 98%); }
 
+/* Touch: every control grows to a finger's size. --cmdbar-h follows through its calc. */
+@media (pointer: coarse) {
+  :root {
+    --ctl-h: 44px;
+    --ctl-h-sm: 40px;
+  }
+}
+
 * {
   box-sizing: border-box;
 }

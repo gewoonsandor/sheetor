@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 
 import type { TabBeat, TabMeasure } from '../../../../src/features/editor/components/types';
-import { alignBars } from '../../../../src/features/editor/components/layout';
+import { alignBars, computeMeasureLayouts, scoreRowWidth } from '../../../../src/features/editor/components/layout';
 
 const bar = (durations: TabBeat['duration'][]): TabMeasure => ({
   id: 'm',
@@ -22,5 +22,31 @@ describe('alignBars', () => {
     const { positions, minWidth } = alignBars([eighths, bar(['2', '2'])]);
     expect(positions[1]).toEqual([positions[0][0], positions[0][4]]);
     expect(minWidth).toBe(alignBars([eighths]).minWidth);
+  });
+});
+
+describe('scoreRowWidth', () => {
+  it('fits the card less the gutter, between the readable minimum and the full row', () => {
+    expect(scoreRowWidth(2000)).toBe(980);
+    expect(scoreRowWidth(500)).toBe(475);
+    expect(scoreRowWidth(100)).toBe(320);
+  });
+});
+
+describe('computeMeasureLayouts', () => {
+  const widths = Array.from({ length: 10 }, () => alignBars([eighths]).minWidth);
+  const conductor = widths.map((_, i) => ({ id: `m${i}`, beats: [] }));
+
+  it('breaks a narrow row into more rows that each end inside it', () => {
+    const wide = computeMeasureLayouts(widths, conductor, 0, [], 980);
+    const narrow = computeMeasureLayouts(widths, conductor, 0, [], 400);
+    const rows = (layouts: typeof wide) => new Set(layouts.map(l => l.row)).size;
+    expect(rows(narrow)).toBeGreaterThan(rows(wide));
+    for (const row of new Set(narrow.map(l => l.row))) {
+      const inRow = narrow.filter(l => l.row === row);
+      if (inRow[0].width > 400) continue;
+      const last = inRow[inRow.length - 1];
+      expect(last.x + last.width).toBeLessThanOrEqual(400 + 1e-9);
+    }
   });
 });
