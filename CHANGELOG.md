@@ -18,6 +18,13 @@ still change the song format or the API; from `1.0.0` on, only a major release w
   keyboard focus.
 - Menus and dialogs work from the keyboard: opening one moves focus into it, and Escape closes it
   and returns focus to where it was.
+- The editor's song title, artist and presence share one line, and a note toolbar above the score
+  holds note length, rest, techniques and MIDI input. The panel that opened on a second click on a
+  note is gone.
+- The command bar shows where the cursor is, and measure commands have a Measure menu of their
+  own. Clearing a song asks first.
+- A read-only song can still be played, walked with the arrow keys and copied from.
+- `?` opens the keyboard shortcuts, which now list every key.
 
 ## [1.0.0] - 2026-10-01
 

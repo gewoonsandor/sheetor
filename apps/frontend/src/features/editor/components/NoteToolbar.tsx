@@ -1,0 +1,95 @@
+import type { MouseEvent } from 'react';
+
+import { DurationPicker } from './DurationPicker';
+import type { Duration, TabNote } from './types';
+import { TECHNIQUE_LABELS, TECHNIQUE_SHORTCUTS } from '../shortcuts';
+import type { TechniqueId } from '../shortcuts';
+
+/** Technique buttons in toolbar order, each with its text glyph. */
+const TECHNIQUES: [TechniqueId, string][] = [
+  ['slur', '⌢'], ['legatoSlide', '╱'], ['bend', 'b'], ['vibrato', '~~'],
+  ['palmMute', 'P.M.'], ['letRing', 'Ring'], ['harmonic', '</>'], ['ghostNote', '(x)'],
+];
+
+// A toolbar button never takes focus from the score, so digits keep entering frets.
+const keepFocus = (e: MouseEvent) => e.preventDefault();
+
+interface NoteToolbarProps {
+  duration: Duration;
+  dotted: boolean;
+  onDuration: (d: Duration) => void;
+  onToggleDot: () => void;
+  isRest: boolean;
+  toggleActiveBeatRest: () => void;
+  activeNote: TabNote | undefined;
+  toggleNoteTechnique: (technique: TechniqueId) => void;
+  clearBeat: () => void;
+  midiInput: boolean;
+  midiAvailable: boolean;
+  toggleMidiInput: () => void;
+  midiStatus: string;
+}
+
+/** Everything that writes the beat under the cursor, always in view above the score. */
+export const NoteToolbar = ({
+  duration, dotted, onDuration, onToggleDot, isRest, toggleActiveBeatRest, activeNote,
+  toggleNoteTechnique, clearBeat, midiInput, midiAvailable, toggleMidiInput, midiStatus,
+}: NoteToolbarProps) => (
+  <div className="note-toolbar card" role="toolbar" aria-label="Note">
+    <DurationPicker duration={duration} dotted={dotted} onDuration={onDuration} onToggleDot={onToggleDot} />
+    <button
+      type="button"
+      className="btn btn-sm"
+      aria-pressed={isRest}
+      title="Rest (R)"
+      onMouseDown={keepFocus}
+      onClick={toggleActiveBeatRest}
+    >
+      Rest
+    </button>
+    <div className="toolbar-divider" />
+    {TECHNIQUES.map(([technique, glyph]) => {
+      const label = `${TECHNIQUE_LABELS[technique]} (${TECHNIQUE_SHORTCUTS[technique]})`;
+      return (
+        <button
+          key={technique}
+          type="button"
+          className="btn btn-sm"
+          aria-pressed={!!activeNote?.[technique]}
+          aria-label={label}
+          title={label}
+          disabled={!activeNote}
+          onMouseDown={keepFocus}
+          onClick={() => toggleNoteTechnique(technique)}
+        >
+          {glyph}
+        </button>
+      );
+    })}
+    <div className="toolbar-divider" />
+    <button
+      type="button"
+      className="btn btn-sm btn-icon btn-danger"
+      aria-label="Clear beat"
+      title="Clear beat (Delete removes one note)"
+      onMouseDown={keepFocus}
+      onClick={clearBeat}
+    >
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+        <path d="M3 6h18M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6" />
+      </svg>
+    </button>
+    <span className="note-toolbar-spacer" />
+    <button
+      type="button"
+      className="btn btn-sm"
+      aria-pressed={midiInput}
+      disabled={!midiAvailable}
+      title={midiStatus}
+      onMouseDown={keepFocus}
+      onClick={toggleMidiInput}
+    >
+      MIDI
+    </button>
+  </div>
+);

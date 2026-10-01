@@ -137,9 +137,7 @@
 
 /* An uppercase label over a group: section headings, popover headings, field names. */
 .eyebrow,
-.compact-field > span,
-.readout-chip dt,
-.shortcut-button-grid span.shortcut-divider {
+.compact-field > span {
   margin: 0;
   font-size: var(--fs-2xs);
   font-weight: 700;

@@ -1,11 +1,11 @@
 import React, { useState, useEffect, useRef, useSyncExternalStore } from 'react';
 import { flushSync } from 'react-dom';
-import { Link, useNavigate } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
 import './TabSheetEditor.css';
 
 import type {
-  BeatPosition, Clef, Duration, FrettedNote, InstrumentId, NoteTechniques, PitchedNote, StaffDisplay,
-  TabNote, TabBeat, TabMeasure, TabSong, TabTrack, BeamGroup, MLayout,
+  BeatPosition, Clef, Duration, FrettedNote, InstrumentId, NoteTechniques, PitchedNote,
+  Staff, TabNote, TabBeat, TabMeasure, TabSong, TabTrack, BeamGroup, MLayout,
 } from './types';
 import {
   getDurationVal,
@@ -15,7 +15,6 @@ import {
   isFrettedNote,
   midiToNoteName,
   midiToNoteOctave,
-  noteOctaveToMidi,
   normalizeTrackLengths,
   MAX_BPM,
   MIN_BPM,
@@ -23,8 +22,6 @@ import {
   retuneTrack,
   trackKind,
   tuningPresets,
-  resizeTuning,
-  GUITAR_NOTE_OPTIONS,
   spellPitch,
   barAccidentals,
   keySignatureSteps,
@@ -58,9 +55,18 @@ import {
 import type { CursorIds, CursorIndices } from './songUtils';
 import { getClip, setClip, subscribeClip } from '../clipboard';
 import { midiSupported, useMidiInput } from '../midiInput';
-import { INSTRUMENTS } from './audioEngine';
 import { TrackStrip } from './TrackStrip';
-import { MenuButton } from '../../../app/MenuButton';
+import { CommandBar } from './CommandBar';
+import type { MenuId } from './CommandBar';
+import { NoteToolbar } from './NoteToolbar';
+import { KeyboardPanel } from './KeyboardPanel';
+import type { Hand } from './KeyboardPanel';
+import { FretboardPanel } from './FretboardPanel';
+import { TrackSettings } from './TrackSettings';
+import { ShortcutsDialog } from './ShortcutsDialog';
+import { JsonDialog } from './JsonDialog';
+import { TECHNIQUE_SHORTCUTS } from '../shortcuts';
+import type { TechniqueId } from '../shortcuts';
 import { parseSong } from './songSchema';
 import { canEdit } from '../../library/libraryStore';
 import type { LibraryEntry } from '../../library/libraryStore';
@@ -73,11 +79,6 @@ import {
   computeRowHeight,
   computeMeasureLayouts,
   checkMeasureBeats,
-  computeFretboardNeckHeight,
-  getFretboardStringY as getFretboardStringYFromLayout,
-  getFretCellLeft,
-  getFretCellWidth,
-  getFretLeftPercentage,
   isWhiteKey,
   computeKeyboardRange,
   FRET_COUNT as fretCount,
@@ -128,8 +129,6 @@ const CLEFS: Record<Clef, ClefShape> = {
   bass: { path: BASS_CLEF_PATH, fillRule: 'nonzero', shift: 12, keyOffset: -2, line: 20 },
 };
 
-const CLEF_LABELS: Record<Clef, string> = { treble: 'Treble (G)', bass: 'Bass (F)' };
-
 /** A key signature's first accidental, after the clef, and the room each one takes. */
 const KEY_X = 46;
 const KEY_SPACING = 9;
@@ -159,16 +158,6 @@ const accidentalGlyph = (alteration: number, cx: number, y: number): React.React
   );
 };
 
-/** Key signatures from seven flats to seven sharps, as the Key menu lists them: major / relative minor. */
-const KEY_OPTIONS = [
-  ['C♭', 'A♭'], ['G♭', 'E♭'], ['D♭', 'B♭'], ['A♭', 'F'], ['E♭', 'C'], ['B♭', 'G'], ['F', 'D'], ['C', 'A'],
-  ['G', 'E'], ['D', 'B'], ['A', 'F♯'], ['E', 'C♯'], ['B', 'G♯'], ['F♯', 'D♯'], ['C♯', 'A♯'],
-].map(([major, minor], i) => {
-  const key = i - 7;
-  const count = key === 0 ? '' : ` · ${Math.abs(key)}${key > 0 ? '♯' : '♭'}`;
-  return { key, label: `${major} / ${minor}m${count}` };
-});
-
 /** Techniques marked over the TAB per run, on one shared line (a beat holds only one): the label, and where its dashes start. */
 const RUN_MARKS = [
   { technique: 'palmMute', label: 'P.M.', dashFrom: 7 },
@@ -178,30 +167,9 @@ const RUN_MARKS = [
 /** Palm mute and let ring share that line, so turning one on clears the other from the whole beat. */
 const EXCLUDES: Partial<Record<keyof NoteTechniques, keyof NoteTechniques>> = { palmMute: 'letRing', letRing: 'palmMute' };
 
-/** Which hand of a grand staff: the treble staff's track is the right. */
-type Hand = 'right' | 'left';
-
-const HAND_LABELS: Record<Hand, string> = { right: 'Right hand', left: 'Left hand' };
-
-/** One drawn staff: how far below the row's origin it sits, the track whose bars it carries, and its clef at every bar. */
-interface Staff {
-  top: number;
-  track: number;
-  clefs: Clef[];
-}
-
-const STAFF_LABELS: Record<StaffDisplay, string> = {
-  both: 'Both', notation: 'Notes', tab: 'TAB',
-};
-
 // Keyboard span for pitched tracks, which have no tuning to derive one from.
 const PITCHED_KEYBOARD_LOW = 36;  // C2
 const PITCHED_KEYBOARD_HIGH = 84; // C6
-
-const INSTRUMENT_OPTIONS = Object.entries(INSTRUMENTS).map(([id, voice]) => ({
-  id: id as InstrumentId,
-  label: voice.label,
-}));
 
 interface TabSheetEditorProps {
   /** The song's listing entry: its folder, and the caller's role before the socket says. */
@@ -285,8 +253,8 @@ export const TabSheetEditor: React.FC<TabSheetEditorProps> = ({ meta, channel })
   const [showFretboard, setShowFretboard] = useState<boolean>(settings.showToolPanel);
   const [midiInput, setMidiInput] = useState<boolean>(settings.midiInput);
   const [showShortcuts, setShowShortcuts] = useState<boolean>(false);
-  const [showNoteOptions, setShowNoteOptions] = useState<boolean>(false);
-  const [openBottomMenu, setOpenBottomMenu] = useState<'song' | 'edit' | 'output' | 'view' | 'track' | null>(null);
+  const [openMenu, setOpenMenu] = useState<MenuId | null>(null);
+  const toggleMenu = (id: MenuId) => setOpenMenu(prev => (prev === id ? null : id));
   /** A grand staff waiting on "delete the left hand?": the menu that asked, and the instrument the part becomes. */
   const [leavingGrand, setLeavingGrand] = useState<{ menu: 'view' | 'track'; instrument: InstrumentId } | null>(null);
 
@@ -388,7 +356,6 @@ export const TabSheetEditor: React.FC<TabSheetEditorProps> = ({ meta, channel })
   const selectTrack = (index: number) => {
     if (handsOf(index).includes(activeTrackIndex)) return;
     setActiveTrackIndex(index);
-    setShowNoteOptions(false);
     // Bar counts are shared, but beat counts are not, so re-clamp the cursor.
     const target = song.tracks[index];
     if (!target) return;
@@ -408,7 +375,6 @@ export const TabSheetEditor: React.FC<TabSheetEditorProps> = ({ meta, channel })
     setActiveTrackIndex(target);
     setActiveBeatIndex(beat === -1 ? Math.max(0, (bar?.beats.length ?? 1) - 1) : beat);
     setAnchor(null);
-    setShowNoteOptions(false);
   };
 
   /** Changes every track of the part `index` belongs to: a grand staff mutes, solos and sounds as one. */
@@ -427,7 +393,7 @@ export const TabSheetEditor: React.FC<TabSheetEditorProps> = ({ meta, channel })
     setActiveTrackIndex(song.tracks.length);
     setActiveBeatIndex(0);
     setActiveStringIndex(0);
-    setOpenBottomMenu('track');
+    setOpenMenu('track');
   };
 
   /** Copies the active part, both hands of a grand staff linked to each other, right after it. */
@@ -465,7 +431,7 @@ export const TabSheetEditor: React.FC<TabSheetEditorProps> = ({ meta, channel })
     setActiveTrackIndex(Math.max(0, hands[0] - 1));
     setActiveBeatIndex(0);
     setActiveStringIndex(0);
-    setOpenBottomMenu(null);
+    setOpenMenu(null);
   };
 
   /**
@@ -916,7 +882,7 @@ export const TabSheetEditor: React.FC<TabSheetEditorProps> = ({ meta, channel })
 
   const startNewSong = async (): Promise<void> => {
     playback.stop();
-    setOpenBottomMenu(null);
+    setOpenMenu(null);
     setNotice(null);
     try {
       // A new song lands in the folder the open one lives in, when you may add to it.
@@ -1068,19 +1034,40 @@ export const TabSheetEditor: React.FC<TabSheetEditorProps> = ({ meta, channel })
   // --- KEYBOARD CONTROLS ---
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLDivElement>) => {
-    // If typing in input fields, ignore shortcuts
+    // Fields, menus and dialogs keep their keys; a focused button keeps Space and Enter.
     const target = e.target as HTMLElement;
-    if (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA') {
+    if (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.tagName === 'SELECT') return;
+    if (target.closest('.popover, dialog')) return;
+    if (target.tagName === 'BUTTON' && (e.key === ' ' || e.key === 'Enter')) return;
+
+    if (e.key === '?') {
+      e.preventDefault();
+      setShowShortcuts(true);
       return;
     }
 
-    if (readOnly) return;
+    const key = e.key.toLowerCase();
+    // A read-only song still plays, moves and copies.
+    if (readOnly) {
+      const browsing = ['ArrowLeft', 'ArrowRight', ' ', 'Escape'].includes(e.key)
+        || ((e.key === 'ArrowUp' || e.key === 'ArrowDown') && !e.shiftKey)
+        || ((e.ctrlKey || e.metaKey) && key === 'c');
+      if (!browsing) return;
+    }
 
     const measure = measures[activeMeasureIndex];
     if (!measure) return;
     const beat = measure.beats[activeBeatIndex];
 
-    const key = e.key.toLowerCase();
+    if (!e.ctrlKey && !e.metaKey && !e.altKey) {
+      const technique = Object.entries(TECHNIQUE_SHORTCUTS).find(([, k]) => k.toLowerCase() === key);
+      if (technique) {
+        e.preventDefault();
+        toggleNoteTechnique(technique[0] as TechniqueId);
+        return;
+      }
+    }
+
     if ((e.ctrlKey || e.metaKey) && ['c', 'x', 'v', 'z', 'y'].includes(key)) {
       e.preventDefault();
       if (key === 'c') copySelection();
@@ -1124,7 +1111,7 @@ export const TabSheetEditor: React.FC<TabSheetEditorProps> = ({ meta, channel })
       case 'ArrowRight': {
         e.preventDefault();
         markSelection(e.shiftKey);
-        if (e.shiftKey) {
+        if (e.shiftKey || readOnly) {
           // Selecting walks the beats that exist; it never writes new ones.
           const next = nextBeatPosition(measures, cursorPosition, false);
           if (next) {
@@ -1151,48 +1138,6 @@ export const TabSheetEditor: React.FC<TabSheetEditorProps> = ({ meta, channel })
         }
         break;
 
-      // Note technique shortcuts (when note options panel is open)
-      case 'h':
-      case 'H':
-        e.preventDefault();
-        toggleNoteTechnique('slur');
-        break;
-      case 's':
-      case 'S':
-        e.preventDefault();
-        toggleNoteTechnique('legatoSlide');
-        break;
-      case 'v':
-      case 'V':
-        e.preventDefault();
-        toggleNoteTechnique('vibrato');
-        break;
-      case 'b':
-      case 'B':
-        e.preventDefault();
-        toggleNoteTechnique('bend');
-        break;
-      case 'm':
-      case 'M':
-        e.preventDefault();
-        toggleNoteTechnique('palmMute');
-        break;
-      case 'l':
-      case 'L':
-        e.preventDefault();
-        toggleNoteTechnique('letRing');
-        break;
-      case 'o':
-      case 'O':
-        e.preventDefault();
-        toggleNoteTechnique('harmonic');
-        break;
-      case 'g':
-      case 'G':
-        e.preventDefault();
-        toggleNoteTechnique('ghostNote');
-        break;
-
       // Delete / Backspace removes a note, or deletes the beat if it's a rest
       case 'Backspace':
       case 'Delete':
@@ -1203,27 +1148,22 @@ export const TabSheetEditor: React.FC<TabSheetEditorProps> = ({ meta, channel })
           deleteSelection();
         } else if (beat?.isRest) {
           deleteActiveBeat();
-        } else if (showNoteOptions) {
-          removeCursorNote();
-          setShowNoteOptions(false);
         } else {
           removeCursorNote();
         }
         break;
 
-      // Rest hotkey (or toggle + close panel)
+      // Rest hotkey
       case 'r':
       case 'R':
         e.preventDefault();
         toggleActiveBeatRest();
-        if (showNoteOptions) setShowNoteOptions(false);
         break;
 
       // Dot hotkey to toggle dotted note
       case '.':
         e.preventDefault();
         toggleDotForActiveBeat();
-        if (showNoteOptions) setShowNoteOptions(false);
         break;
 
       // Plus / Equals / Minus to change duration (increase/decrease)
@@ -1296,19 +1236,13 @@ export const TabSheetEditor: React.FC<TabSheetEditorProps> = ({ meta, channel })
   }, [activeBeatIndex, activeMeasureIndex, playback.isPlaying]);
 
   useEffect(() => {
-    if (!showShortcuts && !openBottomMenu && !showNoteOptions) return;
-
-    const handleOverlayKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') {
-        setShowShortcuts(false);
-        setOpenBottomMenu(null);
-        setShowNoteOptions(false);
-      }
+    if (!openMenu) return;
+    const closeOnEscape = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setOpenMenu(null);
     };
-
-    window.addEventListener('keydown', handleOverlayKeyDown);
-    return () => window.removeEventListener('keydown', handleOverlayKeyDown);
-  }, [showShortcuts, openBottomMenu, showNoteOptions]);
+    window.addEventListener('keydown', closeOnEscape);
+    return () => window.removeEventListener('keydown', closeOnEscape);
+  }, [openMenu]);
 
   // --- SVG MEASUREMENT & LAYOUT CALCULATION ---
 
@@ -1411,11 +1345,6 @@ export const TabSheetEditor: React.FC<TabSheetEditorProps> = ({ meta, channel })
   /** Top boundary of the drawn staff block, or of one staff of a grand staff. */
   const getStaffTop = (ts: number, staff: Staff = staves[0]): number => (showNotation ? staff.top + 10 : tabTop + ts);
 
-  const fretboardNeckHeight = computeFretboardNeckHeight(stringCount);
-
-  const getFretboardStringY = (stringIdx: number): number =>
-    getFretboardStringYFromLayout(stringIdx, stringCount);
-
   /** Where a beat of a staff's bar sits: on the onsets every staff of the row shares. */
   const getBeatCoordinates = (mIdx: number, bIdx: number, staff: Staff = activeStaff): number => {
     const padding = getMeasurePadding(mIdx);
@@ -1489,8 +1418,10 @@ export const TabSheetEditor: React.FC<TabSheetEditorProps> = ({ meta, channel })
     const cover = root?.querySelector('.sheetor-fretboard, .bottom-command-bar');
     if (!root || !marker || !cover) return;
     const box = marker.getBoundingClientRect();
-    // Headroom above the staff keeps the bar number and tempo mark in sight.
-    const top = parseFloat(getComputedStyle(root).getPropertyValue('--header-h')) + 40;
+    // Headroom below the note toolbar (or the app header) keeps the bar number and tempo mark in sight.
+    const toolbar = root.querySelector('.note-toolbar');
+    const top = (toolbar?.getBoundingClientRect().bottom
+      ?? parseFloat(getComputedStyle(root).getPropertyValue('--header-h'))) + 40;
     const bottom = cover.getBoundingClientRect().top - 16;
     if (box.top < top || (playback.isPlaying && box.bottom > bottom)) {
       window.scrollBy({ top: box.top - top, behavior: 'smooth' });
@@ -1692,13 +1623,11 @@ export const TabSheetEditor: React.FC<TabSheetEditorProps> = ({ meta, channel })
 
   /** Clicking a note of a grand staff's other hand switches to it; a selection never spans hands. */
   const selectNote = (mIdx: number, bIdx: number, noteIndex: number, notes: TabNote[], extend: boolean, track: number = activeTrackIndex) => {
-    const wasSelected = isCursorNote(mIdx, bIdx, noteIndex, notes, track);
     const note = notes[noteIndex];
     const extending = extend && track === activeTrackIndex;
     setActiveTrackIndex(track);
     moveCursorTo(mIdx, bIdx, extending);
     if (note) setActiveStringIndex(cursorSlotOf(note, notes));
-    setShowNoteOptions(wasSelected && !extending && !readOnly);
   };
 
   /** Dots of a repeat sign sit in the two spaces either side of each staff's middle. */
@@ -1723,182 +1652,97 @@ export const TabSheetEditor: React.FC<TabSheetEditorProps> = ({ meta, channel })
     </g>
   );
 
-  const durationButtons = (['1', '2', '4', '8', '16', '32'] as const).map((dur) => (
-    <button
-      key={dur}
-      className={`duration-btn ${durationSelect === dur ? 'active' : ''}`}
-      onClick={() => {
-        setDurationSelect(dur);
-        setDurationForActiveBeat(dur);
-      }}
-      title={`Set note length: ${dur === '1' ? 'Whole' : dur === '2' ? 'Half' : dur === '4' ? 'Quarter' : dur === '8' ? 'Eighth' : dur === '16' ? 'Sixteenth' : 'Thirty-Second'}`}
-    >
-      {dur === '1' && (
-        <svg viewBox="0 0 24 24" stroke="currentColor" fill="none" strokeWidth="2">
-          <ellipse cx="12" cy="12" rx="6" ry="4" transform="rotate(-20 12 12)" />
-        </svg>
-      )}
-      {dur === '2' && (
-        <svg viewBox="0 0 24 24" stroke="currentColor" fill="none" strokeWidth="2">
-          <ellipse cx="10" cy="14" rx="5" ry="3.5" transform="rotate(-20 10 14)" />
-          <line x1="15" y1="14" x2="15" y2="4" strokeWidth="2.2" />
-        </svg>
-      )}
-      {dur === '4' && (
-        <svg viewBox="0 0 24 24" fill="currentColor">
-          <ellipse cx="10" cy="14" rx="5" ry="3.5" transform="rotate(-20 10 14)" />
-          <line x1="15" y1="14" x2="15" y2="4" stroke="currentColor" strokeWidth="2.2" />
-        </svg>
-      )}
-      {dur === '8' && (
-        <svg viewBox="0 0 24 24" fill="currentColor">
-          <ellipse cx="10" cy="14" rx="5" ry="3.5" transform="rotate(-20 10 14)" />
-          <line x1="15" y1="14" x2="15" y2="4" stroke="currentColor" strokeWidth="2.2" />
-          <path d="M 15 4 C 18 6, 20 10, 18 13 C 17.5 10, 16 7, 15 6" />
-        </svg>
-      )}
-      {dur === '16' && (
-        <svg viewBox="0 0 24 24" fill="currentColor">
-          <ellipse cx="10" cy="14" rx="5" ry="3.5" transform="rotate(-20 10 14)" />
-          <line x1="15" y1="14" x2="15" y2="4" stroke="currentColor" strokeWidth="2.2" />
-          <path d="M 15 4 C 18 6, 20 10, 18 13 C 17.5 10, 16 7, 15 6" />
-          <path d="M 15 7.5 C 18 9.5, 20 13.5, 18 16.5 C 17.5 13.5, 16 10.5, 15 9.5" />
-        </svg>
-      )}
-      {dur === '32' && (
-        <svg viewBox="0 0 24 24" fill="currentColor">
-          <ellipse cx="10" cy="14" rx="5" ry="3.5" transform="rotate(-20 10 14)" />
-          <line x1="15" y1="14" x2="15" y2="4" stroke="currentColor" strokeWidth="2.2" />
-          <path d="M 15 4 C 18 6, 20 10, 18 13 C 17.5 10, 16 7, 15 6" />
-          <path d="M 15 7.5 C 18 9.5, 20 13.5, 18 16.5 C 17.5 13.5, 16 10.5, 15 9.5" />
-          <path d="M 15 11 C 18 13, 20 17, 18 20 C 17.5 17, 16 14, 15 13" />
-        </svg>
-      )}
-    </button>
-  ));
+  // Where the cursor is, for the command bar's status line.
+  const cursorText = activeBeat?.isRest
+    ? 'Rest'
+    : !activeNote
+      ? 'Empty'
+      : showTab && isFrettedNote(activeNote)
+        ? `Fret ${activeNote.fret}`
+        : midiToNoteOctave(resolveNoteMidi(activeNote, activeTrack) ?? 0);
+  const notesText = activeBeat?.isRest || selectedNotes.length === 0
+    ? '—'
+    : selectedNotes
+        .map(n => (resolveNoteMidi(n, activeTrack) ?? NaN))
+        .sort((a, b) => a - b)
+        .map(midiToNoteOctave)
+        .join(' ');
+  const status = [
+    `Bar ${activeMeasureIndex + 1}/${measures.length}`,
+    `Beat ${activeBeatIndex + 1}/${measures[activeMeasureIndex]?.beats.length ?? 0}`,
+    showTab ? `String ${activeStringIndex + 1} (${midiToNoteName(tuning[activeStringIndex] ?? 0)})` : `Notes ${notesText}`,
+    cursorText,
+    `${activeMeasureTimeSignature.numerator}/${activeMeasureTimeSignature.denominator}`,
+  ].join(' · ');
 
-  const dotButton = (
-    <button
-      className={`duration-btn ${(activeBeat?.dot ?? dotSelect) ? 'active' : ''}`}
-      onClick={() => {
-        toggleDotForActiveBeat();
-      }}
-      title="Dotted note"
-    >
-      <svg viewBox="0 0 24 24" fill="currentColor" width="18" height="18">
-        <circle cx="18" cy="18" r="3" />
-        <ellipse cx="10" cy="14" rx="5" ry="3.5" transform="rotate(-20 10 14)" />
-        <line x1="15" y1="14" x2="15" y2="4" stroke="currentColor" strokeWidth="2.2" />
-      </svg>
-    </button>
-  );
+  /** Changes the part's instrument; a fretted one leaves a grand staff, after asking. */
+  const changeInstrument = (instrument: InstrumentId) => {
+    if (grand && trackKind(instrument) === 'fretted') {
+      leaveGrandStaff(instrument, 'track');
+      return;
+    }
+    // The instrument decides whether this is a TAB staff, so switching it can add or
+    // remove strings and rewrites the notes through their sounding pitch.
+    updatePart(activeTrackIndex, track => retuneTrack(track, instrument));
+    const slots = retuneTrack(activeTrack, instrument).tuning?.length ?? 1;
+    setActiveStringIndex(prev => Math.min(prev, Math.max(slots, 1) - 1));
+  };
 
-  // The View menu's Fretboard/Keyboard toggle brings the panel back.
-  const hidePanelButton = (
-    <button
-      className="panel-hide"
-      onClick={() => setShowFretboard(false)}
-      title="Hide (View menu shows it again)"
-      aria-label={`Hide the ${showTab ? 'fretboard' : 'keyboard'}`}
-    >
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-        <path d="m6 9 6 6 6-6" />
-      </svg>
-    </button>
-  );
+  const toggleViewMode = () => {
+    if (!viewMode) setOpenMenu(null);
+    setViewMode(!viewMode);
+  };
 
   return (
-    <div 
+    <div
       className="sheetor-container"
       ref={containerRef}
       tabIndex={0}
       onKeyDown={handleKeyDown}
     >
-      {/* Top Header */}
-      <div className="sheetor-header">
-        <div className="sheetor-title-section">
+      <div className="song-bar">
+        <div className="song-title">
           <input
-            className="sheetor-title-input"
+            className="song-title-input"
+            aria-label="Song title"
             value={song.title}
             readOnly={readOnly}
             onChange={(e) => editSong({ ...song, title: e.target.value })}
-            placeholder="Song Title"
+            placeholder="Song title"
           />
           <input
-            className="sheetor-artist-input"
+            className="song-artist-input"
+            aria-label="Artist"
             value={song.artist}
             readOnly={readOnly}
             onChange={(e) => editSong({ ...song, artist: e.target.value })}
             placeholder="Artist"
           />
-          {notice !== null && (
-            <p className="form-error" role="alert">
-              {notice}
-            </p>
-          )}
         </div>
 
         <div className="presence">
-          <span className={`presence-status is-${live.status}`}>
+          <span className={`presence-status is-${live.status}`} role="status">
             {live.status === 'live' ? 'Live' : live.status === 'reconnecting' ? 'Reconnecting…' : 'Connecting…'}
             {role === 'viewer' && ' · view only'}
           </span>
           {live.peers.map((peer) => (
             <span
               key={peer.connectionId}
+              role="img"
               className={`presence-chip peer-${peer.userId % 6}`}
               title={`${peer.name} · ${peer.role}`}
+              aria-label={`${peer.name} · ${peer.role}`}
             >
               {deriveInitials(peer.name)}
             </span>
           ))}
         </div>
 
-        <dl className="selection-readout">
-          <div className="readout-chip">
-            <dt>Measure</dt>
-            <dd>{activeMeasureIndex + 1} / {measures.length}</dd>
-          </div>
-          <div className="readout-chip">
-            <dt>Beat</dt>
-            <dd>{activeBeatIndex + 1} / {measures[activeMeasureIndex]?.beats.length ?? 0}</dd>
-          </div>
-          {showTab ? (
-            <div className="readout-chip">
-              <dt>String</dt>
-              <dd>{activeStringIndex + 1} · {midiToNoteName(tuning[activeStringIndex] ?? 0)}</dd>
-            </div>
-          ) : (
-            <div className="readout-chip">
-              <dt>Notes</dt>
-              <dd>
-                {activeBeat?.isRest || selectedNotes.length === 0
-                  ? '—'
-                  : selectedNotes
-                      .map(n => (resolveNoteMidi(n, activeTrack) ?? NaN))
-                      .sort((a, b) => a - b)
-                      .map(midiToNoteOctave)
-                      .join(' ')}
-              </dd>
-            </div>
-          )}
-          <div className="readout-chip is-accent">
-            <dt>Cursor</dt>
-            <dd>
-              {activeBeat?.isRest
-                ? 'Rest'
-                : !activeNote
-                  ? 'Empty'
-                  : showTab && isFrettedNote(activeNote)
-                    ? `Fret ${activeNote.fret}`
-                    : midiToNoteOctave(resolveNoteMidi(activeNote, activeTrack) ?? 0)}
-            </dd>
-          </div>
-          <div className="readout-chip">
-            <dt>Time</dt>
-            <dd>{activeMeasureTimeSignature.numerator}/{activeMeasureTimeSignature.denominator}</dd>
-          </div>
-        </dl>
+        {notice !== null && (
+          <p className="form-error" role="alert">
+            {notice}
+          </p>
+        )}
       </div>
 
       {/* Track strip — picks which track the score and input panel edit */}
@@ -1909,134 +1753,49 @@ export const TabSheetEditor: React.FC<TabSheetEditorProps> = ({ meta, channel })
         onToggleMute={(i) => updatePart(i, () => ({ muted: !song.tracks[i].muted }))}
         onToggleSolo={(i) => updatePart(i, () => ({ soloed: !song.tracks[i].soloed }))}
         onAddTrack={addTrack}
-        onOpenSettings={() => setOpenBottomMenu(prev => (prev === 'track' ? null : 'track'))}
-        settingsOpen={openBottomMenu === 'track'}
+        onOpenSettings={() => toggleMenu('track')}
+        settingsOpen={openMenu === 'track'}
       >
-        <>
-            <label className="compact-field wide-field">
-              <span>Name</span>
-              <input
-                className="control-input"
-                value={part.name}
-                onChange={(e) => updateTrack(hands[0], { name: e.target.value })}
-              />
-            </label>
-            <label className="compact-field wide-field">
-              <span>Sound</span>
-              <select
-                className="control-select"
-                value={activeTrack.instrument}
-                onChange={(e) => {
-                  const instrument = e.target.value as InstrumentId;
-                  // No grand staff on a TAB staff: the left hand goes, after asking.
-                  if (grand && trackKind(instrument) === 'fretted') {
-                    leaveGrandStaff(instrument, 'track');
-                    return;
-                  }
-                  // The instrument decides whether this is a TAB staff, so
-                  // switching it can add or remove strings and rewrites the
-                  // notes through their sounding pitch.
-                  updatePart(activeTrackIndex, track => retuneTrack(track, instrument));
-                  const slots = retuneTrack(activeTrack, instrument).tuning?.length ?? 1;
-                  setActiveStringIndex(prev => Math.min(prev, Math.max(slots, 1) - 1));
-                }}
-              >
-                {INSTRUMENT_OPTIONS.map(opt => (
-                  <option key={opt.id} value={opt.id}>{opt.label}</option>
-                ))}
-              </select>
-            </label>
-            {leftHandWarning('track')}
-            <label className="compact-field wide-field">
-              <span>Key</span>
-              <select
-                className="control-select"
-                value={part.keySignature ?? 0}
-                onChange={(e) => {
-                  const key = Number(e.target.value);
-                  // A grand staff's hands share their key; C major is stored as no key at all.
-                  updatePart(activeTrackIndex, () => ({ keySignature: key === 0 ? undefined : key }));
-                }}
-              >
-                {KEY_OPTIONS.map(opt => (
-                  <option key={opt.key} value={opt.key}>{opt.label}</option>
-                ))}
-              </select>
-            </label>
-            <label className="compact-field wide-field">
-              <span>Volume</span>
-              <input
-                type="range"
-                min="0"
-                max="1"
-                step="0.05"
-                value={part.volume}
-                onChange={(e) => updatePart(activeTrackIndex, () => ({ volume: parseFloat(e.target.value) }))}
-              />
-            </label>
-
-            {isFrettedTrack && (
-              <>
-                <div className="popover-divider" />
-                <span className="eyebrow">Tuning</span>
-                <label className="compact-field wide-field">
-                  <span>Preset</span>
-                  <select
-                    className="control-select"
-                    value={presetName}
-                    onChange={(e) => {
-                      const pitches = presets[e.target.value];
-                      if (pitches) setTuning([...pitches]);
-                    }}
-                  >
-                    {presetName === '' && <option value="">Custom</option>}
-                    {Object.keys(presets).map(name => (
-                      <option key={name} value={name}>{name}</option>
-                    ))}
-                  </select>
-                </label>
-                <label className="compact-field wide-field">
-                  <span>Strings</span>
-                  <select
-                    className="control-select"
-                    value={stringCount}
-                    onChange={(e) => setTuning(resizeTuning(tuning, Number(e.target.value)))}
-                  >
-                    {[4, 5, 6, 7, 8, 9, 10, 11, 12].map(n => (
-                      <option key={n} value={n}>{n}</option>
-                    ))}
-                  </select>
-                </label>
-                <div className="tuning-grid">
-                  {tuning.map((pitch, i) => (
-                    <label key={i} className="tuning-string">
-                      <span>{i + 1}</span>
-                      <select
-                        className="control-select"
-                        value={midiToNoteOctave(pitch)}
-                        onChange={(e) => setTuning(tuning.map((p, j) => (j === i ? noteOctaveToMidi(e.target.value) : p)))}
-                      >
-                        {GUITAR_NOTE_OPTIONS.map(opt => (
-                          <option key={opt} value={opt}>{opt}</option>
-                        ))}
-                      </select>
-                    </label>
-                  ))}
-                </div>
-              </>
-            )}
-
-            <div className="popover-divider" />
-            <button className="btn" onClick={duplicateActiveTrack}>Duplicate track</button>
-            <button
-              className="btn btn-danger"
-              onClick={deleteActiveTrack}
-              disabled={song.tracks.length <= hands.length}
-            >
-              Delete track
-            </button>
-        </>
+        <TrackSettings
+          part={part}
+          activeTrack={activeTrack}
+          renamePart={(name) => updateTrack(hands[0], { name })}
+          changeInstrument={changeInstrument}
+          // A grand staff's hands share their key; C major is stored as no key at all.
+          setPartKey={(key) => updatePart(activeTrackIndex, () => ({ keySignature: key === 0 ? undefined : key }))}
+          setPartVolume={(trackVolume) => updatePart(activeTrackIndex, () => ({ volume: trackVolume }))}
+          leftHandWarning={leftHandWarning('track')}
+          isFrettedTrack={isFrettedTrack}
+          presets={presets}
+          presetName={presetName}
+          tuning={tuning}
+          setTuning={setTuning}
+          duplicateActiveTrack={duplicateActiveTrack}
+          deleteActiveTrack={deleteActiveTrack}
+          canDeleteTrack={song.tracks.length > hands.length}
+        />
       </TrackStrip>
+
+      {!readOnly && (
+        <NoteToolbar
+          duration={activeBeat?.duration ?? durationSelect}
+          dotted={activeBeat ? !!activeBeat.dot : dotSelect}
+          onDuration={(dur) => {
+            setDurationSelect(dur);
+            setDurationForActiveBeat(dur);
+          }}
+          onToggleDot={toggleDotForActiveBeat}
+          isRest={!!activeBeat?.isRest}
+          toggleActiveBeatRest={toggleActiveBeatRest}
+          activeNote={activeNote}
+          toggleNoteTechnique={toggleNoteTechnique}
+          clearBeat={() => updateActiveBeatNotes(() => [])}
+          midiInput={midiInput}
+          midiAvailable={midiSupported()}
+          toggleMidiInput={() => setMidiInput(prev => !prev)}
+          midiStatus={midiStatus}
+        />
+      )}
 
       {/* Editor Canvas */}
       <div
@@ -2379,7 +2138,6 @@ export const TabSheetEditor: React.FC<TabSheetEditorProps> = ({ meta, channel })
                     onClick={(e) => {
                       moveCursorTo(mIdx, bIdx, e.shiftKey);
                       setActiveStringIndex(stringIdx);
-                      setShowNoteOptions(false);
                     }}
                   />
                 )))}
@@ -3096,778 +2854,114 @@ export const TabSheetEditor: React.FC<TabSheetEditorProps> = ({ meta, channel })
       {/* Piano keyboard — replaces the fretboard in sheet-only mode, where
           string/fret input makes no sense but pitch input does. */}
       {showFretboard && !showTab && (
-        <div className="sheetor-fretboard card">
-          <div className="fretboard-header">
-            <div className="fretboard-title eyebrow">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" width="15" height="15">
-                <rect x="3" y="4" width="18" height="16" rx="2" />
-                <path d="M9 4v9M15 4v9" />
-              </svg>
-              Keyboard
-            </div>
-            {grand && (
-              // Which hand the keys, the keyboard and MIDI write to: its keys are the solid ones.
-              <div className="control-group" role="group" aria-label="Hand">
-                {(['left', 'right'] as const).map(hand => (
-                  <button
-                    key={hand}
-                    className="btn" aria-pressed={activeHand === hand}
-                    onClick={() => switchHand(hand)}
-                  >
-                    {HAND_LABELS[hand]}
-                  </button>
-                ))}
-              </div>
-            )}
-            <div className="sheet-controls">
-              <div className="duration-selector">{durationButtons}{dotButton}</div>
-              <button
-                className="btn" aria-pressed={activeBeat?.isRest}
-                onClick={toggleActiveBeatRest}
-                title="Toggle rest on the selected beat"
-              >
-                Rest
-              </button>
-              <button
-                className="btn btn-danger"
-                onClick={() => updateActiveBeatNotes(() => [])}
-                title="Clear every note on the selected beat"
-              >
-                Clear
-              </button>
-            </div>
-            {hidePanelButton}
-          </div>
-
-          <div className="piano-keyboard">
-            <div className="piano-white-row">
-              {whiteKeyMidis.map((midi) => (
-                <button
-                  key={`wk-${midi}`}
-                  className={`piano-key white${keyClass(midi)}`}
-                  onClick={() => toggleNoteAtMidi(midi)}
-                  title={midiToNoteOctave(midi)}
-                >
-                  <span className="piano-key-label">{midiToNoteOctave(midi)}</span>
-                </button>
-              ))}
-            </div>
-            {blackKeys.map(({ midi, leftPct }) => (
-              <button
-                key={`bk-${midi}`}
-                className={`piano-key black${keyClass(midi)}`}
-                style={{
-                  left: `${leftPct}%`,
-                  width: `${blackKeyWidthPct}%`,
-                  marginLeft: `-${blackKeyWidthPct / 2}%`,
-                }}
-                onClick={() => toggleNoteAtMidi(midi)}
-                title={midiToNoteOctave(midi)}
-              />
-            ))}
-          </div>
-
-          <span className="fretboard-hint">
-            {grand
-              ? `Click a key to add or remove that pitch on the ${HAND_LABELS[activeHand].toLowerCase()}'s selected beat`
-              : 'Click a key to add or remove that pitch on the selected beat'}
-          </span>
-        </div>
+        <KeyboardPanel
+          grandStaff={grandStaff}
+          activeHand={activeHand}
+          switchHand={switchHand}
+          whiteKeyMidis={whiteKeyMidis}
+          blackKeys={blackKeys}
+          blackKeyWidthPct={blackKeyWidthPct}
+          activeMidis={activeMidis}
+          keyClass={keyClass}
+          toggleNoteAtMidi={toggleNoteAtMidi}
+          onHide={() => setShowFretboard(false)}
+        />
       )}
 
-      {/* Virtual Fretboard */}
       {showFretboard && showTab && (
-        <div className="sheetor-fretboard card">
-          <div className="fretboard-header">
-            <div className="fretboard-title eyebrow">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" width="15" height="15">
-                <path d="M12 2a3 3 0 0 0-3 3v2.5c0 .5-.2 1-.6 1.4L5 12.5V16l1.5.5L5 21h14l-1.5-4.5L19 16v-3.5l-3.4-3.6c-.4-.4-.6-.9-.6-1.4V5a3 3 0 0 0-3-3Z" />
-                <circle cx="8" cy="18" r="1" />
-              </svg>
-              Fretboard
-            </div>
-            <span className="fretboard-hint">
-              Click a fret to place a note on the selected beat
-            </span>
-            {hidePanelButton}
-          </div>
-
-          <div className="fretboard-neck-container" style={{ height: `${fretboardNeckHeight}px` }}>
-            {/* The Nut */}
-            <div className="fretboard-nut" />
-
-            {/* Fret marker dots on standard positions (3, 5, 7, 9, 12, 15) */}
-            {[3, 5, 7, 9, 12, 15].map((fret) => {
-              const leftPos = getFretLeftPercentage(fret - 1) + (getFretLeftPercentage(fret) - getFretLeftPercentage(fret - 1)) / 2;
-              
-              if (fret === 12) {
-                // Double dots
-                return (
-                  <React.Fragment key={`mark-${fret}`}>
-                    <div className="fretboard-marker double-1" style={{ left: `calc(30px + (100% - 30px) * ${leftPos / 100})` }} />
-                    <div className="fretboard-marker double-2" style={{ left: `calc(30px + (100% - 30px) * ${leftPos / 100})` }} />
-                  </React.Fragment>
-                );
-              }
-              // Single dot
-              return (
-                <div 
-                  key={`mark-${fret}`}
-                  className="fretboard-marker single" 
-                  style={{ left: `calc(30px + (100% - 30px) * ${leftPos / 100})` }} 
-                />
-              );
-            })}
-
-            {/* Nickel Frets vertical bars */}
-            {Array.from({ length: fretCount }).map((_, idx) => {
-              const fretNum = idx + 1;
-              const leftPos = getFretLeftPercentage(fretNum);
-              return (
-                <div 
-                  key={`fret-${fretNum}`}
-                  className="fretboard-fret-line"
-                  style={{ left: `calc(30px + (100% - 30px) * ${leftPos / 100})` }}
-                />
-              );
-            })}
-
-            {/* Horizontal Strings (rendered with scaling thicknesses) */}
-            {Array.from({ length: stringCount }).map((_, stringIdx) => {
-              const y = getFretboardStringY(stringIdx);
-              const thickness = 1.0 + ((stringCount - 1) - stringIdx) * (2.5 / Math.max(stringCount - 1, 1));
-              
-              return (
-                <div 
-                  key={`fb-str-${stringIdx}`}
-                  className="fretboard-string"
-                  style={{ 
-                    top: `${y}px`, 
-                    height: `${thickness}px`,
-                    opacity: 0.85
-                  }}
-                />
-              );
-            })}
-
-            {/* Clickable fretboard note triggers & glowing bubbles */}
-            {Array.from({ length: stringCount }).map((_, stringIdx) => {
-              const stringY = getFretboardStringY(stringIdx);
-
-              return Array.from({ length: fretCount + 1 }).map((_, fretNum) => {
-                const leftPct = getFretCellLeft(fretNum);
-                const widthPct = getFretCellWidth(fretNum);
-
-                // Note name on this coordinate
-                const noteMidi = tuning[stringIdx] + fretNum;
-                const noteName = midiToNoteName(noteMidi);
-
-                // Check if this fret is currently selected in the active beat
-                const isSelectedNote = activeBeat && activeBeat.notes.some(
-                  n => isFrettedNote(n) && n.stringIndex === stringIdx && n.fret === fretNum
-                );
-
-                // Check if playback cursor is currently playing this note
-                let isPlaybackNote = false;
-                const pb = playback.playbackBeat;
-                if (pb) {
-                  const pbBeatObj = measures[pb.measureIndex]?.beats[pb.beatIndex];
-                  isPlaybackNote = pbBeatObj ? pbBeatObj.notes.some(
-                    n => isFrettedNote(n) && n.stringIndex === stringIdx && n.fret === fretNum && !pbBeatObj.isRest
-                  ) : false;
-                }
-
-                return (
-                  <div
-                    key={`cell-${stringIdx}-${fretNum}`}
-                    className="fretboard-fret-cell"
-                    style={{
-                      top: `${stringY - 12}px`,
-                      left: fretNum === 0 ? '0px' : `calc(30px + (100% - 30px) * ${leftPct / 100})`,
-                      width: fretNum === 0 ? '30px' : `calc((100% - 30px) * ${widthPct / 100})`,
-                      height: '25px',
-                    }}
-                    onClick={() => {
-                      if (isSelectedNote) {
-                        // Toggle it off
-                        removeActiveNoteOnString(stringIdx);
-                        setShowNoteOptions(false);
-                      } else {
-                        // Select it
-                        setFretForActiveNote(stringIdx, fretNum);
-                        setShowNoteOptions(false);
-                      }
-                    }}
-                  >
-                    <div className={`fretboard-note-bubble ${isSelectedNote ? 'active' : ''} ${isPlaybackNote ? 'playback-active' : ''}`}>
-                      {fretNum === 0 ? `0 (${noteName})` : noteName}
-                    </div>
-                  </div>
-                );
-              });
-            })}
-          </div>
-
-          {/* Fret Numbers Header bottom row */}
-          <div className="fret-labels">
-            {Array.from({ length: fretCount + 1 }).map((_, fretNum) => {
-              const widthPct = getFretCellWidth(fretNum);
-              return (
-                <div 
-                  key={`fret-lbl-${fretNum}`}
-                  className="fret-label"
-                  style={{
-                    width: fretNum === 0 ? '30px' : `calc((100% - 30px) * ${widthPct / 100})`,
-                  }}
-                >
-                  {fretNum === 0 ? 'Nut' : fretNum}
-                </div>
-              );
-            })}
-          </div>
-        </div>
+        <FretboardPanel
+          tuning={tuning}
+          activeBeat={activeBeat}
+          playbackBeat={playbackBeatObj}
+          removeActiveNoteOnString={removeActiveNoteOnString}
+          setFretForActiveNote={setFretForActiveNote}
+          onHide={() => setShowFretboard(false)}
+        />
       )}
 
-      {showNoteOptions && (
-        <div className="note-options-overlay" onClick={() => setShowNoteOptions(false)}>
-        <div className="note-options-panel" onClick={(e) => e.stopPropagation()}>
-          <div className="note-options-summary">
-            <strong>
-              {!activeNote
-                ? `Beat ${activeBeatIndex + 1}`
-                : isFrettedNote(activeNote)
-                  ? `String ${activeNote.stringIndex + 1}, fret ${activeNote.fret}`
-                  : midiToNoteOctave(activeNote.midi)}
-            </strong>
-            <span>{activeBeat?.isRest ? 'Rest' : `${selectedNotes.length} note${selectedNotes.length === 1 ? '' : 's'}`}</span>
-          </div>
-          <div className="duration-selector">{durationButtons}{dotButton}</div>
-          {activeNote && (
-            <div className="technique-row">
-              <button
-                className={`technique-btn ${activeNote?.harmonic ? 'active' : ''}`}
-                onClick={() => toggleNoteTechnique('harmonic')}
-                title="Harmonic"
-              >&lt;/&gt;</button>
-              <button
-                className={`technique-btn ${activeNote?.palmMute ? 'active' : ''}`}
-                onClick={() => toggleNoteTechnique('palmMute')}
-                title="Palm mute"
-              >P.M.</button>
-              <button
-                className={`technique-btn ${activeNote?.letRing ? 'active' : ''}`}
-                onClick={() => toggleNoteTechnique('letRing')}
-                title="Let ring"
-              >Ring</button>
-              <button
-                className={`technique-btn ${activeNote?.vibrato ? 'active' : ''}`}
-                onClick={() => toggleNoteTechnique('vibrato')}
-                title="Vibrato"
-              >~~</button>
-              <button
-                className={`technique-btn ${activeNote?.ghostNote ? 'active' : ''}`}
-                onClick={() => toggleNoteTechnique('ghostNote')}
-                title="Ghost note"
-              >(x)</button>
-              <button
-                className={`technique-btn ${activeNote?.slur ? 'active' : ''}`}
-                onClick={() => toggleNoteTechnique('slur')}
-                title="Slur (hammer-on/pull-off)"
-              >⌢</button>
-              <button
-                className={`technique-btn ${activeNote?.legatoSlide ? 'active' : ''}`}
-                onClick={() => toggleNoteTechnique('legatoSlide')}
-                title="Legato slide"
-              >╱</button>
-              <button
-                className={`technique-btn ${activeNote?.bend ? 'active' : ''}`}
-                onClick={() => toggleNoteTechnique('bend')}
-                title="Bend"
-              >b</button>
-            </div>
-          )}
-          <button className="btn" onClick={toggleActiveBeatRest}>
-            {activeBeat?.isRest ? 'Make playable' : 'Make rest'}
-          </button>
-          <button className="btn btn-danger" onClick={() => {
-            removeCursorNote();
-            setShowNoteOptions(false);
-          }}>
-            Remove note
-          </button>
-          <button className="btn" onClick={() => setShowNoteOptions(false)}>Close</button>
-        </div>
-        </div>
-      )}
+      <CommandBar
+        openMenu={openMenu}
+        toggleMenu={toggleMenu}
+        readOnly={readOnly}
+        status={status}
+        transport={{
+          isPlaying: playback.isPlaying,
+          stop: playback.stop,
+          startPlaybackFromCursor,
+          activeMeasureIndex,
+          activeMeasureBpm,
+          transportBpmText,
+          setMeasureBpm,
+          setBpmDraft,
+          commitBpmDraft,
+        }}
+        playback={{ playbackSpeed, setPlaybackSpeed, volume, setVolume, loopPlayback, setLoopPlayback }}
+        song={{ startNewSong: () => void startNewSong(), handleExport, handleImport, clearSong }}
+        measure={{
+          activeMeasureIndex,
+          activeMeasureTimeSignature,
+          setActiveMeasureTimeSignature,
+          showNotation,
+          staves,
+          grandStaff,
+          setClef,
+          repeatStart: !!conductorMeasures[activeMeasureIndex]?.repeatStart,
+          toggleRepeatStart,
+          activeRepeat,
+          setRepeatEnd,
+          addMeasure,
+          insertMeasureAfterActive,
+          duplicateActiveMeasure,
+          deleteActiveMeasure,
+        }}
+        edit={{
+          undo: channel.undo,
+          redo: channel.redo,
+          canUndo: live.canUndo,
+          canRedo: live.canRedo,
+          copySelection,
+          cutSelection,
+          pasteClipboard,
+          canPaste: !!clip,
+          activeBeatIndex,
+          insertBeatAfterActive,
+          deleteActiveBeat,
+        }}
+        view={{
+          partName: part.name,
+          staffModes: STAFF_DISPLAYS[trackKind(activeTrack.instrument)],
+          display: activeTrack.display,
+          grandStaff,
+          canGrandStaff: !isFrettedTrack,
+          pickStaffMode: (mode) => (grand ? leaveGrandStaff(activeTrack.instrument, 'view') : updateActiveTrack({ display: mode })),
+          addGrandStaff: () => editSong(prev => addBassStaff(prev, activeTrackIndex)),
+          leftHandWarning: leftHandWarning('view'),
+          panelName: showTab ? 'Fretboard' : 'Keyboard',
+          showFretboard,
+          toggleFretboard: () => setShowFretboard(prev => !prev),
+          isViewer: role === 'viewer',
+          viewMode,
+          toggleViewMode,
+          showShortcuts: () => {
+            setOpenMenu(null);
+            setShowShortcuts(true);
+          },
+        }}
+      />
 
-      <div className="bottom-command-bar">
-        {/* Transport: everything that affects playback */}
-        <div className="bottom-cluster">
-          {playback.isPlaying ? (
-            <button className="btn btn-danger" onClick={playback.stop}>
-              <svg viewBox="0 0 24 24" fill="currentColor">
-                <rect x="6" y="6" width="12" height="12" rx="1" />
-              </svg>
-              Stop
-            </button>
-          ) : (
-            <button className="btn btn-primary" onClick={startPlaybackFromCursor}>
-              <svg viewBox="0 0 24 24" fill="currentColor">
-                <path d="M8 5v14l11-7z" />
-              </svg>
-              Play
-            </button>
-          )}
-          <div className="transport-field">
-            <label htmlFor="transport-bpm">BPM</label>
-            <div className="stepper">
-              <button
-                type="button"
-                className="stepper-btn"
-                onClick={() => setMeasureBpm(activeMeasureIndex, activeMeasureBpm - 1)}
-                disabled={activeMeasureBpm <= MIN_BPM}
-                aria-label="Slower by one"
-              >
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
-                  <path d="M5 12h14" />
-                </svg>
-              </button>
-              <input
-                id="transport-bpm"
-                type="text"
-                inputMode="numeric"
-                className="control-input control-input-num stepper-input"
-                value={transportBpmText}
-                onChange={(e) => setBpmDraft(e.target.value)}
-                onFocus={(e) => e.target.select()}
-                onBlur={() => commitBpmDraft(activeMeasureIndex)}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter') e.currentTarget.blur();
-                  if (e.key === 'Escape') { setBpmDraft(null); e.currentTarget.blur(); }
-                }}
-              />
-              <button
-                type="button"
-                className="stepper-btn"
-                onClick={() => setMeasureBpm(activeMeasureIndex, activeMeasureBpm + 1)}
-                disabled={activeMeasureBpm >= MAX_BPM}
-                aria-label="Faster by one"
-              >
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
-                  <path d="M12 5v14M5 12h14" />
-                </svg>
-              </button>
-            </div>
-          </div>
-          <MenuButton
-            label="Playback"
-            iconOnly
-            icon={(
-              <>
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                  <circle cx="12" cy="12" r="10" />
-                  <polyline points="12 6 12 12 16 14" />
-                </svg>
-                <span aria-hidden="true">{playbackSpeed}x</span>
-              </>
-            )}
-            open={openBottomMenu === 'output'}
-            onToggle={() => setOpenBottomMenu(prev => prev === 'output' ? null : 'output')}
-            placement="up"
-            align="start"
-          >
-                <span className="eyebrow">Speed</span>
-                <div className="speed-choices">
-                  {[0.5, 0.75, 1, 1.25, 1.5, 2].map(speed => (
-                    <button
-                      key={speed}
-                      className="btn" aria-pressed={playbackSpeed === speed}
-                      onClick={() => setPlaybackSpeed(speed)}
-                    >{speed}x</button>
-                  ))}
-                </div>
-                <div className="popover-divider" />
-                <label className="compact-field wide-field">
-                  <span>Master</span>
-                  <input
-                    type="range"
-                    min="0"
-                    max="1"
-                    step="0.05"
-                    value={volume}
-                    onChange={(e) => setVolume(parseFloat(e.target.value))}
-                  />
-                </label>
-                <div className="popover-divider" />
-                <button
-                  className="btn" aria-pressed={loopPlayback}
-                  onClick={() => setLoopPlayback(prev => !prev)}
-                >
-                  {loopPlayback ? 'Loop on' : 'Loop off'}
-                </button>
-          </MenuButton>
-        </div>
+      {showShortcuts && <ShortcutsDialog onClose={() => setShowShortcuts(false)} />}
 
-        <div className="cmd-spacer" />
-
-        <div className="bottom-cluster">
-          <MenuButton
-            label="Song"
-            icon={(
-              <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
-                <path d="M9 3H5a2 2 0 0 0-2 2v4a2 2 0 0 0 2 2h4a2 2 0 0 0 2-2V5a2 2 0 0 0-2-2Z" />
-                <path d="M19 3h-4a2 2 0 0 0-2 2v4a2 2 0 0 0 2 2h4a2 2 0 0 0 2-2V5a2 2 0 0 0-2-2Z" />
-                <path d="M9 13H5a2 2 0 0 0-2 2v4a2 2 0 0 0 2 2h4a2 2 0 0 0 2-2v-4a2 2 0 0 0-2-2Z" />
-                <path d="M19 13h-4a2 2 0 0 0-2 2v4a2 2 0 0 0 2 2h4a2 2 0 0 0 2-2v-4a2 2 0 0 0-2-2Z" />
-              </svg>
-            )}
-            open={openBottomMenu === 'song'}
-            onToggle={() => setOpenBottomMenu(prev => prev === 'song' ? null : 'song')}
-            placement="up"
-          >
-              {!readOnly && (
-              <>
-              <span className="eyebrow">Measure {activeMeasureIndex + 1}</span>
-              <div className="control-group">
-                <span className="eyebrow">Sig</span>
-                <select
-                  className="control-select"
-                  value={activeMeasureTimeSignature.numerator}
-                  onChange={(e) => {
-                    const num = parseInt(e.target.value) || 4;
-                    setActiveMeasureTimeSignature('numerator', num);
-                  }}
-                >
-                  {[2, 3, 4, 5, 6, 7, 8, 9, 12].map(n => (
-                    <option key={n} value={n}>{n}</option>
-                  ))}
-                </select>
-                <span>/</span>
-                <select
-                  className="control-select"
-                  value={activeMeasureTimeSignature.denominator}
-                  onChange={(e) => {
-                    const den = parseInt(e.target.value) || 4;
-                    setActiveMeasureTimeSignature('denominator', den);
-                  }}
-                >
-                  {[2, 4, 8, 16].map(d => (
-                    <option key={d} value={d}>{d}</option>
-                  ))}
-                </select>
-              </div>
-              {/* Each staff's clef from this bar on: a grand staff's hands are set apart. */}
-              {showNotation && staves.map((staff, i) => (
-                <div className="control-group" key={`clef-${staff.top}`}>
-                  <span className="eyebrow">{grand ? `${i === 0 ? 'R.H.' : 'L.H.'} clef` : 'Clef'}</span>
-                  {(['treble', 'bass'] as const).map(clef => (
-                    <button
-                      key={clef}
-                      className="btn" aria-pressed={staff.clefs[activeMeasureIndex] === clef}
-                      onClick={() => setClef(staff, clef)}
-                    >
-                      {CLEF_LABELS[clef]}
-                    </button>
-                  ))}
-                </div>
-              ))}
-              <div className="control-group">
-                <span className="eyebrow">Repeat</span>
-                <button
-                  className="btn" aria-pressed={conductorMeasures[activeMeasureIndex]?.repeatStart}
-                  onClick={toggleRepeatStart}
-                  title="Start a repeated section at this bar"
-                >
-                  Start
-                </button>
-                <button
-                  className="btn" aria-pressed={activeRepeat !== undefined}
-                  onClick={() => setRepeatEnd(activeRepeat !== undefined ? null : MIN_REPEAT)}
-                  title="End a repeated section at this bar"
-                >
-                  End
-                </button>
-              </div>
-              {activeRepeat !== undefined && (
-                <div className="control-group">
-                  <span className="eyebrow">Plays</span>
-                  <div className="stepper">
-                    <button
-                      type="button"
-                      className="stepper-btn"
-                      onClick={() => setRepeatEnd(activeRepeat - 1)}
-                      disabled={activeRepeat <= MIN_REPEAT}
-                      aria-label="Play the section one time fewer"
-                    >
-                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
-                        <path d="M5 12h14" />
-                      </svg>
-                    </button>
-                    <output className="stepper-value">×{activeRepeat}</output>
-                    <button
-                      type="button"
-                      className="stepper-btn"
-                      onClick={() => setRepeatEnd(activeRepeat + 1)}
-                      disabled={activeRepeat >= MAX_REPEAT}
-                      aria-label="Play the section one time more"
-                    >
-                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
-                        <path d="M12 5v14M5 12h14" />
-                      </svg>
-                    </button>
-                  </div>
-                </div>
-              )}
-              <div className="popover-divider" />
-              </>
-              )}
-              <span className="eyebrow">Library</span>
-              <button className="btn btn-primary" onClick={() => void startNewSong()}>New song</button>
-              <Link className="btn" to="/library" onClick={() => setOpenBottomMenu(null)}>
-                Open library
-              </Link>
-              <div className="popover-divider" />
-              <span className="eyebrow">Song file</span>
-              <button className="btn" onClick={handleExport}>Export JSON</button>
-              {!readOnly && <button className="btn" onClick={handleImport}>Import JSON</button>}
-              {!readOnly && <div className="popover-divider" />}
-              {!readOnly && <button className="btn btn-danger" onClick={clearSong}>Clear song</button>}
-          </MenuButton>
-
-          {!readOnly && (
-          <MenuButton
-            label="Edit"
-            icon={(
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                <path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z" />
-              </svg>
-            )}
-            open={openBottomMenu === 'edit'}
-            onToggle={() => setOpenBottomMenu(prev => prev === 'edit' ? null : 'edit')}
-            placement="up"
-          >
-              <span className="eyebrow">History</span>
-              <div className="control-group">
-                <button className="btn" onClick={channel.undo} disabled={!live.canUndo}>Undo</button>
-                <button className="btn" onClick={channel.redo} disabled={!live.canRedo}>Redo</button>
-              </div>
-              <div className="popover-divider" />
-              <span className="eyebrow">Clipboard</span>
-              <div className="control-group">
-                <button className="btn" onClick={copySelection}>Copy</button>
-                <button className="btn" onClick={cutSelection}>Cut</button>
-                <button className="btn" onClick={pasteClipboard} disabled={!clip}>Paste</button>
-              </div>
-              <div className="popover-divider" />
-              <span className="eyebrow">Beat {activeBeatIndex + 1}</span>
-              <button className="btn btn-primary" onClick={insertBeatAfterActive}>Insert beat</button>
-              <button className="btn btn-danger" onClick={deleteActiveBeat}>Delete beat</button>
-              <div className="popover-divider" />
-              <span className="eyebrow">Measure {activeMeasureIndex + 1}</span>
-              <button className="btn" onClick={addMeasure}>Add measure</button>
-              <button className="btn" onClick={insertMeasureAfterActive}>Insert measure</button>
-              <button className="btn" onClick={duplicateActiveMeasure}>Duplicate measure</button>
-              <button className="btn btn-danger" onClick={deleteActiveMeasure}>Delete measure</button>
-              <div className="popover-divider" />
-              <span className="eyebrow">MIDI keyboard</span>
-              <button
-                className="btn" aria-pressed={midiInput}
-                onClick={() => setMidiInput(prev => !prev)}
-                disabled={!midiSupported()}
-              >
-                {midiInput ? 'MIDI input on' : 'MIDI input off'}
-              </button>
-              <span className="popover-hint">{midiStatus}</span>
-          </MenuButton>
-          )}
-
-          <div className="toolbar-divider" />
-
-          <MenuButton
-            label="View"
-            icon={(
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                <path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z" />
-                <circle cx="12" cy="12" r="3" />
-              </svg>
-            )}
-            open={openBottomMenu === 'view'}
-            onToggle={() => setOpenBottomMenu(prev => prev === 'view' ? null : 'view')}
-            placement="up"
-          >
-                <span className="eyebrow">Staff — {part.name}</span>
-                <div className="control-group">
-                  {STAFF_DISPLAYS[trackKind(activeTrack.instrument)].map(mode => (
-                    <button
-                      key={mode}
-                      className="btn" aria-pressed={activeTrack.display === mode && !grand}
-                      onClick={() => (grand ? leaveGrandStaff(activeTrack.instrument, 'view') : updateActiveTrack({ display: mode }))}
-                    >
-                      {STAFF_LABELS[mode]}
-                    </button>
-                  ))}
-                  {!isFrettedTrack && (
-                    <button
-                      className="btn" aria-pressed={grand !== null}
-                      onClick={() => editSong(prev => addBassStaff(prev, activeTrackIndex))}
-                      title="Treble and bass clef, one track per hand: the notes below middle C move to a new left-hand track with its own rhythm"
-                    >
-                      Grand staff
-                    </button>
-                  )}
-                </div>
-                {leftHandWarning('view')}
-                <div className="popover-divider" />
-                <button
-                  className="btn" aria-pressed={showFretboard}
-                  onClick={() => setShowFretboard(prev => !prev)}
-                >
-                  {showTab ? 'Fretboard' : 'Keyboard'}
-                </button>
-                {role === 'viewer' ? (
-                  <button className="btn" aria-pressed disabled>
-                    View only
-                  </button>
-                ) : (
-                  <button
-                    className="btn" aria-pressed={viewMode}
-                    onClick={() => {
-                      setViewMode(prev => {
-                        if (!prev) {
-                          setShowNoteOptions(false);
-                          setOpenBottomMenu(null);
-                        }
-                        return !prev;
-                      });
-                    }}
-                  >
-                    {viewMode ? 'Read-only on' : 'Read-only off'}
-                  </button>
-                )}
-                <div className="popover-divider" />
-                <button className="btn" onClick={() => {
-                  setOpenBottomMenu(null);
-                  setShowShortcuts(true);
-                }}>
-                  Keyboard shortcuts
-                </button>
-          </MenuButton>
-        </div>
-      </div>
-
-      {showShortcuts && (
-        <div className="shortcut-overlay" onClick={() => setShowShortcuts(false)}>
-          <div className="shortcut-panel" onClick={(e) => e.stopPropagation()}>
-            <div className="shortcut-panel-header">
-              <strong>Keyboard</strong>
-              <button className="btn" onClick={() => setShowShortcuts(false)}>Close</button>
-            </div>
-            <div className="shortcut-button-grid">
-              <span><kbd>←</kbd><kbd>→</kbd> Beat</span>
-              <span><kbd>↑</kbd><kbd>↓</kbd> String</span>
-              <span><kbd>Shift</kbd><kbd>↑</kbd><kbd>↓</kbd> Pitch ±semitone</span>
-              <span><kbd>Shift</kbd><kbd>Ctrl</kbd><kbd>↑</kbd><kbd>↓</kbd> Pitch ±octave</span>
-              <span><kbd>0</kbd>-<kbd>9</kbd> Fret</span>
-              <span><kbd>Delete</kbd> Remove</span>
-              <span><kbd>Ctrl</kbd><kbd>Delete</kbd> Delete bar</span>
-              <span><kbd>Space</kbd> Play</span>
-              <span><kbd>R</kbd> Rest</span>
-              <span><kbd>+</kbd><kbd>-</kbd> Duration</span>
-              <span><kbd>Shift</kbd><kbd>←</kbd><kbd>→</kbd> Select beats</span>
-              <span><kbd>Ctrl</kbd><kbd>C</kbd><kbd>X</kbd><kbd>V</kbd> Copy, cut, paste</span>
-              <span><kbd>Ctrl</kbd><kbd>Z</kbd> Undo</span>
-              <span><kbd>Ctrl</kbd><kbd>Shift</kbd><kbd>Z</kbd> Redo</span>
-              <span className="shortcut-divider">Note techniques</span>
-              <span><kbd>H</kbd> Slur</span>
-              <span><kbd>S</kbd> Legato slide</span>
-              <span><kbd>V</kbd> Vibrato</span>
-              <span><kbd>B</kbd> Bend</span>
-              <span><kbd>M</kbd> Palm mute</span>
-              <span><kbd>L</kbd> Let ring</span>
-              <span><kbd>O</kbd> Harmonic</span>
-              <span><kbd>G</kbd> Ghost note</span>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Modal for Import/Export */}
       {modalOpen && (
-        <div className="sheetor-modal-backdrop" onClick={() => setModalOpen(null)}>
-          <div className="sheetor-modal" onClick={(e) => e.stopPropagation()}>
-            <h3 className="sheetor-modal-header">
-              <span style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" width="20" height="20">
-                  {modalOpen === 'export' ? (
-                    <>
-                      <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
-                      <polyline points="17 8 12 3 7 8" />
-                      <line x1="12" y1="3" x2="12" y2="15" />
-                    </>
-                  ) : (
-                    <>
-                      <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
-                      <polyline points="7 10 12 15 17 10" />
-                      <line x1="12" y1="15" x2="12" y2="3" />
-                    </>
-                  )}
-                </svg>
-                {modalOpen === 'export' ? 'Export song' : 'Import song'}
-              </span>
-              <button className="sheetor-modal-close" onClick={() => setModalOpen(null)}>&times;</button>
-            </h3>
-            
-            <p className="sheetor-modal-desc">
-              {modalOpen === 'export'
-                ? 'Copy this JSON to share your song, or download it as a file.'
-                : 'Paste song JSON here, then import it. This replaces the song you have open.'}
-            </p>
-
-            <textarea
-              className="control-input sheetor-modal-textarea"
-              value={jsonText}
-              onChange={(e) => setJsonText(e.target.value)}
-              readOnly={modalOpen === 'export'}
-              placeholder='{ "title": "My Song", ... }'
-            />
-
-            {modalStatus && (
-              <div className="sheetor-modal-status">{modalStatus}</div>
-            )}
-
-            <div className="sheetor-modal-footer">
-              {modalOpen === 'export' ? (
-                <>
-                  <button className="btn" onClick={copyToClipboard}>
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" width="16" height="16">
-                      <rect x="9" y="9" width="13" height="13" rx="2" />
-                      <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
-                    </svg>
-                    Copy JSON
-                  </button>
-                  <button className="btn btn-primary" onClick={downloadJsonFile}>
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" width="16" height="16">
-                      <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
-                      <polyline points="7 10 12 15 17 10" />
-                      <line x1="12" y1="15" x2="12" y2="3" />
-                    </svg>
-                    Download file
-                  </button>
-                </>
-              ) : (
-                <button className="btn btn-primary" onClick={executeImport}>
-                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" width="16" height="16">
-                    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
-                    <polyline points="17 8 12 3 7 8" />
-                    <line x1="12" y1="3" x2="12" y2="15" />
-                  </svg>
-                  Import song
-                </button>
-              )}
-              <button className="btn" onClick={() => setModalOpen(null)}>Close</button>
-            </div>
-          </div>
-        </div>
+        <JsonDialog
+          modalOpen={modalOpen}
+          jsonText={jsonText}
+          setJsonText={setJsonText}
+          modalStatus={modalStatus}
+          copyToClipboard={copyToClipboard}
+          downloadJsonFile={downloadJsonFile}
+          executeImport={executeImport}
+          onClose={() => setModalOpen(null)}
+        />
       )}
     </div>
   );

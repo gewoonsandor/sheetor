@@ -138,3 +138,10 @@ export interface MLayout {
   width: number;
   padding: number;
 }
+
+/** One drawn staff: how far below the row's origin it sits, the track whose bars it carries, and its clef at every bar. */
+export interface Staff {
+  top: number;
+  track: number;
+  clefs: Clef[];
+}
