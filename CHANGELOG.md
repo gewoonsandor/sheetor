@@ -16,6 +16,8 @@ still change the song format or the API; from `1.0.0` on, only a major release w
 
 - Secondary text has more contrast in both themes, and every control shows a ring when it has
   keyboard focus.
+- Menus and dialogs work from the keyboard: opening one moves focus into it, and Escape closes it
+  and returns focus to where it was.
 
 ## [1.0.0] - 2026-10-01
 

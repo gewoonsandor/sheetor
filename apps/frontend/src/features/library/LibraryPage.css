@@ -298,6 +298,10 @@
   margin-bottom: var(--sp-4);
 }
 
+.share-form > .control-input {
+  flex: 1;
+}
+
 .share-list {
   margin: 0;
   padding: 0;

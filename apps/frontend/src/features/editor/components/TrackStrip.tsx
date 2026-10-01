@@ -1,5 +1,6 @@
 import React from 'react';
 
+import { MenuButton } from '../../../app/MenuButton';
 import type { TabTrack } from './types';
 import { INSTRUMENTS } from './audioEngine';
 import { grandStaffOf } from './songUtils';
@@ -11,7 +12,7 @@ interface TrackStripProps {
   onToggleMute: (index: number) => void;
   onToggleSolo: (index: number) => void;
   onAddTrack: () => void;
-  /** Opens the per-track settings popover for the active track. */
+  /** Opens or closes the per-track settings popover for the active track. */
   onOpenSettings: () => void;
   settingsOpen: boolean;
   children?: React.ReactNode;
@@ -66,14 +67,14 @@ export const TrackStrip: React.FC<TrackStripProps> = ({
               <div className="track-chip-toggles">
                 <button
                   type="button"
-                  className={`track-toggle ${track.muted ? 'is-muted' : ''}`}
+                  className={`btn btn-sm btn-icon track-toggle ${track.muted ? 'is-muted' : ''}`}
                   onClick={() => onToggleMute(index)}
                   title={track.muted ? `Unmute ${track.name}` : `Mute ${track.name}`}
                   aria-pressed={!!track.muted}
                 >M</button>
                 <button
                   type="button"
-                  className={`track-toggle ${track.soloed ? 'is-soloed' : ''}`}
+                  className={`btn btn-sm btn-icon track-toggle ${track.soloed ? 'is-soloed' : ''}`}
                   onClick={() => onToggleSolo(index)}
                   title={track.soloed ? `Unsolo ${track.name}` : `Solo ${track.name}`}
                   aria-pressed={!!track.soloed}
@@ -83,7 +84,7 @@ export const TrackStrip: React.FC<TrackStripProps> = ({
           );
         })}
 
-        <button type="button" className="track-add" onClick={onAddTrack} title="Add a track">
+        <button type="button" className="btn btn-ghost track-add" onClick={onAddTrack} title="Add a track">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
             <line x1="12" y1="5" x2="12" y2="19" />
             <line x1="5" y1="12" x2="19" y2="12" />
@@ -92,22 +93,20 @@ export const TrackStrip: React.FC<TrackStripProps> = ({
         </button>
       </div>
 
-      <div className="track-settings-anchor">
-        <button
-          type="button"
-          className="btn"
-          aria-expanded={settingsOpen}
-          onClick={onOpenSettings}
-          title="Track settings"
-        >
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <MenuButton
+        label="Track settings"
+        icon={(
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
             <circle cx="12" cy="12" r="3" />
             <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.6a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1Z" />
           </svg>
-          Settings
-        </button>
+        )}
+        open={settingsOpen}
+        onToggle={onOpenSettings}
+        placement="down"
+      >
         {children}
-      </div>
+      </MenuButton>
     </div>
   );
 };

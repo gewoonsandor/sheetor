@@ -272,3 +272,184 @@ kbd {
   color: var(--text-dim);
   line-height: var(--lh);
 }
+
+/* ------------------------------------------------------------ Menus */
+
+.menu {
+  position: relative;
+}
+
+.popover {
+  position: absolute;
+  z-index: var(--z-popover);
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-hair);
+  min-width: 220px;
+  /* Never grow past the viewport — the tuning list used to run off-screen. */
+  max-height: min(70vh, 560px);
+  overflow-y: auto;
+  padding: var(--sp-1);
+  background: var(--surface-2);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--r-md);
+  box-shadow: inset 0 1px 0 var(--edge-hi), var(--shadow-2);
+  animation: popoverIn var(--t-fast) var(--ease);
+}
+
+.popover-up {
+  bottom: calc(100% + var(--sp-2));
+  transform-origin: bottom;
+  --pop-from: 4px;
+}
+
+.popover-down {
+  top: calc(100% + var(--sp-2));
+  transform-origin: top;
+  --pop-from: -4px;
+}
+
+.popover-end {
+  right: 0;
+}
+
+.popover-start {
+  left: 0;
+}
+
+/* A popover is a menu, not a toolbar: its direct commands are quiet rows that
+   only light up under the pointer. Nested groups (speed, staff mode) keep the
+   button silhouette because they are segmented choices. */
+.popover > .btn {
+  justify-content: flex-start;
+  height: var(--ctl-h-sm);
+  padding: 0 var(--sp-2);
+  background: transparent;
+  border-color: transparent;
+  border-radius: var(--r-sm);
+  box-shadow: none;
+  color: var(--text);
+  font-weight: 500;
+  text-decoration: none;
+  transform: none;
+}
+
+.popover > .btn:hover:not(:disabled) {
+  background: var(--surface-3);
+  border-color: transparent;
+}
+
+.popover > .btn-primary {
+  color: var(--accent-text);
+  font-weight: 600;
+}
+
+.popover > .btn-danger {
+  color: var(--danger);
+}
+
+.popover > .btn-danger:hover:not(:disabled) {
+  background: var(--danger-soft);
+  color: var(--danger-hover-text);
+}
+
+.popover > .btn[aria-pressed='true'],
+.popover > .btn[aria-pressed='true']:hover:not(:disabled) {
+  background: var(--accent-soft);
+  border-color: transparent;
+  box-shadow: none;
+  color: var(--accent-text);
+}
+
+/* Headings and fields line up with the row labels. */
+.popover > :not(.btn, .popover-divider) {
+  padding-inline: var(--sp-2);
+}
+
+.popover > .eyebrow {
+  padding-block: var(--sp-2) var(--sp-1);
+}
+
+/* Wraps to the popover's width instead of widening it. */
+.popover > .popover-hint {
+  width: 0;
+  min-width: 100%;
+  padding-block: var(--sp-1);
+  color: var(--text-dim);
+  font-size: var(--fs-xs);
+  line-height: var(--lh);
+}
+
+.popover-divider {
+  height: 1px;
+  background: var(--border);
+  margin: var(--sp-1) calc(-1 * var(--sp-1));
+}
+
+/* Invisible catcher so a click anywhere else closes the open menu. */
+.popover-scrim {
+  position: fixed;
+  inset: 0;
+  z-index: calc(var(--z-popover) - 1);
+}
+
+/* `translate`/`scale`, not `transform`, so an element that positions itself
+   with a transform keeps it while animating. */
+@keyframes popoverIn {
+  from {
+    opacity: 0;
+    translate: 0 var(--pop-from, 4px);
+    scale: 0.98;
+  }
+}
+
+/* ------------------------------------------------------------ Dialogs */
+
+.dialog {
+  width: 100%;
+  max-width: min(680px, calc(100vw - 2 * var(--sp-4)));
+  padding: 0;
+  border: none;
+  background: none;
+  color: var(--text);
+  overflow: visible;
+}
+
+.dialog::backdrop {
+  background: var(--scrim);
+  backdrop-filter: blur(6px) saturate(1.2);
+}
+
+.dialog-panel {
+  padding: var(--sp-4) var(--sp-5) var(--sp-5);
+  border-color: var(--border-strong);
+  box-shadow: inset 0 1px 0 var(--edge-hi), var(--shadow-3);
+  animation: popoverIn var(--t-slow) var(--ease);
+}
+
+.dialog-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--sp-3);
+}
+
+.dialog-title {
+  margin: 0;
+  font-size: var(--fs-lg);
+  font-weight: 700;
+}
+
+.dialog-desc {
+  margin: var(--sp-2) 0 var(--sp-4);
+  font-size: var(--fs-sm);
+  line-height: var(--lh);
+  color: var(--text-dim);
+}
+
+.dialog-footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--sp-2);
+  margin-top: var(--sp-4);
+}

@@ -60,6 +60,7 @@ import { getClip, setClip, subscribeClip } from '../clipboard';
 import { midiSupported, useMidiInput } from '../midiInput';
 import { INSTRUMENTS } from './audioEngine';
 import { TrackStrip } from './TrackStrip';
+import { MenuButton } from '../../../app/MenuButton';
 import { parseSong } from './songSchema';
 import { canEdit } from '../../library/libraryStore';
 import type { LibraryEntry } from '../../library/libraryStore';
@@ -1911,9 +1912,7 @@ export const TabSheetEditor: React.FC<TabSheetEditorProps> = ({ meta, channel })
         onOpenSettings={() => setOpenBottomMenu(prev => (prev === 'track' ? null : 'track'))}
         settingsOpen={openBottomMenu === 'track'}
       >
-        {openBottomMenu === 'track' && (
-          <div className="bottom-popover track-popover">
-            <span className="eyebrow">Track settings</span>
+        <>
             <label className="compact-field wide-field">
               <span>Name</span>
               <input
@@ -2036,8 +2035,7 @@ export const TabSheetEditor: React.FC<TabSheetEditorProps> = ({ meta, channel })
             >
               Delete track
             </button>
-          </div>
-        )}
+        </>
       </TrackStrip>
 
       {/* Editor Canvas */}
@@ -3402,10 +3400,6 @@ export const TabSheetEditor: React.FC<TabSheetEditorProps> = ({ meta, channel })
         </div>
       )}
 
-      {openBottomMenu && (
-        <div className="popover-scrim" onClick={() => setOpenBottomMenu(null)} />
-      )}
-
       <div className="bottom-command-bar">
         {/* Transport: everything that affects playback */}
         <div className="bottom-cluster">
@@ -3465,21 +3459,23 @@ export const TabSheetEditor: React.FC<TabSheetEditorProps> = ({ meta, channel })
               </button>
             </div>
           </div>
-          <div className="bottom-menu">
-            <button
-              className="btn"
-              aria-expanded={openBottomMenu === 'output'}
-              onClick={() => setOpenBottomMenu(prev => prev === 'output' ? null : 'output')}
-              title="Speed, master volume and looping"
-            >
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <circle cx="12" cy="12" r="10" />
-                <polyline points="12 6 12 12 16 14" />
-              </svg>
-              {playbackSpeed}x
-            </button>
-            {openBottomMenu === 'output' && (
-              <div className="bottom-popover" style={{ left: 0, right: 'auto', minWidth: 200 }}>
+          <MenuButton
+            label="Playback"
+            iconOnly
+            icon={(
+              <>
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                  <circle cx="12" cy="12" r="10" />
+                  <polyline points="12 6 12 12 16 14" />
+                </svg>
+                <span aria-hidden="true">{playbackSpeed}x</span>
+              </>
+            )}
+            open={openBottomMenu === 'output'}
+            onToggle={() => setOpenBottomMenu(prev => prev === 'output' ? null : 'output')}
+            placement="up"
+            align="start"
+          >
                 <span className="eyebrow">Speed</span>
                 <div className="speed-choices">
                   {[0.5, 0.75, 1, 1.25, 1.5, 2].map(speed => (
@@ -3509,30 +3505,26 @@ export const TabSheetEditor: React.FC<TabSheetEditorProps> = ({ meta, channel })
                 >
                   {loopPlayback ? 'Loop on' : 'Loop off'}
                 </button>
-              </div>
-            )}
-          </div>
+          </MenuButton>
         </div>
 
         <div className="cmd-spacer" />
 
         <div className="bottom-cluster">
-          <div className="bottom-menu">
-            <button
-              className="btn"
-              aria-expanded={openBottomMenu === 'song'}
-              onClick={() => setOpenBottomMenu(prev => prev === 'song' ? null : 'song')}
-            >
-              <svg viewBox="0 0 24 24" fill="currentColor">
+          <MenuButton
+            label="Song"
+            icon={(
+              <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
                 <path d="M9 3H5a2 2 0 0 0-2 2v4a2 2 0 0 0 2 2h4a2 2 0 0 0 2-2V5a2 2 0 0 0-2-2Z" />
                 <path d="M19 3h-4a2 2 0 0 0-2 2v4a2 2 0 0 0 2 2h4a2 2 0 0 0 2-2V5a2 2 0 0 0-2-2Z" />
                 <path d="M9 13H5a2 2 0 0 0-2 2v4a2 2 0 0 0 2 2h4a2 2 0 0 0 2-2v-4a2 2 0 0 0-2-2Z" />
                 <path d="M19 13h-4a2 2 0 0 0-2 2v4a2 2 0 0 0 2 2h4a2 2 0 0 0 2-2v-4a2 2 0 0 0-2-2Z" />
               </svg>
-              Song
-            </button>
-            {openBottomMenu === 'song' && (
-              <div className="bottom-popover">
+            )}
+            open={openBottomMenu === 'song'}
+            onToggle={() => setOpenBottomMenu(prev => prev === 'song' ? null : 'song')}
+            placement="up"
+          >
               {!readOnly && (
               <>
               <span className="eyebrow">Measure {activeMeasureIndex + 1}</span>
@@ -3640,24 +3632,20 @@ export const TabSheetEditor: React.FC<TabSheetEditorProps> = ({ meta, channel })
               {!readOnly && <button className="btn" onClick={handleImport}>Import JSON</button>}
               {!readOnly && <div className="popover-divider" />}
               {!readOnly && <button className="btn btn-danger" onClick={clearSong}>Clear song</button>}
-            </div>
-            )}
-          </div>
+          </MenuButton>
 
           {!readOnly && (
-          <div className="bottom-menu">
-            <button
-              className="btn"
-              aria-expanded={openBottomMenu === 'edit'}
-              onClick={() => setOpenBottomMenu(prev => prev === 'edit' ? null : 'edit')}
-            >
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <MenuButton
+            label="Edit"
+            icon={(
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
                 <path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z" />
               </svg>
-              Edit
-            </button>
-            {openBottomMenu === 'edit' && (
-              <div className="bottom-popover">
+            )}
+            open={openBottomMenu === 'edit'}
+            onToggle={() => setOpenBottomMenu(prev => prev === 'edit' ? null : 'edit')}
+            placement="up"
+          >
               <span className="eyebrow">History</span>
               <div className="control-group">
                 <button className="btn" onClick={channel.undo} disabled={!live.canUndo}>Undo</button>
@@ -3690,28 +3678,23 @@ export const TabSheetEditor: React.FC<TabSheetEditorProps> = ({ meta, channel })
                 {midiInput ? 'MIDI input on' : 'MIDI input off'}
               </button>
               <span className="popover-hint">{midiStatus}</span>
-            </div>
-            )}
-          </div>
+          </MenuButton>
           )}
 
           <div className="toolbar-divider" />
 
-          <div className="bottom-menu">
-            <button
-              className="btn"
-              aria-expanded={openBottomMenu === 'view'}
-              onClick={() => setOpenBottomMenu(prev => prev === 'view' ? null : 'view')}
-              title="View options"
-            >
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <MenuButton
+            label="View"
+            icon={(
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
                 <path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z" />
                 <circle cx="12" cy="12" r="3" />
               </svg>
-              View
-            </button>
-            {openBottomMenu === 'view' && (
-              <div className="bottom-popover">
+            )}
+            open={openBottomMenu === 'view'}
+            onToggle={() => setOpenBottomMenu(prev => prev === 'view' ? null : 'view')}
+            placement="up"
+          >
                 <span className="eyebrow">Staff — {part.name}</span>
                 <div className="control-group">
                   {STAFF_DISPLAYS[trackKind(activeTrack.instrument)].map(mode => (
@@ -3719,7 +3702,6 @@ export const TabSheetEditor: React.FC<TabSheetEditorProps> = ({ meta, channel })
                       key={mode}
                       className="btn" aria-pressed={activeTrack.display === mode && !grand}
                       onClick={() => (grand ? leaveGrandStaff(activeTrack.instrument, 'view') : updateActiveTrack({ display: mode }))}
-                     
                     >
                       {STAFF_LABELS[mode]}
                     </button>
@@ -3729,7 +3711,6 @@ export const TabSheetEditor: React.FC<TabSheetEditorProps> = ({ meta, channel })
                       className="btn" aria-pressed={grand !== null}
                       onClick={() => editSong(prev => addBassStaff(prev, activeTrackIndex))}
                       title="Treble and bass clef, one track per hand: the notes below middle C move to a new left-hand track with its own rhythm"
-                     
                     >
                       Grand staff
                     </button>
@@ -3770,9 +3751,7 @@ export const TabSheetEditor: React.FC<TabSheetEditorProps> = ({ meta, channel })
                 }}>
                   Keyboard shortcuts
                 </button>
-              </div>
-            )}
-          </div>
+          </MenuButton>
         </div>
       </div>
 

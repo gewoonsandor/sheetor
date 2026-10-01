@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import type { FormEvent } from 'react';
 
+import { Dialog } from '../../../app/Dialog';
 import { FALLBACK_MESSAGE } from '../../../app/http';
 import { deriveInitials } from '../../user/userStore';
 import { fetchShares, shareFolder, unshareFolder } from '../libraryApi';
@@ -47,14 +48,6 @@ export const ShareDialog = ({ folder, onClose }: { folder: LibraryFolder; onClos
     fetchShares(folder.id).then(setShares, (err: unknown) => setError(messageOf(err)));
   }, [folder.id]);
 
-  useEffect(() => {
-    const onKey = (event: KeyboardEvent): void => {
-      if (event.key === 'Escape') onClose();
-    };
-    window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
-  }, [onClose]);
-
   const run = async (action: () => Promise<unknown>): Promise<void> => {
     setError(null);
     setBusy(true);
@@ -77,80 +70,66 @@ export const ShareDialog = ({ folder, onClose }: { folder: LibraryFolder; onClos
   };
 
   return (
-    <div className="sheetor-modal-backdrop" onClick={onClose}>
-      <div
-        className="sheetor-modal share-dialog"
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="share-title"
-        onClick={(event) => event.stopPropagation()}
-      >
-        <h3 className="sheetor-modal-header" id="share-title">
-          <span>Share “{folder.name}”</span>
-          <button className="sheetor-modal-close" aria-label="Close" onClick={onClose}>
-            &times;
-          </button>
-        </h3>
-        <p className="sheetor-modal-desc">
-          Everyone you add can open everything inside this folder. Editors change songs with you
-          live; viewers watch.
+    <Dialog title={`Share “${folder.name}”`} onClose={onClose}>
+      <p className="dialog-desc">
+        Everyone you add can open everything inside this folder. Editors change songs with you
+        live; viewers watch.
+      </p>
+
+      <form className="share-form" onSubmit={invite}>
+        <input
+          className="control-input"
+          type="email"
+          required
+          placeholder="Email address"
+          aria-label="Email address"
+          value={email}
+          onChange={(event) => setEmail(event.target.value)}
+        />
+        <RoleSelect value={role} label="Role" disabled={busy} onChange={setRole} />
+        <button className="btn btn-primary" type="submit" disabled={busy}>
+          Share
+        </button>
+      </form>
+
+      {error !== null && (
+        <p className="form-error" role="alert">
+          {error}
         </p>
+      )}
 
-        <form className="share-form" onSubmit={invite}>
-          <input
-            className="control-input"
-            type="email"
-            required
-            placeholder="Email address"
-            aria-label="Email address"
-            value={email}
-            onChange={(event) => setEmail(event.target.value)}
-          />
-          <RoleSelect value={role} label="Role" disabled={busy} onChange={setRole} />
-          <button className="btn btn-primary" type="submit" disabled={busy}>
-            Share
-          </button>
-        </form>
-
-        {error !== null && (
-          <p className="form-error" role="alert">
-            {error}
-          </p>
-        )}
-
-        {shares !== null && shares.length === 0 && (
-          <p className="share-empty">Only you can see this folder.</p>
-        )}
-        {shares !== null && shares.length > 0 && (
-          <ul className="share-list">
-            {shares.map((share) => (
-              <li key={share.userId} className="share-row">
-                <span className="app-user-avatar" aria-hidden="true">
-                  {deriveInitials(share.username)}
-                </span>
-                <span className="share-who">
-                  <span className="share-name">{share.username}</span>
-                  <span className="share-email">{share.email}</span>
-                </span>
-                <RoleSelect
-                  value={asShareRole(share.role)}
-                  label={`Role for ${share.username}`}
-                  disabled={busy}
-                  onChange={(next) => void run(() => shareFolder(folder.id, share.email, next))}
-                />
-                <button
-                  className="btn btn-danger"
-                  type="button"
-                  disabled={busy}
-                  onClick={() => void run(() => unshareFolder(folder.id, share.userId))}
-                >
-                  Remove
-                </button>
-              </li>
-            ))}
-          </ul>
-        )}
-      </div>
-    </div>
+      {shares !== null && shares.length === 0 && (
+        <p className="share-empty">Only you can see this folder.</p>
+      )}
+      {shares !== null && shares.length > 0 && (
+        <ul className="share-list">
+          {shares.map((share) => (
+            <li key={share.userId} className="share-row">
+              <span className="app-user-avatar" aria-hidden="true">
+                {deriveInitials(share.username)}
+              </span>
+              <span className="share-who">
+                <span className="share-name">{share.username}</span>
+                <span className="share-email">{share.email}</span>
+              </span>
+              <RoleSelect
+                value={asShareRole(share.role)}
+                label={`Role for ${share.username}`}
+                disabled={busy}
+                onChange={(next) => void run(() => shareFolder(folder.id, share.email, next))}
+              />
+              <button
+                className="btn btn-danger"
+                type="button"
+                disabled={busy}
+                onClick={() => void run(() => unshareFolder(folder.id, share.userId))}
+              >
+                Remove
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
+    </Dialog>
   );
 };
