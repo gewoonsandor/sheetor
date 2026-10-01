@@ -86,6 +86,8 @@ export interface ViewMenuProps {
   panelName: string;
   showFretboard: boolean;
   toggleFretboard: () => void;
+  paperScore: boolean;
+  togglePaperScore: () => void;
   isViewer: boolean;
   viewMode: boolean;
   toggleViewMode: () => void;
@@ -370,7 +372,8 @@ const EditMenu = ({
 
 const ViewMenu = ({
   open, onToggle, partName, staffModes, display, grandStaff, canGrandStaff, pickStaffMode, addGrandStaff,
-  leftHandWarning, panelName, showFretboard, toggleFretboard, isViewer, viewMode, toggleViewMode,
+  leftHandWarning, panelName, showFretboard, toggleFretboard, paperScore, togglePaperScore, isViewer,
+  viewMode, toggleViewMode,
   showShortcuts,
 }: ViewMenuProps & MenuState) => (
   <MenuButton
@@ -415,6 +418,10 @@ const ViewMenu = ({
     <button type="button" className="btn" aria-pressed={showFretboard} onClick={toggleFretboard}>
       {panelName}
     </button>
+    <button type="button" className="btn" aria-pressed={paperScore} onClick={togglePaperScore}>
+      Paper score
+    </button>
+    <span className="popover-hint">Dark ink on a light page, in the dark theme too.</span>
     {isViewer ? (
       <button type="button" className="btn" aria-pressed disabled>View only</button>
     ) : (

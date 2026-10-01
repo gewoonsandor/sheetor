@@ -72,7 +72,8 @@ import { canEdit } from '../../library/libraryStore';
 import type { LibraryEntry } from '../../library/libraryStore';
 import { createSong } from '../../library/libraryApi';
 import type { SongChannel } from '../songChannel';
-import { deriveInitials } from '../../user/userStore';
+import { deriveInitials, getUserSnapshot, subscribeUser } from '../../user/userStore';
+import { saveAppearance } from '../../user/authApi';
 import { loadSettings, updateSettings } from '../../settings/settingsStore';
 import { usePlayback } from './usePlayback';
 import {
@@ -199,6 +200,7 @@ export const TabSheetEditor: React.FC<TabSheetEditorProps> = ({ meta, channel })
   // The far end of a Shift-selection, by id so a collaborator's edit cannot move it.
   const [anchor, setAnchor] = useState<{ measureId: string; beatId: string } | null>(null);
   const clip = useSyncExternalStore(subscribeClip, getClip);
+  const user = useSyncExternalStore(subscribeUser, getUserSnapshot);
 
   // Everything the score and the input panels read comes from the active
   // track, so the rest of the component works one track at a time. A grand
@@ -1800,6 +1802,8 @@ export const TabSheetEditor: React.FC<TabSheetEditorProps> = ({ meta, channel })
       {/* Editor Canvas */}
       <div
         className="sheetor-canvas-container"
+        // A light page in any theme: the light tokens apply to the score card alone.
+        data-theme={user.paperScore ? 'light' : undefined}
         onClick={() => {
           // Refocus the editor on click
           containerRef.current?.focus();
@@ -2939,6 +2943,11 @@ export const TabSheetEditor: React.FC<TabSheetEditorProps> = ({ meta, channel })
           panelName: showTab ? 'Fretboard' : 'Keyboard',
           showFretboard,
           toggleFretboard: () => setShowFretboard(prev => !prev),
+          paperScore: user.paperScore,
+          togglePaperScore: () => {
+            saveAppearance({ paperScore: !user.paperScore })
+              .catch(() => setNotice('Could not save the paper score to your account.'));
+          },
           isViewer: role === 'viewer',
           viewMode,
           toggleViewMode,

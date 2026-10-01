@@ -236,6 +236,25 @@
   --bar-surface: hsl(var(--tint-h) 40% 99% / 0.8);
 }
 
+/* A light scope inside a dark page — the paper score. Tokens :root derives
+   from others were substituted on <html>, so the nested scope derives them again. */
+[data-theme='light']:not(:root) {
+  --ink: rgb(var(--ink-rgb));
+  --ink-dim: rgb(var(--ink-rgb) / 0.62);
+  --ink-faint: rgb(var(--ink-rgb) / 0.42);
+  --accent: rgb(var(--accent-rgb));
+  --accent-hover: rgb(var(--accent-hover-rgb));
+  --accent-soft: rgb(var(--accent-rgb) / 0.14);
+  --accent-glow: rgb(var(--accent-rgb) / 0.28);
+  --accent-wash: rgb(var(--accent-rgb) / 0.12);
+  --accent-text: var(--accent-hover);
+  --border-focus: rgb(var(--accent-rgb) / 0.55);
+  --focus-ring: var(--accent);
+  --danger: rgb(var(--danger-rgb));
+  --warn: rgb(var(--warn-rgb));
+  --ok: rgb(var(--ok-rgb));
+}
+
 /* Colour styles. Each re-points the neutral tint and the accent triplet; the
    selector also matches nested elements, which is how a swatch button on the
    settings page previews a palette it is not currently using. */
@@ -246,12 +265,13 @@
 [data-accent='rose'] { --tint-h: 345; --tint-s: 11%; --accent-rgb: 244 114 160; --accent-hover-rgb: 248 138 178; --accent-ink: hsl(345 35% 9%); }
 
 /* On near-white surfaces the dark-tuned accents lose contrast, so each palette
-   darkens its triplet and inverts its ink. */
-[data-theme='light'][data-accent='amber'], [data-theme='light'] [data-accent='amber'] { --accent-rgb: 176 100 24; --accent-hover-rgb: 156 86 18; --accent-ink: hsl(26 60% 98%); }
-[data-theme='light'][data-accent='teal'], [data-theme='light'] [data-accent='teal'] { --accent-rgb: 13 133 133; --accent-hover-rgb: 10 112 112; --accent-ink: hsl(190 60% 98%); }
-[data-theme='light'][data-accent='indigo'], [data-theme='light'] [data-accent='indigo'] { --accent-rgb: 66 86 214; --accent-hover-rgb: 52 71 190; --accent-ink: hsl(232 60% 98%); }
-[data-theme='light'][data-accent='violet'], [data-theme='light'] [data-accent='violet'] { --accent-rgb: 120 74 202; --accent-hover-rgb: 103 60 180; --accent-ink: hsl(275 60% 98%); }
-[data-theme='light'][data-accent='rose'], [data-theme='light'] [data-accent='rose'] { --accent-rgb: 198 46 106; --accent-hover-rgb: 174 36 92; --accent-ink: hsl(345 60% 98%); }
+   darkens its triplet and inverts its ink. The third form is a light scope
+   inside a dark page, which takes its palette from <html>. */
+[data-theme='light'][data-accent='amber'], [data-theme='light'] [data-accent='amber'], [data-accent='amber'] [data-theme='light'] { --accent-rgb: 176 100 24; --accent-hover-rgb: 156 86 18; --accent-ink: hsl(26 60% 98%); }
+[data-theme='light'][data-accent='teal'], [data-theme='light'] [data-accent='teal'], [data-accent='teal'] [data-theme='light'] { --accent-rgb: 13 133 133; --accent-hover-rgb: 10 112 112; --accent-ink: hsl(190 60% 98%); }
+[data-theme='light'][data-accent='indigo'], [data-theme='light'] [data-accent='indigo'], [data-accent='indigo'] [data-theme='light'] { --accent-rgb: 66 86 214; --accent-hover-rgb: 52 71 190; --accent-ink: hsl(232 60% 98%); }
+[data-theme='light'][data-accent='violet'], [data-theme='light'] [data-accent='violet'], [data-accent='violet'] [data-theme='light'] { --accent-rgb: 120 74 202; --accent-hover-rgb: 103 60 180; --accent-ink: hsl(275 60% 98%); }
+[data-theme='light'][data-accent='rose'], [data-theme='light'] [data-accent='rose'], [data-accent='rose'] [data-theme='light'] { --accent-rgb: 198 46 106; --accent-hover-rgb: 174 36 92; --accent-ink: hsl(345 60% 98%); }
 
 * {
   box-sizing: border-box;
