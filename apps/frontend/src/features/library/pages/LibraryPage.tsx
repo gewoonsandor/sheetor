@@ -1,8 +1,9 @@
 import { useEffect, useState, useSyncExternalStore } from 'react';
-import type { DragEvent } from 'react';
-import { useNavigate, useSearchParams } from 'react-router-dom';
+import type { DragEvent, ReactNode, SyntheticEvent } from 'react';
+import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 
 import { FALLBACK_MESSAGE } from '../../../app/http';
+import { MenuButton } from '../../../app/MenuButton';
 import { createEmptySong } from '../../editor/components/songUtils';
 import { loadSettings } from '../../settings/settingsStore';
 import { getUserSnapshot, subscribeUser } from '../../user/userStore';
@@ -26,9 +27,11 @@ import {
   folderChoices,
   folderPath,
   lastSongId,
+  searchSongs,
   songsIn,
+  sortSongs,
 } from '../libraryStore';
-import type { Library, LibraryFolder } from '../libraryStore';
+import type { Library, LibraryEntry, LibraryFolder, SongOrder } from '../libraryStore';
 import '../LibraryPage.css';
 
 // The library root is not a folder, so the move menus need a value for it that
@@ -67,6 +70,22 @@ const FolderIcon = () => (
   </svg>
 );
 
+const NoteIcon = () => (
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+    <path d="M9 18V5l12-2v13" />
+    <circle cx="6" cy="18" r="3" />
+    <circle cx="18" cy="16" r="3" />
+  </svg>
+);
+
+const DotsIcon = () => (
+  <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+    <circle cx="5" cy="12" r="2" />
+    <circle cx="12" cy="12" r="2" />
+    <circle cx="19" cy="12" r="2" />
+  </svg>
+);
+
 export const LibraryPage = () => {
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
@@ -78,6 +97,10 @@ export const LibraryPage = () => {
   const [dragged, setDragged] = useState<Dragged | null>(null);
   const [dropTarget, setDropTarget] = useState<string | null>(null);
   const [sharing, setSharing] = useState<LibraryFolder | null>(null);
+  const [query, setQuery] = useState('');
+  const [order, setOrder] = useState<SongOrder>('updated');
+  // The item whose ⋯ menu is open.
+  const [openMenu, setOpenMenu] = useState<string | null>(null);
 
   // Collaborators change the library too, so it is re-read whenever the tab regains focus.
   useEffect(() => {
@@ -114,8 +137,30 @@ export const LibraryPage = () => {
       <div className="page-shell">
         <header className="page-header">
           <h1 className="page-title">Library</h1>
-          <p className="page-subtitle">{error ?? 'Loading your library…'}</p>
         </header>
+        {error === null ? (
+          <ul className="library-list card" aria-busy="true" aria-label="Loading your library">
+            {Array.from({ length: 5 }, (_, index) => (
+              <li key={index} className="library-row skeleton" />
+            ))}
+          </ul>
+        ) : (
+          <div className="library-load-error">
+            <p className="form-error" role="alert">
+              {error}
+            </p>
+            <button
+              type="button"
+              className="btn"
+              onClick={() => {
+                setError(null);
+                void reload();
+              }}
+            >
+              Retry
+            </button>
+          </div>
+        )}
       </div>
     );
   }
@@ -139,7 +184,16 @@ export const LibraryPage = () => {
   const openFolder = (id: string | null): void => {
     setPendingDelete(null);
     setRenaming(null);
+    setOpenMenu(null);
     setSearchParams(id === null ? {} : { folder: id });
+  };
+
+  // An action closes its menu; focus goes back to the ⋯ trigger rather than
+  // falling to the page when the popover unmounts.
+  const closeMenu = (event: SyntheticEvent<HTMLElement>): void => {
+    event.currentTarget.closest('.menu')?.querySelector<HTMLElement>('button')?.focus();
+    setOpenMenu(null);
+    setPendingDelete(null);
   };
 
   const newSong = async (): Promise<void> => {
@@ -230,10 +284,14 @@ export const LibraryPage = () => {
 
   const moveMenu = (item: Dragged, currentParent: string | null, label: string) => (
     <select
-      className="library-move"
+      className="control-select"
       aria-label={`Move ${label} to a folder`}
       value=""
-      onChange={(event) => move(item, event.target.value === ROOT_VALUE ? null : event.target.value)}
+      onChange={(event) => {
+        const target = event.target.value === ROOT_VALUE ? null : event.target.value;
+        closeMenu(event);
+        move(item, target);
+      }}
     >
       <option value="" disabled>
         Move to…
@@ -260,14 +318,58 @@ export const LibraryPage = () => {
     return `Shared by ${here.ownerName} · you can ${canEdit(here.role) ? 'edit' : 'view'}`;
   };
 
-  const folderCard = (folder: LibraryFolder) => {
+  const actionsMenu = (id: string, name: string, items: ReactNode) => (
+    <MenuButton
+      label={`Actions for ${name}`}
+      iconOnly
+      icon={<DotsIcon />}
+      placement="down"
+      align="end"
+      triggerClassName="btn-sm btn-ghost btn-icon"
+      open={openMenu === id}
+      onToggle={() => {
+        setPendingDelete(null);
+        setOpenMenu((prev) => (prev === id ? null : id));
+      }}
+    >
+      {items}
+    </MenuButton>
+  );
+
+  // While a delete is pending, the menu asks before acting. The keys make these fresh
+  // buttons rather than reused menu rows, so Cancel takes focus.
+  const confirmDelete = (hint: string, label: string, onConfirm: () => void) => (
+    <>
+      <p className="popover-hint">{hint}</p>
+      <button
+        key="confirm"
+        type="button"
+        className="btn btn-danger"
+        onClick={(event) => {
+          closeMenu(event);
+          onConfirm();
+        }}
+      >
+        {label}
+      </button>
+      <button key="cancel" type="button" className="btn" autoFocus onClick={closeMenu}>
+        Cancel
+      </button>
+    </>
+  );
+
+  const folderRow = (folder: LibraryFolder) => {
     const isOwner = folder.role === 'owner';
     const isShareRoot = !isOwner && folder.parentId === null;
-    const movable = canEdit(folder.role) && (isOwner || folder.parentId !== null);
+    const editable = canEdit(folder.role);
+    const movable = editable && (isOwner || folder.parentId !== null);
     const isRenaming = renaming?.id === folder.id;
-    const isConfirmingDelete = pendingDelete === folder.id;
     const songCount = countSongsIn(library, folder.id);
     const childCount = childFolders(library, folder.id).length;
+    const contents = [
+      ...(songCount > 0 ? [plural(songCount, 'song')] : []),
+      ...(childCount > 0 ? [plural(childCount, 'folder')] : []),
+    ];
     const badge = isShareRoot ? accessLabel(folder) : isOwner && folder.isShared ? 'Shared' : null;
     const drop = dropProps(folder.id);
     const item: Dragged = { kind: 'folder', id: folder.id, ownerId: folder.ownerId };
@@ -275,110 +377,207 @@ export const LibraryPage = () => {
     return (
       <li
         key={folder.id}
-        className={`library-card card library-folder ${drop.className}`}
+        className={`library-row ${drop.className}`}
         {...dragProps(item, movable)}
         onDragEnter={drop.onDragEnter}
         onDragOver={drop.onDragOver}
         onDragLeave={drop.onDragLeave}
         onDrop={drop.onDrop}
       >
-        <div className="library-card-head">
+        <span className="library-row-icon">
+          <FolderIcon />
+        </span>
+        <div className="library-row-name">
           {isRenaming ? (
-            <div className="library-folder-head">
-              <span className="library-folder-icon">
-                <FolderIcon />
-              </span>
-              <input
-                className="library-rename"
-                value={renaming.draft}
-                autoFocus
-                onFocus={(event) => event.target.select()}
-                onChange={(event) => setRenaming({ id: folder.id, draft: event.target.value })}
-                onBlur={commitRename}
-                onKeyDown={(event) => {
-                  if (event.key === 'Enter') commitRename();
-                  if (event.key === 'Escape') setRenaming(null);
-                }}
-              />
-            </div>
+            <input
+              className="library-rename"
+              aria-label="Folder name"
+              value={renaming.draft}
+              autoFocus
+              onFocus={(event) => event.target.select()}
+              onChange={(event) => setRenaming({ id: folder.id, draft: event.target.value })}
+              onBlur={commitRename}
+              onKeyDown={(event) => {
+                if (event.key === 'Enter') commitRename();
+                if (event.key === 'Escape') setRenaming(null);
+              }}
+            />
           ) : (
-            <button type="button" className="library-folder-open" onClick={() => openFolder(folder.id)}>
-              <span className="library-folder-icon">
-                <FolderIcon />
-              </span>
-              <span className="library-folder-name">{folder.name}</span>
+            <button type="button" className="library-row-open" onClick={() => openFolder(folder.id)}>
+              {folder.name}
             </button>
           )}
-          {badge !== null && <span className="library-card-badge eyebrow">{badge}</span>}
         </div>
-
-        <p className="library-card-meta">
-          <span>{songCount === 0 ? 'Empty' : plural(songCount, 'song')}</span>
-          {childCount > 0 && <span>{plural(childCount, 'folder')}</span>}
-        </p>
-
-        <div className="library-card-actions">
-          {isConfirmingDelete ? (
-            <>
-              <p className="library-confirm">
-                {songCount === 0 && childCount === 0
-                  ? 'Nothing inside — this only removes the folder.'
-                  : `Everything inside moves to ${here ? here.name : 'Library'}. No song is deleted.`}
-              </p>
-              <button
-                type="button"
-                className="btn btn-danger"
-                onClick={() => {
-                  setPendingDelete(null);
-                  void run(() => deleteFolder(folder.id));
-                }}
-              >
-                Delete folder
-              </button>
-              <button type="button" className="btn" onClick={() => setPendingDelete(null)}>
-                Cancel
-              </button>
-            </>
-          ) : (
-            <>
-              {canEdit(folder.role) && (
-                <button
-                  type="button"
-                  className="btn"
-                  onClick={() => setRenaming({ id: folder.id, draft: folder.name })}
-                >
-                  Rename
-                </button>
-              )}
-              {movable && moveMenu(item, folder.parentId, folder.name)}
-              {isOwner && (
-                <button type="button" className="btn" onClick={() => setSharing(folder)}>
-                  Share
-                </button>
-              )}
-              {isOwner && (
-                <button type="button" className="btn btn-danger" onClick={() => setPendingDelete(folder.id)}>
-                  Delete
-                </button>
-              )}
-              {isShareRoot && (
-                <button
-                  type="button"
-                  className="btn btn-danger"
-                  onClick={() => void run(() => unshareFolder(folder.id, me))}
-                >
-                  Leave
-                </button>
-              )}
-            </>
-          )}
+        <span className="library-row-meta">{contents.length > 0 ? contents.join(' · ') : 'Empty'}</span>
+        <span className="library-row-aside">
+          {badge !== null && <span className="library-badge eyebrow">{badge}</span>}
+        </span>
+        <div className="library-row-actions">
+          {(editable || isOwner || isShareRoot) && actionsMenu(folder.id, folder.name, pendingDelete === folder.id
+            ? confirmDelete(
+              songCount === 0 && childCount === 0
+                ? 'Nothing inside — this only removes the folder.'
+                : `Everything inside moves to ${here ? here.name : 'Library'}. No song is deleted.`,
+              'Delete folder',
+              () => void run(() => deleteFolder(folder.id)),
+            )
+            : (
+              <>
+                {editable && (
+                  <button
+                    type="button"
+                    className="btn"
+                    onClick={(event) => {
+                      closeMenu(event);
+                      setRenaming({ id: folder.id, draft: folder.name });
+                    }}
+                  >
+                    Rename
+                  </button>
+                )}
+                {movable && moveMenu(item, folder.parentId, folder.name)}
+                {isOwner && (
+                  <button
+                    type="button"
+                    className="btn"
+                    onClick={(event) => {
+                      closeMenu(event);
+                      setSharing(folder);
+                    }}
+                  >
+                    Share
+                  </button>
+                )}
+                {isOwner && (
+                  <button type="button" className="btn btn-danger" onClick={() => setPendingDelete(folder.id)}>
+                    Delete
+                  </button>
+                )}
+                {isShareRoot && (
+                  <button
+                    type="button"
+                    className="btn btn-danger"
+                    onClick={(event) => {
+                      closeMenu(event);
+                      void run(() => unshareFolder(folder.id, me));
+                    }}
+                  >
+                    Leave
+                  </button>
+                )}
+              </>
+            ))}
         </div>
       </li>
     );
   };
 
+  const songRow = (entry: LibraryEntry, meta: string) => {
+    const title = entry.title || 'Untitled';
+    const isCurrent = entry.id === currentId;
+    const editable = canEdit(entry.role);
+    const item: Dragged = { kind: 'song', id: entry.id, ownerId: entry.ownerId };
+
+    return (
+      <li key={entry.id} className={`library-row ${isCurrent ? 'is-current' : ''}`} {...dragProps(item, editable)}>
+        <span className="library-row-icon">
+          <NoteIcon />
+        </span>
+        <div className="library-row-name">
+          <Link to={`/songs/${entry.id}`} className="library-row-open" draggable={false}>
+            {title}
+          </Link>
+          <span className="library-row-sub">{entry.artist || 'Unknown artist'}</span>
+        </div>
+        <span className="library-row-meta">{meta}</span>
+        <span className="library-row-aside">
+          {isCurrent ? (
+            <span className="library-badge eyebrow">Current</span>
+          ) : (
+            `${formatUpdated(entry.updatedAt)}${entry.updatedByName !== null ? ` by ${entry.updatedByName}` : ''}`
+          )}
+        </span>
+        <div className="library-row-actions">
+          {editable && actionsMenu(entry.id, title, pendingDelete === entry.id
+            ? confirmDelete(
+              `Deletes “${title}” for everyone it is shared with.`,
+              'Delete for good',
+              () => void run(() => deleteSong(entry.id)),
+            )
+            : (
+              <>
+                <button
+                  type="button"
+                  className="btn"
+                  onClick={(event) => {
+                    closeMenu(event);
+                    void run(() => duplicateSong(entry.id));
+                  }}
+                >
+                  Duplicate
+                </button>
+                {moveMenu(item, entry.folderId, title)}
+                <button type="button" className="btn btn-danger" onClick={() => setPendingDelete(entry.id)}>
+                  Delete
+                </button>
+              </>
+            ))}
+        </div>
+      </li>
+    );
+  };
+
+  const listSection = (title: string, rows: ReactNode[]) => rows.length > 0 && (
+    <section>
+      <h2 className="library-section eyebrow">{title}</h2>
+      <ul className="library-list card">{rows}</ul>
+    </section>
+  );
+
+  const trimmedQuery = query.trim();
   const isEmpty = folders.length === 0 && sharedWithMe.length === 0 && songs.length === 0;
   const rootDrop = dropProps(null);
+
+  let content: ReactNode;
+  if (trimmedQuery) {
+    const results = sortSongs(searchSongs(library, query), order);
+    content = results.length > 0
+      ? listSection('Results', results.map((entry) => songRow(
+        entry,
+        folderPath(library, entry.folderId).map((it) => it.name).join(' / ') || 'Library',
+      )))
+      : <p className="library-no-results">No songs match “{trimmedQuery}”.</p>;
+  } else if (isEmpty) {
+    content = (
+      <div className="library-empty">
+        <span className="eyebrow">{here ? 'Empty folder' : 'Empty library'}</span>
+        <h2 className="library-empty-title">
+          {here ? `Nothing in ${here.name} yet` : 'Start your first song'}
+        </h2>
+        <p className="library-empty-body">
+          {here
+            ? 'Drag a song onto this folder from the library, or start a new song here — it will be filed in this folder.'
+            : 'Songs are saved to your account. Put them in a folder to share them with other people and edit together in real time.'}
+        </p>
+        {canCreateHere && (
+          <button type="button" className="btn btn-primary" onClick={() => void newSong()}>
+            New song
+          </button>
+        )}
+      </div>
+    );
+  } else {
+    content = (
+      <>
+        {listSection('Folders', folders.map(folderRow))}
+        {listSection('Shared with me', sharedWithMe.map(folderRow))}
+        {listSection('Songs', sortSongs(songs, order).map((entry) => songRow(
+          entry,
+          `${plural(entry.trackCount, 'track')} · ${plural(entry.barCount, 'bar')} · ${entry.bpm} BPM`,
+        )))}
+      </>
+    );
+  }
 
   return (
     <div className="page-shell">
@@ -435,123 +634,33 @@ export const LibraryPage = () => {
         )}
       </header>
 
+      <div className="library-toolbar">
+        <input
+          type="search"
+          className="control-input"
+          placeholder="Search songs"
+          aria-label="Search songs"
+          value={query}
+          onChange={(event) => setQuery(event.target.value)}
+        />
+        <select
+          className="control-select"
+          aria-label="Sort songs"
+          value={order}
+          onChange={(event) => setOrder(event.target.value === 'title' ? 'title' : 'updated')}
+        >
+          <option value="updated">Recently edited</option>
+          <option value="title">Title A–Z</option>
+        </select>
+      </div>
+
       {error !== null && (
         <p className="form-error" role="alert">
           {error}
         </p>
       )}
 
-      {isEmpty ? (
-        <div className="library-empty">
-          <span className="eyebrow">{here ? 'Empty folder' : 'Empty library'}</span>
-          <h2 className="library-empty-title">
-            {here ? `Nothing in ${here.name} yet` : 'Start your first song'}
-          </h2>
-          <p className="library-empty-body">
-            {here
-              ? 'Drag a song card onto this folder from the library, or start a new song here — it will be filed in this folder.'
-              : 'Songs are saved to your account. Put them in a folder to share them with other people and edit together in real time.'}
-          </p>
-          {canCreateHere && (
-            <button type="button" className="btn btn-primary" onClick={() => void newSong()}>
-              New song
-            </button>
-          )}
-        </div>
-      ) : (
-        <>
-          {folders.length > 0 && <h2 className="library-section eyebrow">Folders</h2>}
-          <ul className="library-grid library-grid-folders">{folders.map(folderCard)}</ul>
-
-          {sharedWithMe.length > 0 && (
-            <>
-              <h2 className="library-section eyebrow">Shared with me</h2>
-              <ul className="library-grid library-grid-folders">{sharedWithMe.map(folderCard)}</ul>
-            </>
-          )}
-
-          {(folders.length > 0 || sharedWithMe.length > 0) && songs.length > 0 && (
-            <h2 className="library-section eyebrow">Songs</h2>
-          )}
-          <ul className="library-grid">
-            {songs.map((entry) => {
-              const isCurrent = entry.id === currentId;
-              const isConfirmingDelete = pendingDelete === entry.id;
-              const editable = canEdit(entry.role);
-              const item: Dragged = { kind: 'song', id: entry.id, ownerId: entry.ownerId };
-
-              return (
-                <li
-                  key={entry.id}
-                  className={`library-card card ${isCurrent ? 'is-current' : ''}`}
-                  {...dragProps(item, editable)}
-                >
-                  <div className="library-card-head">
-                    <h2 className="library-card-title">{entry.title || 'Untitled'}</h2>
-                    {isCurrent && <span className="library-card-badge eyebrow">Current</span>}
-                  </div>
-                  <p className="library-card-artist">{entry.artist || 'Unknown artist'}</p>
-
-                  <p className="library-card-meta">
-                    <span>{plural(entry.trackCount, 'track')}</span>
-                    <span>{plural(entry.barCount, 'bar')}</span>
-                    <span>{entry.bpm} BPM</span>
-                    <span>
-                      {formatUpdated(entry.updatedAt)}
-                      {entry.updatedByName !== null && ` by ${entry.updatedByName}`}
-                    </span>
-                  </p>
-
-                  <div className="library-card-actions">
-                    {isConfirmingDelete ? (
-                      <>
-                        <button
-                          type="button"
-                          className="btn btn-danger"
-                          onClick={() => {
-                            setPendingDelete(null);
-                            void run(() => deleteSong(entry.id));
-                          }}
-                        >
-                          Delete for good
-                        </button>
-                        <button type="button" className="btn" onClick={() => setPendingDelete(null)}>
-                          Cancel
-                        </button>
-                      </>
-                    ) : (
-                      <>
-                        <button
-                          type="button"
-                          className="btn btn-primary"
-                          onClick={() => navigate(`/songs/${entry.id}`)}
-                        >
-                          Open
-                        </button>
-                        {editable && (
-                          <button type="button" className="btn" onClick={() => void run(() => duplicateSong(entry.id))}>
-                            Duplicate
-                          </button>
-                        )}
-                        {editable && moveMenu(item, entry.folderId, entry.title || 'Untitled')}
-                        {editable && (
-                          <button
-                            type="button"
-                            className="btn btn-danger"
-                            onClick={() => setPendingDelete(entry.id)}
-                          >
-                            Delete
-                          </button>
-                        )}
-                      </>
-                    )}
-                  </div>
-                </li>
-              );
-            })}
-          </ul>
-        </>
-      )}
+      {content}
 
       {sharing !== null && (
         <ShareDialog

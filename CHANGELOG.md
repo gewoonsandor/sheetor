@@ -29,6 +29,8 @@ still change the song format or the API; from `1.0.0` on, only a major release w
 - `?` opens the keyboard shortcuts, which now list every key.
 - On phones and tablets the score reflows to the screen's width instead of scrolling sideways, and
   on a touch screen every control grows to a finger's size.
+- The library is a list: search finds songs in every folder, songs sort by title or by last edit,
+  and each row has a ⋯ menu for its actions. A whole row opens its song.
 
 ## [1.0.0] - 2026-10-01
 

@@ -49,102 +49,174 @@
   font-weight: 600;
 }
 
-.library-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
-  gap: var(--sp-4);
+.library-section {
+  margin: 0 0 var(--sp-2);
+}
+
+/* ---------------------------------------------------------------- Toolbar */
+.library-toolbar {
+  display: flex;
+  gap: var(--sp-2);
+}
+
+.library-toolbar .control-select {
+  flex: none;
+}
+
+.library-load-error {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--sp-3);
+}
+
+.library-no-results {
+  margin: 0;
+  font-size: var(--fs-md);
+  color: var(--text-dim);
+}
+
+/* ------------------------------------------------------------------- List */
+.library-list {
   margin: 0;
   padding: 0;
   list-style: none;
 }
 
-/* Folders are shelves: they size to their own content instead of stretching to
-   the height of a song card in the same row. */
-.library-grid-folders {
-  grid-template-columns: repeat(auto-fill, minmax(230px, 1fr));
-  margin-bottom: var(--sp-6);
+/* Icon · name · meta · updated or badge · ⋯ */
+.library-row {
+  position: relative;
+  display: grid;
+  grid-template-columns: var(--ctl-h) minmax(0, 1fr) auto auto var(--ctl-h);
+  align-items: center;
+  column-gap: var(--sp-3);
+  min-height: calc(var(--ctl-h) + var(--sp-4));
+  padding: 0 var(--sp-2);
+  border-top: 1px solid var(--border);
+  transition: background var(--t-fast) var(--ease);
 }
 
-.library-section {
-  margin: 0 0 var(--sp-3);
-  color: var(--text-faint);
+/* The list is a card; the first and last rows follow its rounded corners so
+   their fill does not poke out. */
+.library-row:first-child {
+  border-top: 0;
+  border-radius: var(--r-lg) var(--r-lg) 0 0;
 }
 
-.library-card {
+.library-row:last-child {
+  border-radius: 0 0 var(--r-lg) var(--r-lg);
+}
+
+.library-row:only-child {
+  border-radius: var(--r-lg);
+}
+
+.library-row:hover {
+  background: var(--surface-2);
+}
+
+.library-row.is-current {
+  background: var(--accent-wash);
+}
+
+/* The live drop target, whether a folder row or a breadcrumb step. */
+.library-row.is-drop-target,
+.library-crumb.is-drop-target {
+  background: var(--accent-soft);
+  border-color: var(--accent);
+  color: var(--text);
+}
+
+.library-row.is-drop-target {
+  box-shadow: inset 0 0 0 1px var(--accent);
+}
+
+.library-row-icon {
+  display: inline-flex;
+  justify-content: center;
+  color: var(--accent);
+}
+
+.library-row-icon svg {
+  width: 20px;
+  height: 20px;
+}
+
+.library-row-name {
   display: flex;
   flex-direction: column;
-  padding: var(--sp-4);
-  /* Every card is a drag source: songs and folders both move by dropping. */
-  cursor: grab;
-  transition: background var(--t) var(--ease), border-color var(--t) var(--ease),
-    box-shadow var(--t) var(--ease), transform var(--t-fast) var(--ease);
-}
-
-.library-card:active {
-  cursor: grabbing;
-}
-
-.library-card:hover {
-  border-color: var(--border-strong);
-  box-shadow: var(--shadow-2);
-  transform: translateY(calc(-1 * var(--sp-hair)));
-}
-
-/* A folder is a shelf, not a document: raised surface, amber mark, no artist. */
-.library-folder {
-  background: var(--sheen), var(--surface-2);
-}
-
-/* One count line, so it does not need a song card's breathing room. */
-.library-folder .library-card-meta {
-  margin: var(--sp-2) 0 var(--sp-3);
-}
-
-.library-folder-head,
-.library-folder-open {
-  display: flex;
-  align-items: center;
-  gap: var(--sp-3);
-  width: 100%;
   min-width: 0;
 }
 
-.library-folder-open {
+.library-row-open {
   padding: 0;
+  overflow: hidden;
   background: none;
-  border: none;
+  border: 0;
   color: var(--text);
   font-family: inherit;
   font-size: var(--fs-md);
   font-weight: 600;
   line-height: var(--lh-tight);
   text-align: left;
+  text-decoration: none;
+  text-overflow: ellipsis;
+  white-space: nowrap;
   cursor: pointer;
-  transition: color var(--t-fast) var(--ease);
 }
 
-.library-folder-open:hover {
-  color: var(--accent);
+/* The opener stretches over the whole row, so a click anywhere opens it. */
+.library-row-open::after {
+  content: '';
+  position: absolute;
+  inset: 0;
 }
 
-.library-folder-icon {
+.library-row-open:focus-visible {
+  outline: none;
+}
+
+.library-row-open:focus-visible::after {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: -2px;
+}
+
+.library-row-sub {
+  overflow: hidden;
+  font-size: var(--fs-sm);
+  color: var(--text-dim);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.library-row-meta,
+.library-row-aside {
+  font-size: var(--fs-xs);
+  color: var(--text-dim);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+/* Sits above the opener's overlay by coming later in the row. No z-index: that
+   would trap the popover in this row's stacking context, under the rows below. */
+.library-row-actions {
+  position: relative;
+  display: flex;
+  justify-content: center;
+}
+
+.library-badge {
   display: inline-flex;
-  flex: none;
-  color: var(--accent);
-}
-
-.library-folder-icon svg {
-  width: 20px;
-  height: 20px;
-}
-
-.library-folder-name {
-  min-width: 0;
-  overflow-wrap: anywhere;
+  align-items: center;
+  height: var(--ctl-h-xs);
+  padding: 0 var(--sp-2);
+  background: var(--accent-soft);
+  border: 1px solid var(--border-focus);
+  border-radius: var(--r-pill);
+  color: var(--accent-text);
 }
 
 .library-rename {
-  flex: 1;
   min-width: 0;
   height: var(--ctl-h-sm);
   padding: 0 var(--sp-2);
@@ -158,110 +230,15 @@
   cursor: text;
 }
 
-/* The live drop target, whether a folder tile or a breadcrumb step. */
-.library-card.is-drop-target,
-.library-crumb.is-drop-target {
-  background: var(--accent-soft);
-  border-color: var(--accent);
-  color: var(--text);
-}
+@media (max-width: 640px) {
+  .library-row {
+    grid-template-columns: var(--ctl-h) minmax(0, 1fr) var(--ctl-h);
+  }
 
-.library-card.is-drop-target {
-  box-shadow: var(--shadow-2);
-}
-
-.library-card.is-current {
-  background: var(--accent-soft);
-  border-color: var(--border-focus);
-}
-
-.library-card-head {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: var(--sp-2);
-}
-
-.library-card-title {
-  margin: 0;
-  font-size: var(--fs-md);
-  font-weight: 600;
-  line-height: var(--lh-tight);
-  overflow-wrap: anywhere;
-}
-
-.library-card .library-card-badge {
-  display: inline-flex;
-  align-items: center;
-  flex: none;
-  height: var(--ctl-h-xs);
-  padding: 0 var(--sp-2);
-  background: var(--accent-soft);
-  border: 1px solid var(--border-focus);
-  border-radius: var(--r-pill);
-  color: var(--accent-text);
-}
-
-.library-card-artist {
-  margin: var(--sp-1) 0 0;
-  font-size: var(--fs-sm);
-  color: var(--text-dim);
-  overflow-wrap: anywhere;
-}
-
-.library-card-meta {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: baseline;
-  margin: var(--sp-3) 0 var(--sp-4);
-  font-size: var(--fs-xs);
-  color: var(--text-faint);
-  font-variant-numeric: tabular-nums;
-}
-
-.library-card-meta span + span::before {
-  content: '\00b7';
-  margin: 0 var(--sp-2);
-}
-
-.library-card-actions {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--sp-2);
-  margin-top: auto;
-  padding-top: var(--sp-4);
-  border-top: 1px solid var(--border);
-}
-
-/* The keyboard path for a move; dragging a card is the mouse path. Shares the
-   button silhouette so the actions row keeps one rhythm. */
-.library-move {
-  flex: none;
-  height: var(--ctl-h);
-  padding: 0 var(--sp-2);
-  background: var(--surface-3);
-  border: 1px solid var(--border);
-  border-radius: var(--r-md);
-  color: var(--text);
-  font-family: inherit;
-  font-size: var(--fs-sm);
-  font-weight: 600;
-  cursor: pointer;
-  transition: background var(--t-fast) var(--ease), border-color var(--t-fast) var(--ease);
-}
-
-.library-move:hover {
-  background: var(--surface-4);
-  border-color: var(--border-strong);
-}
-
-/* Spells out where a deleted folder's contents land, on its own row. */
-.library-confirm {
-  flex: 1 1 100%;
-  margin: 0;
-  font-size: var(--fs-xs);
-  color: var(--text-dim);
-  line-height: var(--lh);
+  .library-row-meta,
+  .library-row-aside {
+    display: none;
+  }
 }
 
 .library-empty {

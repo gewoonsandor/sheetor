@@ -146,3 +146,32 @@ export const folderChoices = (
   walk(null, 0);
   return choices;
 };
+
+// --- Search and order ---
+
+const fold = (s: string): string => s.normalize('NFD').replace(/\p{Diacritic}/gu, '').toLowerCase();
+
+// Every query word must occur in the title or the artist, ignoring case and
+// accents. Keeps the server order; a blank query finds nothing.
+export const searchSongs = (library: Library, query: string): LibraryEntry[] => {
+  const words = fold(query).split(/\s+/).filter((word) => word.length > 0);
+  if (words.length === 0) return [];
+  return library.entries.filter((entry) => {
+    const haystack = `${fold(entry.title)} ${fold(entry.artist)}`;
+    return words.every((word) => haystack.includes(word));
+  });
+};
+
+export type SongOrder = 'updated' | 'title';
+
+// 'updated' is the server order; 'title' is natural order with untitled songs last.
+export const sortSongs = (entries: LibraryEntry[], order: SongOrder): LibraryEntry[] => {
+  const sorted = [...entries];
+  if (order === 'title') {
+    sorted.sort((a, b) => {
+      if (!a.title || !b.title) return Number(!a.title) - Number(!b.title);
+      return a.title.localeCompare(b.title, undefined, { numeric: true, sensitivity: 'base' });
+    });
+  }
+  return sorted;
+};

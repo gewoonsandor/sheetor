@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 
 import type { Library, LibraryEntry, LibraryFolder, Role } from '../../../src/features/library/libraryStore';
 import {
-  childFolders, countSongsIn, folderChoices, folderPath, songsIn,
+  childFolders, countSongsIn, folderChoices, folderPath, searchSongs, songsIn, sortSongs,
 } from '../../../src/features/library/libraryStore';
 
 const entry = (id: string, title: string, folderId: string | null): LibraryEntry => ({
@@ -104,5 +104,49 @@ describe('tree queries', () => {
 
     expect(folderChoices(mixed, 2).map((it) => it.id)).toEqual(['band', 'demos']);
     expect(folderChoices(mixed, 1).map((it) => it.id)).toEqual(['mine']);
+  });
+});
+
+describe('searchSongs', () => {
+  const library: Library = {
+    folders: [],
+    entries: [
+      { ...entry('a', 'Midnight Riff', null), artist: 'Beyoncé' },
+      { ...entry('b', 'Café Blues', 'f'), artist: 'Nobody' },
+      { ...entry('c', 'Morning', null), artist: 'Midnight Choir' },
+    ],
+  };
+  const ids = (query: string) => searchSongs(library, query).map((it) => it.id);
+
+  it('ignores case, accents and word order', () => {
+    expect(ids('RIFF midnight')).toEqual(['a']);
+    expect(ids('cafe')).toEqual(['b']);
+    expect(ids('beyonce riff')).toEqual(['a']);
+  });
+
+  it('matches the artist and keeps server order', () => {
+    expect(ids('midnight')).toEqual(['a', 'c']);
+  });
+
+  it('finds nothing for a blank query', () => {
+    expect(ids('')).toEqual([]);
+    expect(ids('   ')).toEqual([]);
+  });
+});
+
+describe('sortSongs', () => {
+  const songs = [entry('a', 'song 10', null), entry('b', '', null), entry('c', 'Song 2', null), entry('d', 'alpha', null)];
+
+  it("orders 'title' naturally with untitled songs last", () => {
+    expect(sortSongs(songs, 'title').map((it) => it.id)).toEqual(['d', 'c', 'a', 'b']);
+  });
+
+  it("returns 'updated' as a new array in the input order without mutating it", () => {
+    const before = [...songs];
+    const sorted = sortSongs(songs, 'updated');
+    expect(sorted).toEqual(before);
+    expect(sorted).not.toBe(songs);
+    sortSongs(songs, 'title');
+    expect(songs).toEqual(before);
   });
 });

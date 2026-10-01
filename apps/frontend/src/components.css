@@ -451,3 +451,28 @@ kbd {
   gap: var(--sp-2);
   margin-top: var(--sp-4);
 }
+
+/* ------------------------------------------------------------ Loading */
+
+/* A placeholder row while the server answers. */
+.skeleton {
+  background: linear-gradient(90deg, var(--surface-1), var(--surface-2), var(--surface-1));
+  background-size: 200% 100%;
+  animation: skeleton 1.2s ease-in-out infinite;
+}
+
+@keyframes skeleton {
+  from {
+    background-position: 100% 0;
+  }
+
+  to {
+    background-position: -100% 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .skeleton {
+    animation: none;
+  }
+}
