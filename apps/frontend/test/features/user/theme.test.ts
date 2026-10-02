@@ -11,6 +11,7 @@ interface FakeQuery {
 let prefersLight: boolean;
 let listeners: Array<() => void>;
 let root: { dataset: Record<string, string> };
+let icons: Array<{ href: string }>;
 
 const makeQuery = (): FakeQuery => ({
   get matches() {
@@ -28,8 +29,9 @@ beforeEach(() => {
   prefersLight = false;
   listeners = [];
   root = { dataset: {} };
+  icons = [{ href: 'http://localhost/assets/emerald/icon/favicon.svg' }];
   vi.stubGlobal('window', { matchMedia: () => makeQuery() });
-  vi.stubGlobal('document', { documentElement: root });
+  vi.stubGlobal('document', { documentElement: root, querySelectorAll: () => icons });
 });
 
 describe('resolveTheme', () => {
@@ -58,6 +60,13 @@ describe('applyTheme', () => {
     prefersLight = true;
     applyTheme({ theme: 'system', accent: 'amber' });
     expect(root.dataset.theme).toBe('light');
+  });
+
+  it("points the tab icons at the colour style's folder", () => {
+    applyTheme({ theme: 'dark', accent: 'rose' });
+    expect(icons[0].href).toBe('http://localhost/assets/rose/icon/favicon.svg');
+    applyTheme({ theme: 'dark', accent: 'emerald' });
+    expect(icons[0].href).toBe('http://localhost/assets/emerald/icon/favicon.svg');
   });
 });
 

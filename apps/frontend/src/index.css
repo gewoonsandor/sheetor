@@ -147,8 +147,9 @@
   /* The sticky app header; the editor keeps what it scrolls to below it. */
   --header-h: 56px;
 
-  /* The wordmark has one artwork per theme: light lettering here. */
-  --logo: url('/assets/logo/sheetor-logo-dark.svg');
+  /* The wordmark: one artwork per palette and theme, light lettering here.
+     Each palette block below re-points it. */
+  --logo: url('/assets/emerald/logo/sheetor-logo-dark.svg');
 
   /* Elevation: a tight contact shadow plus a soft ambient one per step */
   --shadow-1: 0 1px 1px rgb(0 0 0 / 0.3), 0 2px 6px -2px rgb(0 0 0 / 0.35);
@@ -238,7 +239,7 @@
   --shadow-3: 0 4px 10px -2px hsl(var(--tint-h) 30% 20% / 0.1), 0 28px 64px -18px hsl(var(--tint-h) 30% 20% / 0.3);
   --scrim: hsl(var(--tint-h) 20% 25% / 0.28);
   --bar-surface: hsl(var(--tint-h) 40% 99% / 0.8);
-  --logo: url('/assets/logo/sheetor-logo.svg');
+  --logo: url('/assets/emerald/logo/sheetor-logo.svg');
 }
 
 /* A light scope inside a dark page — the paper score. Tokens :root derives
@@ -263,22 +264,22 @@
 /* Colour styles. Each re-points the neutral tint and the accent triplet; the
    selector also matches nested elements, which is how a swatch button on the
    settings page previews a palette it is not currently using. */
-[data-accent='emerald'] { --tint-h: 160; --tint-s: 11%; --accent-rgb: 52 211 153; --accent-hover-rgb: 88 225 175; --accent-ink: hsl(160 40% 7%); }
-[data-accent='amber'] { --tint-h: 26; --tint-s: 12%; --accent-rgb: 217 138 63; --accent-hover-rgb: 231 154 79; --accent-ink: hsl(26 30% 8%); }
-[data-accent='teal'] { --tint-h: 190; --tint-s: 10%; --accent-rgb: 56 189 189; --accent-hover-rgb: 82 205 205; --accent-ink: hsl(190 40% 7%); }
-[data-accent='indigo'] { --tint-h: 232; --tint-s: 12%; --accent-rgb: 129 148 248; --accent-hover-rgb: 150 167 252; --accent-ink: hsl(232 40% 9%); }
-[data-accent='violet'] { --tint-h: 275; --tint-s: 11%; --accent-rgb: 167 129 240; --accent-hover-rgb: 183 150 246; --accent-ink: hsl(275 35% 9%); }
-[data-accent='rose'] { --tint-h: 345; --tint-s: 11%; --accent-rgb: 244 114 160; --accent-hover-rgb: 248 138 178; --accent-ink: hsl(345 35% 9%); }
+[data-accent='emerald'] { --tint-h: 160; --tint-s: 11%; --accent-rgb: 52 211 153; --accent-hover-rgb: 88 225 175; --accent-ink: hsl(160 40% 7%); --logo: url('/assets/emerald/logo/sheetor-logo-dark.svg'); }
+[data-accent='amber'] { --tint-h: 26; --tint-s: 12%; --accent-rgb: 217 138 63; --accent-hover-rgb: 231 154 79; --accent-ink: hsl(26 30% 8%); --logo: url('/assets/amber/logo/sheetor-logo-dark.svg'); }
+[data-accent='teal'] { --tint-h: 190; --tint-s: 10%; --accent-rgb: 56 189 189; --accent-hover-rgb: 82 205 205; --accent-ink: hsl(190 40% 7%); --logo: url('/assets/teal/logo/sheetor-logo-dark.svg'); }
+[data-accent='indigo'] { --tint-h: 232; --tint-s: 12%; --accent-rgb: 129 148 248; --accent-hover-rgb: 150 167 252; --accent-ink: hsl(232 40% 9%); --logo: url('/assets/indigo/logo/sheetor-logo-dark.svg'); }
+[data-accent='violet'] { --tint-h: 275; --tint-s: 11%; --accent-rgb: 167 129 240; --accent-hover-rgb: 183 150 246; --accent-ink: hsl(275 35% 9%); --logo: url('/assets/violet/logo/sheetor-logo-dark.svg'); }
+[data-accent='rose'] { --tint-h: 345; --tint-s: 11%; --accent-rgb: 244 114 160; --accent-hover-rgb: 248 138 178; --accent-ink: hsl(345 35% 9%); --logo: url('/assets/rose/logo/sheetor-logo-dark.svg'); }
 
 /* On near-white surfaces the dark-tuned accents lose contrast, so each palette
    darkens its triplet and inverts its ink. The third form is a light scope
    inside a dark page, which takes its palette from <html>. */
-[data-theme='light'][data-accent='emerald'], [data-theme='light'] [data-accent='emerald'], [data-accent='emerald'] [data-theme='light'] { --accent-rgb: 4 130 92; --accent-hover-rgb: 3 110 78; --accent-ink: hsl(160 60% 98%); }
-[data-theme='light'][data-accent='amber'], [data-theme='light'] [data-accent='amber'], [data-accent='amber'] [data-theme='light'] { --accent-rgb: 176 100 24; --accent-hover-rgb: 156 86 18; --accent-ink: hsl(26 60% 98%); }
-[data-theme='light'][data-accent='teal'], [data-theme='light'] [data-accent='teal'], [data-accent='teal'] [data-theme='light'] { --accent-rgb: 13 133 133; --accent-hover-rgb: 10 112 112; --accent-ink: hsl(190 60% 98%); }
-[data-theme='light'][data-accent='indigo'], [data-theme='light'] [data-accent='indigo'], [data-accent='indigo'] [data-theme='light'] { --accent-rgb: 66 86 214; --accent-hover-rgb: 52 71 190; --accent-ink: hsl(232 60% 98%); }
-[data-theme='light'][data-accent='violet'], [data-theme='light'] [data-accent='violet'], [data-accent='violet'] [data-theme='light'] { --accent-rgb: 120 74 202; --accent-hover-rgb: 103 60 180; --accent-ink: hsl(275 60% 98%); }
-[data-theme='light'][data-accent='rose'], [data-theme='light'] [data-accent='rose'], [data-accent='rose'] [data-theme='light'] { --accent-rgb: 198 46 106; --accent-hover-rgb: 174 36 92; --accent-ink: hsl(345 60% 98%); }
+[data-theme='light'][data-accent='emerald'], [data-theme='light'] [data-accent='emerald'], [data-accent='emerald'] [data-theme='light'] { --accent-rgb: 4 130 92; --accent-hover-rgb: 3 110 78; --accent-ink: hsl(160 60% 98%); --logo: url('/assets/emerald/logo/sheetor-logo.svg'); }
+[data-theme='light'][data-accent='amber'], [data-theme='light'] [data-accent='amber'], [data-accent='amber'] [data-theme='light'] { --accent-rgb: 176 100 24; --accent-hover-rgb: 156 86 18; --accent-ink: hsl(26 60% 98%); --logo: url('/assets/amber/logo/sheetor-logo.svg'); }
+[data-theme='light'][data-accent='teal'], [data-theme='light'] [data-accent='teal'], [data-accent='teal'] [data-theme='light'] { --accent-rgb: 13 133 133; --accent-hover-rgb: 10 112 112; --accent-ink: hsl(190 60% 98%); --logo: url('/assets/teal/logo/sheetor-logo.svg'); }
+[data-theme='light'][data-accent='indigo'], [data-theme='light'] [data-accent='indigo'], [data-accent='indigo'] [data-theme='light'] { --accent-rgb: 66 86 214; --accent-hover-rgb: 52 71 190; --accent-ink: hsl(232 60% 98%); --logo: url('/assets/indigo/logo/sheetor-logo.svg'); }
+[data-theme='light'][data-accent='violet'], [data-theme='light'] [data-accent='violet'], [data-accent='violet'] [data-theme='light'] { --accent-rgb: 120 74 202; --accent-hover-rgb: 103 60 180; --accent-ink: hsl(275 60% 98%); --logo: url('/assets/violet/logo/sheetor-logo.svg'); }
+[data-theme='light'][data-accent='rose'], [data-theme='light'] [data-accent='rose'], [data-accent='rose'] [data-theme='light'] { --accent-rgb: 198 46 106; --accent-hover-rgb: 174 36 92; --accent-ink: hsl(345 60% 98%); --logo: url('/assets/rose/logo/sheetor-logo.svg'); }
 
 /* Touch: every control grows to a finger's size. --cmdbar-h follows through its calc. */
 @media (pointer: coarse) {

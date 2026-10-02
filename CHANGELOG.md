@@ -13,8 +13,9 @@ still change the song format or the API; from `1.0.0` on, only a major release w
   in from.
 - Paper score, in the editor's View menu: dark ink on a light page, in the dark theme too. It is
   saved to your account with the rest of your appearance.
-- The Sheetor logo in the header and on the sign-in screen, in a version for each theme, and app
-  icons for browser tabs, home screens and installs.
+- The Sheetor logo in the header and on the sign-in screen, and app icons for browser tabs, home
+  screens and installs. The logo and the tab icon take the colour of your colour style, with a
+  version for each theme.
 - An Emerald colour style that matches the logo, now the default. Anyone who already has a colour
   style keeps it until they pick Emerald in Settings.
 
