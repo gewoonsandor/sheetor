@@ -209,6 +209,10 @@ export const checkMeasureBeats = (measure: TabMeasure, measureIndex: number, get
   };
 };
 
+/** A vibrato's wavy line from `x0` along `y`: one 4-unit zigzag after another up to `x1`, at least two. */
+export const vibratoPath = (x0: number, x1: number, y: number): string =>
+  `M ${x0} ${y}` + ' l 1 -1.5 l 2 3 l 1 -1.5'.repeat(Math.max(2, Math.floor((x1 - x0) / 4)));
+
 // Virtual fretboard logarithmic layout
 export const FRET_COUNT = 15;
 const scaleFactor = 1 - Math.pow(2, -FRET_COUNT / 12);

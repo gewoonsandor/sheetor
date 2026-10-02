@@ -21,6 +21,8 @@ still change the song format or the API; from `1.0.0` on, only a major release w
 
 ### Changed
 
+- Vibrato is a wavy line over the note, in the notation and above the TAB, and a bend is an arrow
+  rising from the fret number, labelled "full", instead of a `~` or `b` after the fret.
 - Secondary text has more contrast in both themes, and every control shows a ring when it has
   keyboard focus.
 - Menus and dialogs work from the keyboard: opening one moves focus into it, and Escape closes it

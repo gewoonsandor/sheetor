@@ -94,6 +94,7 @@ import {
   GRAND_BASS_TOP,
   alignBars,
   CLEF_CHANGE_ROOM,
+  vibratoPath,
 } from './layout';
 
 // Treble clef outline traced from the public-domain "Treble clef with empty staff.svg"
@@ -1370,6 +1371,12 @@ export const TabSheetEditor: React.FC<TabSheetEditorProps> = ({ meta, channel })
     return getMeasureX(mIdx) + padding + at * usableWidth;
   };
 
+  /** Where a vibrato starting at a beat ends: just before the bar's next beat, or at the bar line. */
+  const vibratoEnd = (mIdx: number, bIdx: number, staff: Staff): number =>
+    (bIdx + 1 < barOf(staff, mIdx).beats.length
+      ? getBeatCoordinates(mIdx, bIdx + 1, staff)
+      : getMeasureX(mIdx) + getMeasureWidth(mIdx)) - 4;
+
   // Determine the unified stem direction for a beam group in a staff's bar `mIdx`.
   const getBeamStemUp = (mIdx: number, beamGroup: BeamGroup, staff: Staff): boolean => {
     const measure = barOf(staff, mIdx);
@@ -2439,6 +2446,17 @@ export const TabSheetEditor: React.FC<TabSheetEditorProps> = ({ meta, channel })
                     );
                   })}
 
+                  {/* Vibrato: a wavy line over the beat, clear of the staff, the noteheads and an up stem. */}
+                  {showNotation && beatNotes.some(n => n.vibrato) && (
+                    <path
+                      d={vibratoPath(beatX - 4, vibratoEnd(mIdx, bIdx, staff), Math.min(staffY + 10, hasStem && stemUp ? stemEndY : highestY - 4) - 7)}
+                      fill="none"
+                      className="glyph-ink-stroke"
+                      strokeWidth="1"
+                      style={{ pointerEvents: 'none' }}
+                    />
+                  )}
+
                   {/* Shared stem for chord */}
                   {showNotation && hasStem && (
                     <g>
@@ -2502,6 +2520,17 @@ export const TabSheetEditor: React.FC<TabSheetEditorProps> = ({ meta, channel })
                     </g>
                   )}
 
+                  {/* Vibrato over the TAB, on the line just above the top string. */}
+                  {showTab && b.notes.some(n => n.vibrato) && (
+                    <path
+                      d={vibratoPath(beatX - 4, vibratoEnd(mIdx, bIdx, staff), rowY + tabTop + ts - 7)}
+                      fill="none"
+                      className="glyph-ink-stroke"
+                      strokeWidth="1"
+                      style={{ pointerEvents: 'none' }}
+                    />
+                  )}
+
                   {/* B. TAB numbers (fret digits over strings) */}
                   {showTab && b.notes.map((rawNote, noteIndex) => {
                     if (!isFrettedNote(rawNote)) return null;
@@ -2511,10 +2540,7 @@ export const TabSheetEditor: React.FC<TabSheetEditorProps> = ({ meta, channel })
 
                     const fretDisplay = (note: FrettedNote): string => {
                       if (note.ghostNote) return 'x';
-                      let text = note.harmonic ? `<${note.fret}>` : `${note.fret}`;
-                      if (note.bend) text += 'b';
-                      if (note.vibrato) text += '~';
-                      return text;
+                      return note.harmonic ? `<${note.fret}>` : `${note.fret}`;
                     };
 
                     const displayText = fretDisplay(n);
@@ -2547,6 +2573,21 @@ export const TabSheetEditor: React.FC<TabSheetEditorProps> = ({ meta, channel })
                         >
                           {displayText}
                         </text>
+                        {/* Bend: an arrow from the fret number up above the staff. A bend
+                            has no amount, so it reads as a full one; a chord labels it once. */}
+                        {n.bend && (() => {
+                          const x0 = beatX + bgWidth / 2;
+                          const ax = x0 + 6;
+                          const tip = rowY + tabTop + ts - 14;
+                          const labelled = b.notes.findIndex(nn => nn.bend) === noteIndex;
+                          return (
+                            <g style={{ pointerEvents: 'none' }}>
+                              <path d={`M ${x0} ${stringY} Q ${ax} ${stringY}, ${ax} ${tip + 4}`} fill="none" className="glyph-ink-stroke" strokeWidth="1" />
+                              <path d={`M ${ax} ${tip} l 2.5 4.5 h -5 Z`} className="glyph-ink" />
+                              {labelled && <text x={ax} y={tip - 2} textAnchor="middle" fontSize="8" className="music-text glyph-ink">full</text>}
+                            </g>
+                          );
+                        })()}
                         {(n.slur || n.legatoSlide) && (() => {
                           let prevPos: { x: number; y: number; fret: number } | null = null;
                           for (let i = bIdx - 1; i >= 0; i--) {
