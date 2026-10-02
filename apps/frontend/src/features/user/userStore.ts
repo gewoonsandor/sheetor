@@ -7,11 +7,12 @@ export type ThemePreference = 'system' | 'light' | 'dark';
 
 export const THEME_PREFERENCES = ['system', 'light', 'dark'] as const;
 
-export const ACCENTS = ['amber', 'teal', 'indigo', 'violet', 'rose'] as const;
+export const ACCENTS = ['emerald', 'amber', 'teal', 'indigo', 'violet', 'rose'] as const;
 
 export type AccentId = (typeof ACCENTS)[number];
 
 export const ACCENT_LABELS: Record<AccentId, string> = {
+  emerald: 'Emerald',
   amber: 'Amber',
   teal: 'Teal',
   indigo: 'Indigo',
@@ -41,7 +42,7 @@ export const DEFAULT_USER: User = {
   name: 'Local musician',
   email: '',
   theme: 'system',
-  accent: 'amber',
+  accent: 'emerald',
   paperScore: false,
 };
 

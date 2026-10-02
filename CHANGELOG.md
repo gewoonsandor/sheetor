@@ -15,6 +15,8 @@ still change the song format or the API; from `1.0.0` on, only a major release w
   saved to your account with the rest of your appearance.
 - The Sheetor logo in the header and on the sign-in screen, in a version for each theme, and app
   icons for browser tabs, home screens and installs.
+- An Emerald colour style that matches the logo, now the default. Anyone who already has a colour
+  style keeps it until they pick Emerald in Settings.
 
 ### Changed
 

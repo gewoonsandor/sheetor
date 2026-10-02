@@ -111,7 +111,7 @@ describe('loadUser', () => {
 
   it('rejects an accent that is not one of the shipped palettes', () => {
     seed({ accent: 'chartreuse' });
-    expect(store.loadUser().accent).toBe('amber');
+    expect(store.loadUser().accent).toBe(store.DEFAULT_USER.accent);
   });
 
   it('accepts every shipped accent', async () => {

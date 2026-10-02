@@ -24,6 +24,7 @@ impl Theme {
 #[sqlx(type_name = "text", rename_all = "lowercase")]
 #[serde(rename_all = "lowercase")]
 pub enum Accent {
+    Emerald,
     Amber,
     Teal,
     Indigo,
@@ -34,6 +35,7 @@ pub enum Accent {
 impl Accent {
     pub fn as_str(self) -> &'static str {
         match self {
+            Accent::Emerald => "emerald",
             Accent::Amber => "amber",
             Accent::Teal => "teal",
             Accent::Indigo => "indigo",

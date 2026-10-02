@@ -15,13 +15,14 @@
 :root {
   color-scheme: dark;
 
-  /* Colour style: the two knobs every palette re-points. Amber lives here so a
-     missing or unknown data-accent still renders the shipped look. */
-  --tint-h: 26;
-  --tint-s: 12%;
-  --accent-rgb: 217 138 63;
-  --accent-hover-rgb: 231 154 79;
-  --accent-ink: hsl(26 30% 8%);
+  /* Colour style: the two knobs every palette re-points. Emerald, the logo's
+     green, lives here so a missing or unknown data-accent still renders the
+     default look. */
+  --tint-h: 160;
+  --tint-s: 11%;
+  --accent-rgb: 52 211 153;
+  --accent-hover-rgb: 88 225 175;
+  --accent-ink: hsl(160 40% 7%);
 
   /* Surfaces: deep tinted near-black, each step lighter as it lifts */
   --bg: hsl(var(--tint-h) var(--tint-s) 5%);
@@ -189,9 +190,9 @@
 [data-theme='light'] {
   color-scheme: light;
 
-  --accent-rgb: 176 100 24;
-  --accent-hover-rgb: 156 86 18;
-  --accent-ink: hsl(26 60% 98%);
+  --accent-rgb: 4 130 92;
+  --accent-hover-rgb: 3 110 78;
+  --accent-ink: hsl(160 60% 98%);
 
   --bg: hsl(var(--tint-h) 30% 94%);
   --surface-1: hsl(var(--tint-h) 45% 99%);
@@ -262,6 +263,7 @@
 /* Colour styles. Each re-points the neutral tint and the accent triplet; the
    selector also matches nested elements, which is how a swatch button on the
    settings page previews a palette it is not currently using. */
+[data-accent='emerald'] { --tint-h: 160; --tint-s: 11%; --accent-rgb: 52 211 153; --accent-hover-rgb: 88 225 175; --accent-ink: hsl(160 40% 7%); }
 [data-accent='amber'] { --tint-h: 26; --tint-s: 12%; --accent-rgb: 217 138 63; --accent-hover-rgb: 231 154 79; --accent-ink: hsl(26 30% 8%); }
 [data-accent='teal'] { --tint-h: 190; --tint-s: 10%; --accent-rgb: 56 189 189; --accent-hover-rgb: 82 205 205; --accent-ink: hsl(190 40% 7%); }
 [data-accent='indigo'] { --tint-h: 232; --tint-s: 12%; --accent-rgb: 129 148 248; --accent-hover-rgb: 150 167 252; --accent-ink: hsl(232 40% 9%); }
@@ -271,6 +273,7 @@
 /* On near-white surfaces the dark-tuned accents lose contrast, so each palette
    darkens its triplet and inverts its ink. The third form is a light scope
    inside a dark page, which takes its palette from <html>. */
+[data-theme='light'][data-accent='emerald'], [data-theme='light'] [data-accent='emerald'], [data-accent='emerald'] [data-theme='light'] { --accent-rgb: 4 130 92; --accent-hover-rgb: 3 110 78; --accent-ink: hsl(160 60% 98%); }
 [data-theme='light'][data-accent='amber'], [data-theme='light'] [data-accent='amber'], [data-accent='amber'] [data-theme='light'] { --accent-rgb: 176 100 24; --accent-hover-rgb: 156 86 18; --accent-ink: hsl(26 60% 98%); }
 [data-theme='light'][data-accent='teal'], [data-theme='light'] [data-accent='teal'], [data-accent='teal'] [data-theme='light'] { --accent-rgb: 13 133 133; --accent-hover-rgb: 10 112 112; --accent-ink: hsl(190 60% 98%); }
 [data-theme='light'][data-accent='indigo'], [data-theme='light'] [data-accent='indigo'], [data-accent='indigo'] [data-theme='light'] { --accent-rgb: 66 86 214; --accent-hover-rgb: 52 71 190; --accent-ink: hsl(232 60% 98%); }
