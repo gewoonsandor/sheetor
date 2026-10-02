@@ -282,7 +282,7 @@
 }
 
 .cursor-ring {
-  stroke: var(--warn);
+  stroke: var(--accent);
 }
 
 .playback-line {

@@ -2317,8 +2317,8 @@ export const TabSheetEditor: React.FC<TabSheetEditorProps> = ({ meta, channel })
                         rx="4"
                         pointerEvents="none"
                       />
-                      {/* Fret/string tiny dot cursor in TAB */}
-                      {showTab && (
+                      {/* Empty-string cursor in the TAB; a note there is highlighted itself */}
+                      {showTab && !b.notes.some(n => isFrettedNote(n) && n.stringIndex === activeStringIndex) && (
                         <circle
                           cx={beatX}
                           cy={rowY + tabTop + ts + activeStringIndex * 10}
