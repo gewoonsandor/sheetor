@@ -21,6 +21,9 @@ still change the song format or the API; from `1.0.0` on, only a major release w
 - Bends have a size. B steps the note through a ½ bend, a full bend and none, and Shift+B lets the
   bend back down (a release). The TAB labels the size and draws the release, and the notation
   curves to the pitch the bend reaches. Bends in songs saved earlier read as full.
+- Slides into a note from below or above, and out of a note down or up. S steps the slide into a
+  note: from the note before, from below, from above, off. Shift+S steps the slide out: down, up,
+  off. A note can have both.
 
 ### Changed
 

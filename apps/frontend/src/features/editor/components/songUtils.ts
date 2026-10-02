@@ -104,6 +104,26 @@ export const withNextBend = (note: TabNote): TabNote => {
   return next;
 };
 
+/** S steps how a note is slid into: from the note before, from below, from above, then not at all. */
+export const withNextSlideIn = (note: TabNote): TabNote => {
+  const next = { ...note };
+  delete next.legatoSlide;
+  delete next.slideIn;
+  if (!note.legatoSlide && !note.slideIn) next.legatoSlide = true;
+  else if (note.legatoSlide) next.slideIn = 'below';
+  else if (note.slideIn === 'below') next.slideIn = 'above';
+  return next;
+};
+
+/** Shift+S steps a slide out of the note through down and up to none. */
+export const withNextSlideOut = (note: TabNote): TabNote => {
+  const next = { ...note };
+  delete next.slideOut;
+  if (!note.slideOut) next.slideOut = 'down';
+  else if (note.slideOut === 'down') next.slideOut = 'up';
+  return next;
+};
+
 // Helper to convert duration string to beat multiplier (relative to quarter note)
 export const getDurationVal = (dur: Duration, dot?: boolean): number => {
   let base: number;
@@ -483,7 +503,7 @@ const convertNote = (note: TabNote, track: TabTrack, tuning?: number[]): TabNote
   return [{ ...techniquesOf(note), ...(tuning ? placeMidiOnStrings(midi, tuning) : { midi }) }];
 };
 
-/** The technique flags and the bend only — the two note shapes share nothing else. */
+/** The technique flags, the bend and the slides only — the two note shapes share nothing else. */
 const techniquesOf = (note: TabNote): NoteTechniques => {
   const flags: NoteTechniques = {};
   for (const key of TECHNIQUE_KEYS) {
@@ -491,6 +511,8 @@ const techniquesOf = (note: TabNote): NoteTechniques => {
   }
   if (note.bend) flags.bend = note.bend;
   if (note.bend && note.bendRelease) flags.bendRelease = true;
+  if (note.slideIn) flags.slideIn = note.slideIn;
+  if (note.slideOut) flags.slideOut = note.slideOut;
   return flags;
 };
 

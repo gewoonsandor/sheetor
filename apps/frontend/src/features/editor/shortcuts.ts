@@ -20,8 +20,8 @@ export const typeFretDigit = (entry: FretEntry | null, digit: string, at: string
   return { digits: Number(joined) <= MAX_FRET ? joined : digit, at, time };
 };
 
-/** A technique with a key of its own; the release rides on the bend's key with Shift. */
-export type TechniqueId = Exclude<keyof NoteTechniques, 'bendRelease'>;
+/** A technique with a key of its own; the bend's release and the slide out ride on their keys with Shift. */
+export type TechniqueId = Exclude<keyof NoteTechniques, 'bendRelease' | 'slideIn' | 'slideOut'>;
 
 export interface Shortcut {
   keys: string[];
@@ -43,7 +43,7 @@ export const TECHNIQUE_SHORTCUTS: Record<TechniqueId, string> = {
 
 export const TECHNIQUE_LABELS: Record<TechniqueId, string> = {
   slur: 'Slur',
-  legatoSlide: 'Legato slide',
+  legatoSlide: 'Slide in: from the note before, from below, from above, off',
   vibrato: 'Vibrato',
   bend: 'Bend: ½, full, off',
   palmMute: 'Palm mute',
@@ -78,4 +78,5 @@ export const SHORTCUTS: Shortcut[] = [
     group: 'Techniques',
   })),
   { keys: ['Shift', 'B'], action: 'Release the bend', group: 'Techniques' },
+  { keys: ['Shift', 'S'], action: 'Slide out: down, up, off', group: 'Techniques' },
 ];

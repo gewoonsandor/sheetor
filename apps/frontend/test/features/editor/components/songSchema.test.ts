@@ -277,4 +277,21 @@ describe('parseSong', () => {
       { stringIndex: 2, fret: 7 },
     ]);
   });
+
+  it('reads a slide in only when it does not already come from the note before', () => {
+    const song = valid();
+    song.measures[0].beats[0].notes = [
+      { stringIndex: 0, fret: 7, slideIn: 'below', slideOut: 'up' },
+      { stringIndex: 1, fret: 7, legatoSlide: true, slideIn: 'above' },
+      { stringIndex: 2, fret: 7, slideIn: 'sideways', slideOut: 'left' },
+    ] as never;
+    const result = parseSong(song);
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.song.tracks[0].measures[0].beats[0].notes).toEqual([
+      { stringIndex: 0, fret: 7, slideIn: 'below', slideOut: 'up' },
+      { stringIndex: 1, fret: 7, legatoSlide: true },
+      { stringIndex: 2, fret: 7 },
+    ]);
+  });
 });

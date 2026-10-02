@@ -94,6 +94,9 @@ const parseNote = (value: unknown, where: string): TabNote | string => {
     note.bend = bend;
     if (value.bendRelease === true) note.bendRelease = true;
   }
+  // A slide comes into a note from the note before or from below or above, never both.
+  if ((value.slideIn === 'below' || value.slideIn === 'above') && !note.legatoSlide) note.slideIn = value.slideIn;
+  if (value.slideOut === 'down' || value.slideOut === 'up') note.slideOut = value.slideOut;
   return note;
 };
 

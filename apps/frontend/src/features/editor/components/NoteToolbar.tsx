@@ -13,6 +13,14 @@ const TECHNIQUES: [TechniqueId, string][] = [
 ];
 
 const RELEASE_LABEL = 'Release the bend (Shift+B)';
+const SLIDE_OUT_LABEL = 'Slide out: down, up, off (Shift+S)';
+
+/** What a button adds to its glyph for a technique with more kinds than on and off. */
+const kindOf = (technique: TechniqueId, note: TabNote | undefined): string | undefined => {
+  if (technique === 'bend' && note?.bend) return BEND_LABELS[note.bend];
+  if (technique === 'legatoSlide') return note?.slideIn;
+  return undefined;
+};
 
 // A toolbar button never takes focus from the score, so digits keep entering frets.
 const keepFocus = (e: MouseEvent) => e.preventDefault();
@@ -53,21 +61,36 @@ export const NoteToolbar = ({
     <div className="toolbar-divider" />
     {TECHNIQUES.map(([technique, glyph]) => {
       const label = `${TECHNIQUE_LABELS[technique]} (${TECHNIQUE_SHORTCUTS[technique]})`;
-      const bend = technique === 'bend' ? activeNote?.bend : undefined;
+      const kind = kindOf(technique, activeNote);
       return [
         <button
           key={technique}
           type="button"
           className="btn btn-sm"
-          aria-pressed={!!activeNote?.[technique]}
+          aria-pressed={!!activeNote?.[technique] || !!kind}
           aria-label={label}
           title={label}
           disabled={!activeNote}
           onMouseDown={keepFocus}
           onClick={() => toggleNoteTechnique(technique)}
         >
-          {bend ? `${glyph} ${BEND_LABELS[bend]}` : glyph}
+          {kind ? `${glyph} ${kind}` : glyph}
         </button>,
+        technique === 'legatoSlide' && (
+          <button
+            key="slideOut"
+            type="button"
+            className="btn btn-sm"
+            aria-pressed={!!activeNote?.slideOut}
+            aria-label={SLIDE_OUT_LABEL}
+            title={SLIDE_OUT_LABEL}
+            disabled={!activeNote}
+            onMouseDown={keepFocus}
+            onClick={() => toggleNoteTechnique('slideOut')}
+          >
+            {activeNote?.slideOut ? `╲ ${activeNote.slideOut}` : '╲'}
+          </button>
+        ),
         technique === 'bend' && (
           <button
             key="bendRelease"

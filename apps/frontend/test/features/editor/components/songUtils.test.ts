@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 
-import type { BeatPosition, TabBeat, TabMeasure, TabSong, TabTrack } from '../../../../src/features/editor/components/types';
+import type { BeatPosition, TabBeat, TabMeasure, TabNote, TabSong, TabTrack } from '../../../../src/features/editor/components/types';
 import {
   computeBeamGroups,
   createEmptyMeasure,
@@ -39,6 +39,8 @@ import {
   beatOnset,
   beatRuns,
   withNextBend,
+  withNextSlideIn,
+  withNextSlideOut,
   previousNoteOnString,
 } from '../../../../src/features/editor/components/songUtils';
 
@@ -674,6 +676,20 @@ describe('withNextBend', () => {
     const full = withNextBend({ ...half, bendRelease: true });
     expect(full).toEqual({ stringIndex: 0, fret: 7, bend: 2, bendRelease: true });
     expect(withNextBend(full)).toEqual({ stringIndex: 0, fret: 7 });
+  });
+});
+
+describe('slides', () => {
+  it('steps a slide in through the note before, below and above to none, and a slide out on its own', () => {
+    const steps: TabNote[] = [{ stringIndex: 0, fret: 7, slideOut: 'down' }];
+    for (let i = 0; i < 4; i++) steps.push(withNextSlideIn(steps[steps.length - 1]));
+    expect(steps.map(n => [n.legatoSlide, n.slideIn])).toEqual([
+      [undefined, undefined], [true, undefined], [undefined, 'below'], [undefined, 'above'], [undefined, undefined],
+    ]);
+    expect(steps.every(n => n.slideOut === 'down')).toBe(true);
+    const up = withNextSlideOut(steps[0]);
+    expect(up.slideOut).toBe('up');
+    expect(withNextSlideOut(up).slideOut).toBeUndefined();
   });
 });
 

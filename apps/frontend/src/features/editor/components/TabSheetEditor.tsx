@@ -53,6 +53,8 @@ import {
   beatRuns,
   BEND_LABELS,
   withNextBend,
+  withNextSlideIn,
+  withNextSlideOut,
   previousNoteOnString,
 } from './songUtils';
 import type { CursorIds, CursorIndices } from './songUtils';
@@ -173,6 +175,14 @@ const RUN_MARKS = [
 
 /** Palm mute and let ring share that line, so turning one on clears the other from the whole beat. */
 const EXCLUDES: Partial<Record<keyof NoteTechniques, keyof NoteTechniques>> = { palmMute: 'letRing', letRing: 'palmMute' };
+
+/** Techniques with more than on and off: their key steps the cursor note through every kind. */
+const CYCLES: Partial<Record<keyof NoteTechniques, (note: TabNote) => TabNote>> = {
+  bend: withNextBend,
+  legatoSlide: withNextSlideIn,
+  slideIn: withNextSlideIn,
+  slideOut: withNextSlideOut,
+};
 
 // Keyboard span for pitched tracks, which have no tuning to derive one from.
 const PITCHED_KEYBOARD_LOW = 36;  // C2
@@ -747,12 +757,13 @@ export const TabSheetEditor: React.FC<TabSheetEditorProps> = ({ meta, channel })
     playback.playTone(targetMidi);
   };
 
-  /** Turns a technique on or off on the cursor note; a bend steps through its amounts instead. */
+  /** Turns a technique on or off on the cursor note; bends and slides step through their kinds instead. */
   const toggleNoteTechnique = (technique: keyof NoteTechniques) => {
     updateActiveBeatNotes(currentNotes => {
       const idx = cursorNoteIndex(currentNotes);
       if (idx === -1) return currentNotes;
-      if (technique === 'bend') return currentNotes.map((n, i) => (i === idx ? withNextBend(n) : n));
+      const cycle = CYCLES[technique];
+      if (cycle) return currentNotes.map((n, i) => (i === idx ? cycle(n) : n));
       const on = !currentNotes[idx][technique];
       const other = on ? EXCLUDES[technique] : undefined;
       return currentNotes.map((n, i) => {
@@ -1083,6 +1094,11 @@ export const TabSheetEditor: React.FC<TabSheetEditorProps> = ({ meta, channel })
       if (e.shiftKey && key === 'b') {
         e.preventDefault();
         if (getCursorNote()?.bend) toggleNoteTechnique('bendRelease');
+        return;
+      }
+      if (e.shiftKey && key === 's') {
+        e.preventDefault();
+        toggleNoteTechnique('slideOut');
         return;
       }
       const technique = Object.entries(TECHNIQUE_SHORTCUTS).find(([, k]) => k.toLowerCase() === key);
@@ -2586,6 +2602,25 @@ export const TabSheetEditor: React.FC<TabSheetEditorProps> = ({ meta, channel })
                         >
                           {displayText}
                         </text>
+                        {/* Slides in from below or above and out down or up: a short line beside the
+                            fret number, slanted the way the pitch moves, like a slide between notes. */}
+                        {(n.slideIn || n.slideOut) && (() => {
+                          const left = beatX - bgWidth / 2 - 1;
+                          const right = beatX + bgWidth / 2 + 1;
+                          const inRise = n.slideIn === 'below' ? 3 : -3;
+                          const outRise = n.slideOut === 'up' ? 3 : -3;
+                          return (
+                            <path
+                              d={[
+                                n.slideIn && `M ${left - 8} ${stringY + inRise} L ${left} ${stringY - inRise}`,
+                                n.slideOut && `M ${right} ${stringY + outRise} L ${right + 8} ${stringY - outRise}`,
+                              ].filter(Boolean).join(' ')}
+                              className="slur-line"
+                              strokeWidth="1"
+                              style={{ pointerEvents: 'none' }}
+                            />
+                          );
+                        })()}
                         {/* Bend: an arrow from the fret number up above the staff, labelled with its
                             amount once per beat; a release curves back down to the fret number. */}
                         {n.bend && (() => {

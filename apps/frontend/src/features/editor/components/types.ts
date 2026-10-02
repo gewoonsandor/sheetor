@@ -49,6 +49,12 @@ export type TrackKind = 'fretted' | 'pitched';
 /** How far a bend raises the string, in semitones: half a step or a full one. */
 export type BendAmount = 1 | 2;
 
+/** Where a slide into a note starts when it does not come from the note before. */
+export type SlideIn = 'below' | 'above';
+
+/** Which way a slide out of a note goes. */
+export type SlideOut = 'down' | 'up';
+
 export interface NoteTechniques {
   harmonic?: boolean;
   palmMute?: boolean;
@@ -57,6 +63,9 @@ export interface NoteTechniques {
   ghostNote?: boolean;
   slur?: boolean;       // hammer-on/pull-off (curved bow to previous note on same string)
   legatoSlide?: boolean; // slide (diagonal line to previous note on same string)
+  /** A slide into the note from nowhere in particular; never with `legatoSlide`. */
+  slideIn?: SlideIn;
+  slideOut?: SlideOut;
   bend?: BendAmount;
   /** The bend lets back down to the fretted pitch within the note; only read with a bend. */
   bendRelease?: boolean;
