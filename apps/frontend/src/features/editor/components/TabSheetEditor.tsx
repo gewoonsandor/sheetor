@@ -1284,7 +1284,10 @@ export const TabSheetEditor: React.FC<TabSheetEditorProps> = ({ meta, channel })
       active instanceof HTMLTextAreaElement ||
       active instanceof HTMLSelectElement
     ) return;
-    el.focus();
+    // Never scroll for it: focusing the tall editor scrolls its top, the song title and
+    // artist, under the sticky header in Chromium, where a click lands on the header's
+    // links instead. Scrolling is the keep-in-view effect's alone.
+    el.focus({ preventScroll: true });
   }, [activeBeatIndex, activeMeasureIndex, playback.isPlaying]);
 
   useEffect(() => {
@@ -1862,7 +1865,7 @@ export const TabSheetEditor: React.FC<TabSheetEditorProps> = ({ meta, channel })
         data-theme={user.paperScore ? 'light' : undefined}
         onClick={() => {
           // Refocus the editor on click
-          containerRef.current?.focus();
+          containerRef.current?.focus({ preventScroll: true });
         }}
       >
         <svg
@@ -1877,7 +1880,7 @@ export const TabSheetEditor: React.FC<TabSheetEditorProps> = ({ meta, channel })
             height={totalSVGHeight}
             fill="transparent" 
             className="svg-interactive-bg"
-            onClick={() => containerRef.current?.focus()}
+            onClick={() => containerRef.current?.focus({ preventScroll: true })}
           />
 
           {/* Render Staff & Measure Lines */}

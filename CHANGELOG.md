@@ -58,6 +58,9 @@ still change the song format or the API; from `1.0.0` on, only a major release w
   →, 2 writes two 2s, not a 22. Any other key also ends a two-digit fret.
 - A slur or a slide into a note now connects to the note before it in the previous bar too, and
   one that crosses a row break is drawn in two halves.
+- The song title and artist fields could not be clicked in Chrome and other Chromium browsers:
+  opening a song scrolled them under the header, and a click on them opened the editor again
+  instead.
 
 ## [1.0.0] - 2026-10-01
 
