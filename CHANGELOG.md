@@ -13,6 +13,8 @@ still change the song format or the API; from `1.0.0` on, only a major release w
   in from.
 - Paper score, in the editor's View menu: dark ink on a light page, in the dark theme too. It is
   saved to your account with the rest of your appearance.
+- The Sheetor logo in the header and on the sign-in screen, in a version for each theme, and app
+  icons for browser tabs, home screens and installs.
 
 ### Changed
 

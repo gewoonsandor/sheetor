@@ -1,6 +1,14 @@
 /* Shared primitives: every page builds from these. Tokens live in index.css;
    a feature stylesheet only adds what is particular to it. */
 
+/* The wordmark, as tall as a control; 1623 / 512 is the artwork's ratio. */
+.logo {
+  flex: none;
+  width: calc(var(--ctl-h) * 1623 / 512);
+  height: var(--ctl-h);
+  background: var(--logo) left center / contain no-repeat;
+}
+
 /* ------------------------------------------------------------------- Buttons */
 
 /* One silhouette for every command: buttons and menu triggers are the same

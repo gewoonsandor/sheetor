@@ -83,14 +83,7 @@ export const LoginPage = () => {
   return (
     <div className="login-screen">
       <form className="login-card card" onSubmit={submit}>
-        <div className="login-brand">
-          <span className="logo-mark" aria-hidden="true">
-            <svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor">
-              <path d="M9 3.5 19.5 2v3L9 6.5v9.2a3.3 3.3 0 1 1-2-3V3.5Z" />
-            </svg>
-          </span>
-          <span className="logo-text">Sheetor</span>
-        </div>
+        <span className="logo" role="img" aria-label="Sheetor" />
 
         <h1 className="login-title">{signup ? copy.title : 'Sign in'}</h1>
 

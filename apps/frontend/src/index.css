@@ -146,6 +146,9 @@
   /* The sticky app header; the editor keeps what it scrolls to below it. */
   --header-h: 56px;
 
+  /* The wordmark has one artwork per theme: light lettering here. */
+  --logo: url('/assets/logo/sheetor-logo-dark.svg');
+
   /* Elevation: a tight contact shadow plus a soft ambient one per step */
   --shadow-1: 0 1px 1px rgb(0 0 0 / 0.3), 0 2px 6px -2px rgb(0 0 0 / 0.35);
   --shadow-2: 0 2px 4px -1px rgb(0 0 0 / 0.3), 0 14px 32px -10px rgb(0 0 0 / 0.6);
@@ -234,6 +237,7 @@
   --shadow-3: 0 4px 10px -2px hsl(var(--tint-h) 30% 20% / 0.1), 0 28px 64px -18px hsl(var(--tint-h) 30% 20% / 0.3);
   --scrim: hsl(var(--tint-h) 20% 25% / 0.28);
   --bar-surface: hsl(var(--tint-h) 40% 99% / 0.8);
+  --logo: url('/assets/logo/sheetor-logo.svg');
 }
 
 /* A light scope inside a dark page — the paper score. Tokens :root derives

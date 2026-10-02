@@ -15,12 +15,6 @@
   padding: var(--sp-5);
 }
 
-.login-brand {
-  display: flex;
-  align-items: center;
-  gap: var(--sp-2);
-}
-
 .login-title {
   margin: 0;
   font-family: var(--font-display);
