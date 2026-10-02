@@ -61,6 +61,8 @@ still change the song format or the API; from `1.0.0` on, only a major release w
   Ctrl+Delete the bar. The Measure menu shows each key.
 - Grand staff is a toggle in Track settings instead of the View menu, which now shows the staff
   choice only for guitar and bass.
+- A notes staff has a cursor like the TAB's: ↑ and ↓ move a circle line by line, Enter writes a
+  note there, and the note on the circle is the one techniques, Delete and Shift+↑/↓ act on.
 
 ### Fixed
 

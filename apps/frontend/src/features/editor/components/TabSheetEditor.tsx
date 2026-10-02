@@ -4,7 +4,7 @@ import { useNavigate } from 'react-router-dom';
 import './TabSheetEditor.css';
 
 import type {
-  BeatPosition, Clef, Duration, FrettedNote, InstrumentId, NoteTechniques, PitchedNote,
+  BeatPosition, Clef, Duration, FrettedNote, InstrumentId, NoteTechniques,
   Staff, TabNote, TabBeat, TabMeasure, TabSong, TabTrack, BeamGroup, MLayout,
 } from './types';
 import {
@@ -195,6 +195,10 @@ const CYCLES: Partial<Record<keyof NoteTechniques, (note: TabNote) => TabNote>> 
   slideOut: withNextSlideOut,
 };
 
+// How far the notation cursor goes past the staff: three ledger lines either way.
+const NOTE_CURSOR_LOW = -5;
+const NOTE_CURSOR_HIGH = 17;
+
 // Keyboard span for pitched tracks, which have no tuning to derive one from.
 const PITCHED_KEYBOARD_LOW = 36;  // C2
 const PITCHED_KEYBOARD_HIGH = 84; // C6
@@ -219,6 +223,8 @@ export const TabSheetEditor: React.FC<TabSheetEditorProps> = ({ meta, channel })
   const [activeMeasureIndex, setActiveMeasureIndex] = useState<number>(0);
   const [activeBeatIndex, setActiveBeatIndex] = useState<number>(0);
   const [activeStringIndex, setActiveStringIndex] = useState<number>(0);
+  /** The notation cursor's line or space on a pitched track, in treble steps (2 = bottom line, 10 = top line). */
+  const [cursorStep, setCursorStep] = useState<number>(6);
   // Which bar's tempo mark is open for editing in the score, if any. The
   // transport field keeps its own draft, so the two never fight over one value.
   const [bpmEditIndex, setBpmEditIndex] = useState<number | null>(null);
@@ -273,6 +279,10 @@ export const TabSheetEditor: React.FC<TabSheetEditorProps> = ({ meta, channel })
     spell(midi, staff).diatonicStep + clefAt(staff, mIdx).shift;
   /** The bar a staff draws at an index: its own track's. */
   const barOf = (staff: Staff, mIdx: number): TabMeasure => song.tracks[staff.track].measures[mIdx];
+  /** The pitch under the notation cursor, as a click there would write it. */
+  const cursorMidi = staffStepToSoundingMidi(
+    cursorStep - clefAt(activeStaff, activeMeasureIndex).shift, activeTrack.transpose, keyOf(activeStaff),
+  );
 
   const [durationSelect, setDurationSelect] = useState<Duration>('4');
   const [dotSelect, setDotSelect] = useState<boolean>(false);
@@ -709,17 +719,12 @@ export const TabSheetEditor: React.FC<TabSheetEditorProps> = ({ meta, channel })
   };
 
   /**
-   * Which note the cursor is on. Fretted tracks address it by string; pitched
-   * tracks have no strings, so the cursor walks the chord from the top down.
+   * Which note the cursor is on: the one on its string on a fretted track, the
+   * one on its line or space on a pitched one.
    */
-  const cursorNoteIndex = (notes: TabNote[]): number => {
-    if (isFrettedTrack) {
-      return notes.findIndex(n => isFrettedNote(n) && n.stringIndex === activeStringIndex);
-    }
-    const byPitch = [...notes].sort((a, b) => (b as PitchedNote).midi - (a as PitchedNote).midi);
-    const target = byPitch[Math.min(activeStringIndex, byPitch.length - 1)];
-    return target ? notes.indexOf(target) : -1;
-  };
+  const cursorNoteIndex = (notes: TabNote[]): number => (isFrettedTrack
+    ? notes.findIndex(n => isFrettedNote(n) && n.stringIndex === activeStringIndex)
+    : notes.findIndex(n => staffStep(noteMidi(n), activeStaff, activeMeasureIndex) === cursorStep));
 
   const getCursorNote = (): TabNote | undefined => {
     const notes = getActiveBeat()?.notes ?? [];
@@ -741,6 +746,7 @@ export const TabSheetEditor: React.FC<TabSheetEditorProps> = ({ meta, channel })
       const targetMidi = note.midi + semitones;
       if (targetMidi < 0 || targetMidi > 127) return;
       updateActiveBeatNotes(notes => notes.map((n, i) => (i === idx ? { ...n, midi: targetMidi } : n)));
+      setCursorStep(staffStep(targetMidi, activeStaff, activeMeasureIndex));
       playback.playTone(targetMidi);
       return;
     }
@@ -1148,7 +1154,8 @@ export const TabSheetEditor: React.FC<TabSheetEditorProps> = ({ meta, channel })
         if (e.shiftKey) {
           transposeActiveNote(e.ctrlKey || e.metaKey ? 12 : 1);
         } else {
-          setActiveStringIndex(prev => Math.max(0, prev - 1));
+          if (isFrettedTrack) setActiveStringIndex(prev => Math.max(0, prev - 1));
+          else setCursorStep(prev => Math.min(NOTE_CURSOR_HIGH, prev + 1));
         }
         break;
       case 'ArrowDown':
@@ -1156,7 +1163,8 @@ export const TabSheetEditor: React.FC<TabSheetEditorProps> = ({ meta, channel })
         if (e.shiftKey) {
           transposeActiveNote(e.ctrlKey || e.metaKey ? -12 : -1);
         } else {
-          setActiveStringIndex(prev => Math.min(stringCount - 1, prev + 1));
+          if (isFrettedTrack) setActiveStringIndex(prev => Math.min(stringCount - 1, prev + 1));
+          else setCursorStep(prev => Math.max(NOTE_CURSOR_LOW, prev - 1));
         }
         break;
       case 'ArrowLeft':
@@ -1198,6 +1206,13 @@ export const TabSheetEditor: React.FC<TabSheetEditorProps> = ({ meta, channel })
         } else {
           startPlaybackFromCursor();
         }
+        break;
+
+      // Enter writes the pitch under the circle on a pitched staff, as a click there would.
+      case 'Enter':
+        if (isFrettedTrack) break;
+        e.preventDefault();
+        setPitchForActiveNote(cursorMidi);
         break;
 
       // Delete, Backspace and D remove a note, or delete the beat if it's a rest;
@@ -1547,11 +1562,13 @@ export const TabSheetEditor: React.FC<TabSheetEditorProps> = ({ meta, channel })
   // names the beat and the track itself.
   const handleStandardStaffClick = (at: BeatPosition, clickY: number, staff: Staff) => {
     const track = song.tracks[staff.track];
-    const step = Math.round((60 - clickY) / 5) - clefAt(staff, at.measureIndex).shift;
+    const shown = Math.round((60 - clickY) / 5);
+    const step = shown - clefAt(staff, at.measureIndex).shift;
     const clicked = staffStepToSoundingMidi(step, track.transpose, keyOf(staff));
     setActiveTrackIndex(staff.track);
     moveCursorTo(at.measureIndex, at.beatIndex, false);
     if (!isFretted(track)) {
+      setCursorStep(shown);
       setPitchForActiveNote(clicked, at, staff.track);
       return;
     }
@@ -1713,16 +1730,6 @@ export const TabSheetEditor: React.FC<TabSheetEditorProps> = ({ meta, channel })
     return `${activeMidis.has(midi) ? ' active' : ''}${playbackMidis.has(midi) ? ' playback-active' : ''}`;
   };
 
-  /**
-   * The cursor slot a note occupies: its string on a fretted track, its rank
-   * from the top of the chord on a pitched one.
-   */
-  const cursorSlotOf = (note: TabNote, notes: TabNote[]): number => {
-    if (isFrettedNote(note)) return note.stringIndex;
-    const byPitch = [...notes].sort((a, b) => (b as PitchedNote).midi - (a as PitchedNote).midi);
-    return Math.max(0, byPitch.indexOf(note));
-  };
-
   const isCursorNote = (mIdx: number, bIdx: number, noteIndex: number, notes: TabNote[], track: number = activeTrackIndex): boolean =>
     track === activeTrackIndex && activeMeasureIndex === mIdx && activeBeatIndex === bIdx && cursorNoteIndex(notes) === noteIndex;
 
@@ -1732,7 +1739,11 @@ export const TabSheetEditor: React.FC<TabSheetEditorProps> = ({ meta, channel })
     const extending = extend && track === activeTrackIndex;
     setActiveTrackIndex(track);
     moveCursorTo(mIdx, bIdx, extending);
-    if (note) setActiveStringIndex(cursorSlotOf(note, notes));
+    if (note && isFrettedNote(note)) setActiveStringIndex(note.stringIndex);
+    else if (note) {
+      const staff = staves.find(s => s.track === track) ?? activeStaff;
+      setCursorStep(staffStep(noteMidi(note, staff), staff, mIdx));
+    }
   };
 
   /** Dots of a repeat sign sit in the two spaces either side of each staff's middle. */
@@ -1761,7 +1772,7 @@ export const TabSheetEditor: React.FC<TabSheetEditorProps> = ({ meta, channel })
   const cursorText = activeBeat?.isRest
     ? 'Rest'
     : !activeNote
-      ? 'Empty'
+      ? (isFrettedTrack ? 'Empty' : `${midiToNoteOctave(cursorMidi)} (empty)`)
       : showTab && isFrettedNote(activeNote)
         ? `Fret ${activeNote.fret}`
         : midiToNoteOctave(resolveNoteMidi(activeNote, activeTrack) ?? 0);
@@ -2346,6 +2357,18 @@ export const TabSheetEditor: React.FC<TabSheetEditorProps> = ({ meta, channel })
                           cx={beatX}
                           cy={rowY + tabTop + ts + activeStringIndex * 10}
                           r="5.5"
+                          fill="transparent"
+                          className="cursor-ring"
+                          strokeWidth="1.5"
+                          pointerEvents="none"
+                        />
+                      )}
+                      {/* Empty-position cursor on a pitched staff; a note there is highlighted itself */}
+                      {!isFrettedTrack && showNotation && cursorNoteIndex(b.notes) === -1 && (
+                        <circle
+                          cx={beatX}
+                          cy={rowY + staff.top + Y_of_step(cursorStep)}
+                          r="5"
                           fill="transparent"
                           className="cursor-ring"
                           strokeWidth="1.5"

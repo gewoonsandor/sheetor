@@ -55,12 +55,13 @@ export const TECHNIQUE_LABELS: Record<TechniqueId, string> = {
 /** Every key the editor answers, as the shortcuts dialog lists them. */
 export const SHORTCUTS: Shortcut[] = [
   { keys: ['←', '→'], action: 'Beat', group: 'Move' },
-  { keys: ['↑', '↓'], action: 'String', group: 'Move' },
+  { keys: ['↑', '↓'], action: 'String, or line and space on a notes staff', group: 'Move' },
   { keys: ['Shift', '←', '→'], action: 'Select beats', group: 'Move' },
   { keys: ['Esc'], action: 'Clear selection', group: 'Move' },
   { keys: ['Space'], action: 'Play or stop', group: 'Move' },
   { keys: ['?'], action: 'Shortcuts', group: 'Move' },
   { keys: ['0', '–', '9'], action: 'Fret (two digits within a moment: 10–24)', group: 'Write' },
+  { keys: ['Enter'], action: 'Note under the circle (notes staff)', group: 'Write' },
   { keys: ['Shift', '↑', '↓'], action: 'Pitch ± semitone', group: 'Write' },
   { keys: ['Shift', 'Ctrl', '↑', '↓'], action: 'Pitch ± octave', group: 'Write' },
   { keys: ['R'], action: 'Rest', group: 'Write' },
