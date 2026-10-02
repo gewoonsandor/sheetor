@@ -181,6 +181,12 @@ const RUN_MARKS = [
   { technique: 'letRing', label: 'let ring', dashFrom: 17 },
 ] as const;
 
+/** A fret number as the TAB prints it: x for a dead note, <n> for a harmonic. */
+const fretLabel = (note: FrettedNote): string => (note.ghostNote ? 'x' : note.harmonic ? `<${note.fret}>` : `${note.fret}`);
+
+/** Width of the knockout behind a fret label. */
+const fretLabelWidth = (label: string): number => Math.max(10, label.length * 6 + 4);
+
 /** Techniques with more than on and off: their key steps the cursor note through every kind. */
 const CYCLES: Partial<Record<keyof NoteTechniques, (note: TabNote) => TabNote>> = {
   bend: withNextBend,
@@ -2279,6 +2285,8 @@ export const TabSheetEditor: React.FC<TabSheetEditorProps> = ({ meta, channel })
               const isSelected = own && activeMeasureIndex === mIdx && activeBeatIndex === bIdx;
               const pb = playback.playbackBeat;
               const isPlayback = own && pb && pb.measureIndex === mIdx && pb.beatIndex === bIdx;
+              // Wide enough for the widest fret label, a harmonic's <12> included.
+              const ringWidth = Math.max(20, ...(showTab ? b.notes.filter(isFrettedNote).map(n => fretLabelWidth(fretLabel(n)) + 4) : []));
 
               return (
                 <g key={`highlight-${b.id}`}>
@@ -2290,15 +2298,15 @@ export const TabSheetEditor: React.FC<TabSheetEditorProps> = ({ meta, channel })
                     .map((peer) => (
                       <g key={peer.connectionId} className={`peer-cursor peer-${peer.userId % 6}`} pointerEvents="none">
                         <rect
-                          x={beatX - 11}
+                          x={beatX - ringWidth / 2 - 1}
                           y={rowY + top - 6}
-                          width="22"
+                          width={ringWidth + 2}
                           height={bottom - top + 12}
                           fill="none"
                           strokeWidth="1.5"
                           rx="5"
                         />
-                        <text className="peer-label" x={beatX - 11} y={rowY + top - 9} fontSize="8">
+                        <text className="peer-label" x={beatX - ringWidth / 2 - 1} y={rowY + top - 9} fontSize="8">
                           {peer.name}
                         </text>
                       </g>
@@ -2308,9 +2316,9 @@ export const TabSheetEditor: React.FC<TabSheetEditorProps> = ({ meta, channel })
                   {!readOnly && isSelected && (
                     <g>
                       <rect
-                        x={beatX - 10}
+                        x={beatX - ringWidth / 2}
                         y={rowY + top - 5}
-                        width="20"
+                        width={ringWidth}
                         height={bottom - top + 10}
                         className="selection-ring"
                         strokeWidth="1.5"
@@ -2635,13 +2643,8 @@ export const TabSheetEditor: React.FC<TabSheetEditorProps> = ({ meta, channel })
                     const stringY = rowY + tabTop + ts + n.stringIndex * 10;
                     const isSelected = isCursorNote(mIdx, bIdx, noteIndex, b.notes);
 
-                    const fretDisplay = (note: FrettedNote): string => {
-                      if (note.ghostNote) return 'x';
-                      return note.harmonic ? `<${note.fret}>` : `${note.fret}`;
-                    };
-
-                    const displayText = fretDisplay(n);
-                    const bgWidth = Math.max(10, displayText.length * 6 + 4);
+                    const displayText = fretLabel(n);
+                    const bgWidth = fretLabelWidth(displayText);
 
                     return (
                       <g

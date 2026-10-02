@@ -52,7 +52,8 @@ still change the song format or the API; from `1.0.0` on, only a major release w
 - In read-only mode the song title and artist can no longer be clicked into, and Escape leaves
   either field and returns to the score.
 - The TAB cursor is drawn in your colour style instead of yellow, and only on an empty string: on a
-  note, the note's own highlight is the only ring.
+  note, the note's own highlight is the only ring. The beat's outline widens to fit a harmonic's
+  `<12>`.
 
 ### Fixed
 
