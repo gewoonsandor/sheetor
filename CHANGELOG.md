@@ -63,6 +63,8 @@ still change the song format or the API; from `1.0.0` on, only a major release w
 - The song title and artist fields could not be clicked in Chrome and other Chromium browsers:
   opening a song scrolled them under the header, and a click on them opened the editor again
   instead.
+- Bends, vibrato and palm mute or let ring over the TAB no longer run into each other: each has its
+  own line, bends nearest the staff, and a row that needs all three gets the room for them.
 
 ## [1.0.0] - 2026-10-01
 

@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 
 import type { TabBeat, TabMeasure } from '../../../../src/features/editor/components/types';
-import { alignBars, computeMeasureLayouts, scoreRowWidth } from '../../../../src/features/editor/components/layout';
+import { alignBars, computeMeasureLayouts, scoreRowWidth, tabMarkLanes } from '../../../../src/features/editor/components/layout';
 
 const bar = (durations: TabBeat['duration'][]): TabMeasure => ({
   id: 'm',
@@ -60,5 +60,28 @@ describe('computeMeasureLayouts', () => {
       const last = inRow[inRow.length - 1];
       expect(last.x + last.width).toBeLessThanOrEqual(400 + 1e-9);
     }
+  });
+});
+
+describe('tabMarkLanes', () => {
+  // Extents up from the top string: a bend's label tops out at 22, a vibrato is its line ±1.5,
+  // and a P.M. closing bar reaches 1 below the run's baseline.
+  const vibrato = { vibrato: true };
+  const bend = { bend: 2 as const };
+  const palmMute = { palmMute: true };
+
+  it('keeps bends, vibrato and palm mute apart, each above the one before', () => {
+    const all = tabMarkLanes([palmMute, vibrato, bend]);
+    expect(all.vibrato - 1.5).toBeGreaterThan(22);
+    expect(all.run - 1).toBeGreaterThan(all.vibrato + 1.5);
+    const noBend = tabMarkLanes([palmMute, vibrato]);
+    expect(noBend.run - 1).toBeGreaterThan(noBend.vibrato + 1.5);
+  });
+
+  it('takes extra room only for a row that stacks more than every row leaves', () => {
+    expect(tabMarkLanes([]).room).toBe(0);
+    expect(tabMarkLanes([bend]).room).toBe(0);
+    expect(tabMarkLanes([palmMute, vibrato]).room).toBe(0);
+    expect(tabMarkLanes([palmMute, vibrato, bend]).room).toBeGreaterThan(tabMarkLanes([vibrato, bend]).room);
   });
 });

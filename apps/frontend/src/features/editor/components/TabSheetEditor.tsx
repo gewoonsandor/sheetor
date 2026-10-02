@@ -103,6 +103,7 @@ import {
   alignBars,
   CLEF_CHANGE_ROOM,
   vibratoPath,
+  tabMarkLanes,
 } from './layout';
 
 // Treble clef outline traced from the public-domain "Treble clef with empty staff.svg"
@@ -1343,6 +1344,16 @@ export const TabSheetEditor: React.FC<TabSheetEditorProps> = ({ meta, channel })
     const r = l.row;
     rowExtra[r] = Math.max(rowExtra[r] || 0, measureTabOffsets[i]);
   });
+
+  // The marks over each row's TAB stack in lanes; what they need beyond the room every row
+  // leaves pushes that row's TAB down too.
+  const rowNotes: TabNote[][] = [];
+  measures.forEach((measure, i) => {
+    (rowNotes[measureLayouts[i]?.row ?? 0] ??= []).push(...measure.beats.flatMap(b => b.notes));
+  });
+  const rowLanes = rowNotes.map(tabMarkLanes);
+  if (showTab) rowLanes.forEach((lanes, r) => { rowExtra[r] = (rowExtra[r] || 0) + lanes.room; });
+  const lanesOf = (index: number) => rowLanes[measureLayouts[index]?.row ?? 0];
 
   // Per-row extra top padding for very high notes (stems/beams above the staff)
   const rowHighExtra: number[] = [];
@@ -2586,10 +2597,10 @@ export const TabSheetEditor: React.FC<TabSheetEditorProps> = ({ meta, channel })
                     </g>
                   )}
 
-                  {/* Vibrato over the TAB, on the line just above the top string. */}
+                  {/* Vibrato over the TAB, in its lane above any bends. */}
                   {showTab && b.notes.some(n => n.vibrato) && (
                     <path
-                      d={vibratoPath(beatX - 4, vibratoEnd(mIdx, bIdx, staff), rowY + tabTop + ts - 7)}
+                      d={vibratoPath(beatX - 4, vibratoEnd(mIdx, bIdx, staff), rowY + tabTop + ts - lanesOf(mIdx).vibrato)}
                       fill="none"
                       className="glyph-ink-stroke"
                       strokeWidth="1"
@@ -3006,7 +3017,7 @@ export const TabSheetEditor: React.FC<TabSheetEditorProps> = ({ meta, channel })
               return pieces.map((piece, i) => {
                 const first = piece[0];
                 const last = piece[piece.length - 1];
-                const y = getRowY(first.measureIndex) + tabTop + getRowShift(first.measureIndex) - 9;
+                const y = getRowY(first.measureIndex) + tabTop + getRowShift(first.measureIndex) - lanesOf(first.measureIndex).run;
                 const x = getBeatCoordinates(first.measureIndex, first.beatIndex);
                 const lastX = getBeatCoordinates(last.measureIndex, last.beatIndex);
                 const barEnd = getMeasureX(last.measureIndex) + getMeasureWidth(last.measureIndex);

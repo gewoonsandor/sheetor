@@ -1,4 +1,4 @@
-import type { Duration, TabMeasure, MLayout } from './types';
+import type { Duration, NoteTechniques, TabMeasure, MLayout } from './types';
 import { barTicks, beatTicks, TICKS_PER_QUARTER } from './songUtils';
 export const SLOT_WIDTH = 22;
 
@@ -23,7 +23,7 @@ export const MIN_JUSTIFY_FILL = 0.62;
 
 export const TAB_STAFF_TOP = 90;
 // With the notation staff hidden the TAB takes its place at the top of the row,
-// keeping just enough room above it for the P.M. / let ring marks.
+// keeping just enough room above it for the marks over the TAB (see `tabMarkLanes`).
 export const TAB_ONLY_STAFF_TOP = 20;
 export const getTabStaffTop = (includeNotation: boolean): number =>
   includeNotation ? TAB_STAFF_TOP : TAB_ONLY_STAFF_TOP;
@@ -211,6 +211,29 @@ export const checkMeasureBeats = (measure: TabMeasure, measureIndex: number, get
 /** A vibrato's wavy line from `x0` along `y`: one 4-unit zigzag after another up to `x1`, at least two. */
 export const vibratoPath = (x0: number, x1: number, y: number): string =>
   `M ${x0} ${y}` + ' l 1 -1.5 l 2 3 l 1 -1.5'.repeat(Math.max(2, Math.floor((x1 - x0) / 4)));
+
+/* What every TAB row leaves above its top string for marks: up to the top of a bend's label. */
+const TAB_MARK_ROOM = 22;
+/* The height of a lane in use: a bend's arrow and label, then the vibrato's wavy line. */
+const BEND_LANE = 21;
+const VIBRATO_LANE = 5;
+
+/**
+ * Where the marks over a TAB row sit, up from its top string, each in a lane of its own so none
+ * crosses another: bends nearest the staff, then vibrato, then palm mute and let ring (`run` is
+ * their label's baseline). A lane takes room only in a row that uses it, and `room` is how much
+ * more than every row leaves anyway they need.
+ */
+export const tabMarkLanes = (notes: NoteTechniques[]): { vibrato: number; run: number; room: number } => {
+  const bend = notes.some(n => n.bend) ? BEND_LANE : 0;
+  const vibrato = notes.some(n => n.vibrato) ? VIBRATO_LANE : 0;
+  const lanes = { vibrato: 7 + bend, run: 9 + bend + vibrato };
+  // The highest mark: a run's closing bar, else the vibrato's crest, else a bend's label.
+  const top = notes.some(n => n.palmMute || n.letRing) ? lanes.run + 7
+    : vibrato ? lanes.vibrato + 1.5
+      : bend ? TAB_MARK_ROOM : 0;
+  return { ...lanes, room: Math.max(0, Math.ceil(top - TAB_MARK_ROOM)) };
+};
 
 // Virtual fretboard logarithmic layout
 export const FRET_COUNT = 15;
