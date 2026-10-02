@@ -39,6 +39,11 @@ still change the song format or the API; from `1.0.0` on, only a major release w
 - The library is a list: search finds songs in every folder, songs sort by title or by last edit,
   and each row has a ⋯ menu for its actions. A whole row opens its song.
 
+### Fixed
+
+- The editor froze on a bar where an eighth or shorter note crosses a beat, for example an eighth
+  starting on the last sixteenth of a beat.
+
 ## [1.0.0] - 2026-10-01
 
 The first release.

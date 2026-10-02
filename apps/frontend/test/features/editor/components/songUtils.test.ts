@@ -155,6 +155,14 @@ describe('computeBeamGroups', () => {
     const rest: TabBeat = { id: 'r', duration: '8', notes: [], isRest: true };
     expect(computeBeamGroups([rest, rest], { numerator: 4, denominator: 4 })).toEqual([]);
   });
+
+  it('leaves an eighth that crosses the beat unbeamed and beams again after it', () => {
+    const dotted = { ...beat('8'), dot: true };
+    // At 0, 0.75 (across beat 2), 1.25 and 1.5: the bar that used to hang the editor.
+    expect(computeBeamGroups([dotted, beat('8'), beat('16'), beat('8'), beat('8')], { numerator: 4, denominator: 4 })).toEqual([
+      { startIdx: 2, endIdx: 3, duration: '8' },
+    ]);
+  });
 });
 
 describe('effective bpm and time signature', () => {

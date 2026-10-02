@@ -137,7 +137,8 @@ export function computeBeamGroups(beats: TabBeat[], timeSig?: TimeSignature): Be
         const bDur = b.duration;
         if (bDur !== '8' && bDur !== '16' && bDur !== '32') break;
         const val = getDurationVal(bDur, b.dot);
-        if (accumulated + val > maxGroupDur + 0.001) break;
+        // The first note always joins, even one that crosses the beat: left out, it would start this group again forever.
+        if (i > start && accumulated + val > maxGroupDur + 0.001) break;
         accumulated += val;
         if (bDur === '8') hasEighth = true;
         else if (bDur === '16') hasSixteenth = true;
