@@ -169,19 +169,56 @@ account by registering their address at a provider that does not check it.
 
 ## Development
 
-Requires Nix with flakes; the dev shell provides Node, the Rust toolchain, `sqlx-cli` and a
-local PostgreSQL that starts on first entry.
+You need Node 20.19 or newer, Rust 1.88 or newer, `cargo-watch` and PostgreSQL. Get them with Nix,
+or install them yourself.
+
+### With Nix
+
+The flake's dev shell provides all of it, plus `sqlx-cli`. It sets `DATABASE_URL` and `PUBLIC_URL`,
+and on first entry it starts a local PostgreSQL in `.direnv/pgdata` with the databases `sheetor`
+and `sheetor_test`.
 
 ```bash
 direnv allow            # or: nix develop
+```
+
+### Without Nix
+
+Install Node and Rust (for example with [rustup](https://rustup.rs)), then the cargo tools:
+
+```bash
+cargo install cargo-watch
+cargo install sqlx-cli --no-default-features --features rustls,postgres   # only to refresh .sqlx/
+```
+
+Run PostgreSQL however you like. With Docker:
+
+```bash
+docker run -d --name sheetor-dev-db -p 127.0.0.1:5432:5432 \
+  -e POSTGRES_HOST_AUTH_METHOD=trust -e POSTGRES_DB=sheetor postgres:17
+docker exec sheetor-dev-db createdb -U postgres sheetor_test
+```
+
+Then export what the dev shell would have set, in every terminal you build or run from:
+
+```bash
+export DATABASE_URL=postgres://postgres@127.0.0.1/sheetor
+export PUBLIC_URL=http://localhost:5173
+```
+
+`DATABASE_URL` is needed when compiling too, because SQL is checked against the database. To build
+without one, set `SQLX_OFFLINE=true` and the committed `.sqlx/` is used instead.
+
+### Running
+
+```bash
 npm install
 npm run dev             # axum on :4000, Vite on :5173; open http://localhost:5173
 npm run check           # vitest, tsc, cargo check, eslint, clippy
 TEST_DATABASE_URL=postgres://postgres@127.0.0.1/sheetor_test cargo test   # database tests
 ```
 
-SQL is checked at compile time. After changing a query, refresh the offline data the Docker
-build uses:
+After changing a query, refresh `.sqlx/`, the offline data the Docker build uses:
 
 ```bash
 cargo sqlx prepare --workspace -- --all-targets
@@ -232,4 +269,4 @@ a good idea for a project.
 
 ## License
 
-[MIT](LICENSE) © 2026 Sandor van Wieringen
+[MIT](LICENSE) © 2Cartesian coordinates of the shader’s026 Sandor van Wieringen

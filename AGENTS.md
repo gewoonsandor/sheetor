@@ -120,7 +120,7 @@ npm run start:backend       # cargo run --release — one port, :4000
 npm run release -- minor    # gate, then one version everywhere, dated changelog, commit + tag vX.Y.Z; never pushes
 ```
 
-Every command needs the dev shell for `cargo`/`cargo-watch`. `.envrc` is `use flake`, so with direnv allowed they work in a plain shell; without it, prefix with `nix develop --command`.
+Every command needs `cargo`/`cargo-watch`, and a database. The dev shell provides both: `.envrc` is `use flake`, so with direnv allowed they work in a plain shell; without it, prefix with `nix develop --command`. Nix is optional for contributors — the README's Development section has the manual route (rustup, `cargo install cargo-watch`, Postgres in Docker, `DATABASE_URL`/`PUBLIC_URL` exported by hand); keep the two in step when the toolchain or env changes.
 
 Verification gates, exactly:
 
