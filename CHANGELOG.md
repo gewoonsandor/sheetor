@@ -59,6 +59,8 @@ still change the song format or the API; from `1.0.0` on, only a major release w
   and copy, cut and paste stay on Ctrl+C, X and V.
 - I inserts a beat after the cursor and Shift+I a bar; Shift+Delete deletes the beat and
   Ctrl+Delete the bar. The Measure menu shows each key.
+- Grand staff is a toggle in Track settings instead of the View menu, which now shows the staff
+  choice only for guitar and bass.
 
 ### Fixed
 

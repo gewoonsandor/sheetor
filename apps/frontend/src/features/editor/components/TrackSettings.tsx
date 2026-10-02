@@ -28,6 +28,8 @@ interface TrackSettingsProps {
   setPartKey: (key: number) => void;
   setPartVolume: (volume: number) => void;
   leftHandWarning: ReactNode;
+  grandStaff: boolean;
+  toggleGrandStaff: () => void;
   isFrettedTrack: boolean;
   presets: Record<string, number[]>;
   presetName: string;
@@ -40,7 +42,7 @@ interface TrackSettingsProps {
 
 /** The active part's settings, inside the track strip's menu. */
 export const TrackSettings = ({
-  part, activeTrack, renamePart, changeInstrument, setPartKey, setPartVolume, leftHandWarning,
+  part, activeTrack, renamePart, changeInstrument, setPartKey, setPartVolume, leftHandWarning, grandStaff, toggleGrandStaff,
   isFrettedTrack, presets, presetName, tuning, setTuning, duplicateActiveTrack, deleteActiveTrack,
   canDeleteTrack,
 }: TrackSettingsProps) => (
@@ -61,6 +63,17 @@ export const TrackSettings = ({
         ))}
       </select>
     </label>
+    {!isFrettedTrack && (
+      <button
+        type="button"
+        className="btn"
+        aria-pressed={grandStaff}
+        onClick={toggleGrandStaff}
+        title="Treble and bass clef, one track per hand: the notes below middle C move to a new left-hand track with its own rhythm"
+      >
+        Grand staff
+      </button>
+    )}
     {leftHandWarning}
     <label className="compact-field wide-field">
       <span>Key</span>

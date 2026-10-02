@@ -283,8 +283,8 @@ export const TabSheetEditor: React.FC<TabSheetEditorProps> = ({ meta, channel })
   const [showShortcuts, setShowShortcuts] = useState<boolean>(false);
   const [openMenu, setOpenMenu] = useState<MenuId | null>(null);
   const toggleMenu = (id: MenuId) => setOpenMenu(prev => (prev === id ? null : id));
-  /** A grand staff waiting on "delete the left hand?": the menu that asked, and the instrument the part becomes. */
-  const [leavingGrand, setLeavingGrand] = useState<{ menu: 'view' | 'track'; instrument: InstrumentId } | null>(null);
+  /** A grand staff waiting on "delete the left hand?": the instrument the part becomes. */
+  const [leavingGrand, setLeavingGrand] = useState<InstrumentId | null>(null);
 
   const [playbackSpeed, setPlaybackSpeed] = useState<number>(settings.playbackSpeed);
   const [loopPlayback, setLoopPlayback] = useState<boolean>(settings.loopPlayback);
@@ -472,13 +472,14 @@ export const TabSheetEditor: React.FC<TabSheetEditorProps> = ({ meta, channel })
 
   /**
    * Leaves a grand staff for one staff, the part becoming `instrument`. The left hand is deleted
-   * rather than living on as a track of its own; when it holds notes, `menu` asks first (null: confirmed).
+   * rather than living on as a track of its own; when it holds notes, Track settings asks first
+   * unless `confirmed`.
    */
-  const leaveGrandStaff = (instrument: InstrumentId, menu: 'view' | 'track' | null) => {
+  const leaveGrandStaff = (instrument: InstrumentId, confirmed = false) => {
     if (!grand) return;
     const leftNotes = song.tracks[grand.bass].measures.some(m => m.beats.some(b => b.notes.length > 0));
-    if (leftNotes && menu) {
-      setLeavingGrand({ menu, instrument });
+    if (leftNotes && !confirmed) {
+      setLeavingGrand(instrument);
       return;
     }
     setLeavingGrand(null);
@@ -496,12 +497,12 @@ export const TabSheetEditor: React.FC<TabSheetEditorProps> = ({ meta, channel })
     setActiveTrackIndex(grand.treble - (grand.bass < grand.treble ? 1 : 0));
   };
 
-  /** The warning `leaveGrandStaff` raises, shown in the menu that asked. */
-  const leftHandWarning = (menu: 'view' | 'track') => grand && leavingGrand?.menu === menu && (
+  /** The warning `leaveGrandStaff` raises, in Track settings. */
+  const leftHandWarning = grand && leavingGrand && (
     <>
       <span className="popover-hint">One staff: the left hand and its notes will be deleted.</span>
       <div className="control-group">
-        <button className="btn btn-danger" onClick={() => leaveGrandStaff(leavingGrand.instrument, null)}>
+        <button className="btn btn-danger" onClick={() => leaveGrandStaff(leavingGrand, true)}>
           Delete left hand
         </button>
         <button className="btn" onClick={() => setLeavingGrand(null)}>Cancel</button>
@@ -1782,7 +1783,7 @@ export const TabSheetEditor: React.FC<TabSheetEditorProps> = ({ meta, channel })
   /** Changes the part's instrument; a fretted one leaves a grand staff, after asking. */
   const changeInstrument = (instrument: InstrumentId) => {
     if (grand && trackKind(instrument) === 'fretted') {
-      leaveGrandStaff(instrument, 'track');
+      leaveGrandStaff(instrument);
       return;
     }
     // The instrument decides whether this is a TAB staff, so switching it can add or
@@ -1873,7 +1874,11 @@ export const TabSheetEditor: React.FC<TabSheetEditorProps> = ({ meta, channel })
           // A grand staff's hands share their key; C major is stored as no key at all.
           setPartKey={(key) => updatePart(activeTrackIndex, () => ({ keySignature: key === 0 ? undefined : key }))}
           setPartVolume={(trackVolume) => updatePart(activeTrackIndex, () => ({ volume: trackVolume }))}
-          leftHandWarning={leftHandWarning('track')}
+          leftHandWarning={leftHandWarning}
+          grandStaff={grandStaff}
+          toggleGrandStaff={() => (grand
+            ? leaveGrandStaff(activeTrack.instrument)
+            : editSong(prev => addBassStaff(prev, activeTrackIndex)))}
           isFrettedTrack={isFrettedTrack}
           presets={presets}
           presetName={presetName}
@@ -3136,11 +3141,7 @@ export const TabSheetEditor: React.FC<TabSheetEditorProps> = ({ meta, channel })
           partName: part.name,
           staffModes: STAFF_DISPLAYS[trackKind(activeTrack.instrument)],
           display: activeTrack.display,
-          grandStaff,
-          canGrandStaff: !isFrettedTrack,
-          pickStaffMode: (mode) => (grand ? leaveGrandStaff(activeTrack.instrument, 'view') : updateActiveTrack({ display: mode })),
-          addGrandStaff: () => editSong(prev => addBassStaff(prev, activeTrackIndex)),
-          leftHandWarning: leftHandWarning('view'),
+          pickStaffMode: (mode) => updateActiveTrack({ display: mode }),
           panelName: showTab ? 'Fretboard' : 'Keyboard',
           showFretboard,
           toggleFretboard: () => setShowFretboard(prev => !prev),

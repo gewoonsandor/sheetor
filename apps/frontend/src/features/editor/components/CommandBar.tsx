@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import type { Dispatch, ReactNode, SetStateAction } from 'react';
+import type { Dispatch, SetStateAction } from 'react';
 
 import { MenuButton } from '../../../app/MenuButton';
 import { Stepper } from './Stepper';
@@ -80,11 +80,7 @@ export interface ViewMenuProps {
   partName: string;
   staffModes: readonly StaffDisplay[];
   display: StaffDisplay;
-  grandStaff: boolean;
-  canGrandStaff: boolean;
   pickStaffMode: (mode: StaffDisplay) => void;
-  addGrandStaff: () => void;
-  leftHandWarning: ReactNode;
   panelName: string;
   showFretboard: boolean;
   toggleFretboard: () => void;
@@ -384,8 +380,8 @@ const ReadOnlyToggle = ({ isViewer, viewMode, toggleViewMode }: ReadOnlyProps) =
 );
 
 const ViewMenu = ({
-  open, onToggle, partName, staffModes, display, grandStaff, canGrandStaff, pickStaffMode, addGrandStaff,
-  leftHandWarning, panelName, showFretboard, toggleFretboard, paperScore, togglePaperScore, showShortcuts,
+  open, onToggle, partName, staffModes, display, pickStaffMode, panelName, showFretboard, toggleFretboard,
+  paperScore, togglePaperScore, showShortcuts,
 }: ViewMenuProps & MenuState) => (
   <MenuButton
     label="View"
@@ -399,33 +395,26 @@ const ViewMenu = ({
     onToggle={onToggle}
     placement="up"
   >
-    <span className="eyebrow">Staff — {partName}</span>
-    <div className="control-group" role="group" aria-label="Staff">
-      {staffModes.map(mode => (
-        <button
-          key={mode}
-          type="button"
-          className="btn"
-          aria-pressed={display === mode && !grandStaff}
-          onClick={() => pickStaffMode(mode)}
-        >
-          {STAFF_LABELS[mode]}
-        </button>
-      ))}
-      {canGrandStaff && (
-        <button
-          type="button"
-          className="btn"
-          aria-pressed={grandStaff}
-          onClick={addGrandStaff}
-          title="Treble and bass clef, one track per hand: the notes below middle C move to a new left-hand track with its own rhythm"
-        >
-          Grand staff
-        </button>
-      )}
-    </div>
-    {leftHandWarning}
-    <div className="popover-divider" />
+    {/* Only a fretted part has a choice; a grand staff is set in Track settings. */}
+    {staffModes.length > 1 && (
+      <>
+        <span className="eyebrow">Staff — {partName}</span>
+        <div className="control-group" role="group" aria-label="Staff">
+          {staffModes.map(mode => (
+            <button
+              key={mode}
+              type="button"
+              className="btn"
+              aria-pressed={display === mode}
+              onClick={() => pickStaffMode(mode)}
+            >
+              {STAFF_LABELS[mode]}
+            </button>
+          ))}
+        </div>
+        <div className="popover-divider" />
+      </>
+    )}
     <button type="button" className="btn" aria-pressed={showFretboard} onClick={toggleFretboard}>
       {panelName}
     </button>
