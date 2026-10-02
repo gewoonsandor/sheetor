@@ -62,7 +62,7 @@ import {
   techniqueBlocked,
 } from './songUtils';
 import type { CursorIds, CursorIndices } from './songUtils';
-import { getClip, setClip, subscribeClip } from '../clipboard';
+import { getClip, setClip } from '../clipboard';
 import { midiSupported, useMidiInput } from '../midiInput';
 import { TrackStrip } from './TrackStrip';
 import { CommandBar } from './CommandBar';
@@ -226,7 +226,6 @@ export const TabSheetEditor: React.FC<TabSheetEditorProps> = ({ meta, channel })
   const [bpmDraft, setBpmDraft] = useState<string | null>(null);
   // The far end of a Shift-selection, by id so a collaborator's edit cannot move it.
   const [anchor, setAnchor] = useState<{ measureId: string; beatId: string } | null>(null);
-  const clip = useSyncExternalStore(subscribeClip, getClip);
   const user = useSyncExternalStore(subscribeUser, getUserSnapshot);
 
   // Everything the score and the input panels read comes from the active
@@ -983,6 +982,7 @@ export const TabSheetEditor: React.FC<TabSheetEditorProps> = ({ meta, channel })
   };
 
   const pasteClipboard = () => {
+    const clip = getClip();
     if (!clip) return;
     const pasted = pasteClip(song, activeTrackIndex, cursorPosition, clip);
     editSong(pasted.song);
@@ -1200,12 +1200,22 @@ export const TabSheetEditor: React.FC<TabSheetEditorProps> = ({ meta, channel })
         break;
 
       // Delete, Backspace and D remove a note, or delete the beat if it's a rest;
-      // Ctrl+Delete deletes the bar, and Ctrl+D stays the browser's bookmark key.
+      // Shift deletes the beat, Ctrl the bar, and Ctrl+D stays the browser's bookmark key.
       case 'Backspace':
       case 'Delete':
         e.preventDefault();
         if (e.ctrlKey || e.metaKey) deleteActiveMeasure();
+        else if (e.shiftKey) deleteActiveBeat();
         else deleteAtCursor();
+        break;
+
+      // I inserts a beat after the cursor, Shift+I a bar.
+      case 'i':
+      case 'I':
+        if (e.ctrlKey || e.metaKey) break;
+        e.preventDefault();
+        if (e.shiftKey) insertMeasureAfterActive();
+        else insertBeatAfterActive();
         break;
 
       case 'd':
@@ -3117,20 +3127,11 @@ export const TabSheetEditor: React.FC<TabSheetEditorProps> = ({ meta, channel })
           insertMeasureAfterActive,
           duplicateActiveMeasure,
           deleteActiveMeasure,
-        }}
-        edit={{
-          undo: channel.undo,
-          redo: channel.redo,
-          canUndo: live.canUndo,
-          canRedo: live.canRedo,
-          copySelection,
-          cutSelection,
-          pasteClipboard,
-          canPaste: !!clip,
           activeBeatIndex,
           insertBeatAfterActive,
           deleteActiveBeat,
         }}
+        history={{ undo: channel.undo, redo: channel.redo, canUndo: live.canUndo, canRedo: live.canRedo }}
         view={{
           partName: part.name,
           staffModes: STAFF_DISPLAYS[trackKind(activeTrack.instrument)],
@@ -3148,14 +3149,12 @@ export const TabSheetEditor: React.FC<TabSheetEditorProps> = ({ meta, channel })
             saveAppearance({ paperScore: !user.paperScore })
               .catch(() => setNotice('Could not save the paper score to your account.'));
           },
-          isViewer: role === 'viewer',
-          viewMode,
-          toggleViewMode,
           showShortcuts: () => {
             setOpenMenu(null);
             setShowShortcuts(true);
           },
         }}
+        readOnlyToggle={{ isViewer: role === 'viewer', viewMode, toggleViewMode }}
       />
 
       {showShortcuts && <ShortcutsDialog onClose={() => setShowShortcuts(false)} />}

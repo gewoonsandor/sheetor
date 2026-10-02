@@ -6,7 +6,7 @@ import { Stepper } from './Stepper';
 import { MAX_BPM, MAX_REPEAT, MIN_BPM, MIN_REPEAT } from './songUtils';
 import type { Clef, Staff, StaffDisplay, TimeSignature } from './types';
 
-export type MenuId = 'song' | 'measure' | 'edit' | 'playback' | 'view' | 'track';
+export type MenuId = 'song' | 'measure' | 'playback' | 'view' | 'track';
 
 const CLEF_LABELS: Record<Clef, string> = { treble: 'Treble (G)', bass: 'Bass (F)' };
 
@@ -58,20 +58,22 @@ export interface MeasureMenuProps {
   insertMeasureAfterActive: () => void;
   duplicateActiveMeasure: () => void;
   deleteActiveMeasure: () => void;
+  activeBeatIndex: number;
+  insertBeatAfterActive: () => void;
+  deleteActiveBeat: () => void;
 }
 
-export interface EditMenuProps {
+export interface HistoryProps {
   undo: () => void;
   redo: () => void;
   canUndo: boolean;
   canRedo: boolean;
-  copySelection: () => void;
-  cutSelection: () => void;
-  pasteClipboard: () => void;
-  canPaste: boolean;
-  activeBeatIndex: number;
-  insertBeatAfterActive: () => void;
-  deleteActiveBeat: () => void;
+}
+
+export interface ReadOnlyProps {
+  isViewer: boolean;
+  viewMode: boolean;
+  toggleViewMode: () => void;
 }
 
 export interface ViewMenuProps {
@@ -88,9 +90,6 @@ export interface ViewMenuProps {
   toggleFretboard: () => void;
   paperScore: boolean;
   togglePaperScore: () => void;
-  isViewer: boolean;
-  viewMode: boolean;
-  toggleViewMode: () => void;
   showShortcuts: () => void;
 }
 
@@ -238,6 +237,7 @@ const MeasureMenu = ({
   open, onToggle, activeMeasureIndex, activeMeasureTimeSignature, setActiveMeasureTimeSignature,
   showNotation, staves, grandStaff, setClef, repeatStart, toggleRepeatStart, activeRepeat, setRepeatEnd,
   addMeasure, insertMeasureAfterActive, duplicateActiveMeasure, deleteActiveMeasure,
+  activeBeatIndex, insertBeatAfterActive, deleteActiveBeat,
 }: MeasureMenuProps & MenuState) => (
   <MenuButton
     label="Measure"
@@ -330,51 +330,62 @@ const MeasureMenu = ({
     )}
     <div className="popover-divider" />
     <button type="button" className="btn" onClick={addMeasure}>Add measure at end</button>
-    <button type="button" className="btn" onClick={insertMeasureAfterActive}>Insert measure after</button>
+    <button type="button" className="btn" onClick={insertMeasureAfterActive}>
+      Insert measure after <kbd>Shift</kbd><kbd>I</kbd>
+    </button>
     <button type="button" className="btn" onClick={duplicateActiveMeasure}>Duplicate measure</button>
-    <button type="button" className="btn btn-danger" onClick={deleteActiveMeasure}>Delete measure</button>
+    <button type="button" className="btn btn-danger" onClick={deleteActiveMeasure}>
+      Delete measure <kbd>Ctrl</kbd><kbd>Del</kbd>
+    </button>
+    <div className="popover-divider" />
+    <span className="eyebrow">Beat {activeBeatIndex + 1}</span>
+    <button type="button" className="btn" onClick={insertBeatAfterActive}>
+      Insert beat after <kbd>I</kbd>
+    </button>
+    <button type="button" className="btn btn-danger" onClick={deleteActiveBeat}>
+      Delete beat <kbd>Shift</kbd><kbd>Del</kbd>
+    </button>
   </MenuButton>
 );
 
-const EditMenu = ({
-  open, onToggle, undo, redo, canUndo, canRedo, copySelection, cutSelection, pasteClipboard, canPaste,
-  activeBeatIndex, insertBeatAfterActive, deleteActiveBeat,
-}: EditMenuProps & MenuState) => (
-  <MenuButton
-    label="Edit"
-    icon={(
+const HistoryButtons = ({ undo, redo, canUndo, canRedo }: HistoryProps) => (
+  <>
+    <button type="button" className="btn btn-icon" onClick={undo} disabled={!canUndo} aria-label="Undo" title="Undo (Ctrl+Z)">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-        <path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z" />
+        <path d="M9 14 4 9l5-5" />
+        <path d="M4 9h10.5a5.5 5.5 0 0 1 0 11H11" />
       </svg>
-    )}
-    open={open}
-    onToggle={onToggle}
-    placement="up"
+    </button>
+    <button type="button" className="btn btn-icon" onClick={redo} disabled={!canRedo} aria-label="Redo" title="Redo (Ctrl+Shift+Z)">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+        <path d="m15 14 5-5-5-5" />
+        <path d="M20 9H9.5a5.5 5.5 0 0 0 0 11H13" />
+      </svg>
+    </button>
+  </>
+);
+
+/** One click between editing and reading; a viewer's is stuck on. */
+const ReadOnlyToggle = ({ isViewer, viewMode, toggleViewMode }: ReadOnlyProps) => (
+  <button
+    type="button"
+    className="btn"
+    aria-pressed={isViewer || viewMode}
+    disabled={isViewer}
+    onClick={toggleViewMode}
+    title={isViewer ? 'You can only view this song' : 'Read-only: play and browse without changing the song'}
   >
-    <span className="eyebrow">History</span>
-    <div className="control-group">
-      <button type="button" className="btn" onClick={undo} disabled={!canUndo}>Undo</button>
-      <button type="button" className="btn" onClick={redo} disabled={!canRedo}>Redo</button>
-    </div>
-    <div className="popover-divider" />
-    <span className="eyebrow">Clipboard</span>
-    <div className="control-group">
-      <button type="button" className="btn" onClick={copySelection}>Copy</button>
-      <button type="button" className="btn" onClick={cutSelection}>Cut</button>
-      <button type="button" className="btn" onClick={pasteClipboard} disabled={!canPaste}>Paste</button>
-    </div>
-    <div className="popover-divider" />
-    <span className="eyebrow">Beat {activeBeatIndex + 1}</span>
-    <button type="button" className="btn" onClick={insertBeatAfterActive}>Insert beat</button>
-    <button type="button" className="btn btn-danger" onClick={deleteActiveBeat}>Delete beat</button>
-  </MenuButton>
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <rect x="5" y="11" width="14" height="10" rx="2" />
+      <path d={isViewer || viewMode ? 'M8 11V7a4 4 0 0 1 8 0v4' : 'M8 11V7a4 4 0 0 1 7.5-2'} />
+    </svg>
+    <span className="cmd-label">{isViewer ? 'View only' : 'Read-only'}</span>
+  </button>
 );
 
 const ViewMenu = ({
   open, onToggle, partName, staffModes, display, grandStaff, canGrandStaff, pickStaffMode, addGrandStaff,
-  leftHandWarning, panelName, showFretboard, toggleFretboard, paperScore, togglePaperScore, isViewer,
-  viewMode, toggleViewMode,
-  showShortcuts,
+  leftHandWarning, panelName, showFretboard, toggleFretboard, paperScore, togglePaperScore, showShortcuts,
 }: ViewMenuProps & MenuState) => (
   <MenuButton
     label="View"
@@ -422,11 +433,6 @@ const ViewMenu = ({
       Paper score
     </button>
     <span className="popover-hint">Dark ink on a light page, in the dark theme too.</span>
-    {isViewer ? (
-      <button type="button" className="btn" aria-pressed disabled>View only</button>
-    ) : (
-      <button type="button" className="btn" aria-pressed={viewMode} onClick={toggleViewMode}>Read-only</button>
-    )}
     <div className="popover-divider" />
     <button type="button" className="btn" onClick={showShortcuts}>
       Keyboard shortcuts <kbd>?</kbd>
@@ -443,13 +449,14 @@ interface CommandBarProps {
   playback: PlaybackMenuProps;
   song: SongMenuProps;
   measure: MeasureMenuProps;
-  edit: EditMenuProps;
+  history: HistoryProps;
   view: ViewMenuProps;
+  readOnlyToggle: ReadOnlyProps;
 }
 
-/** The dock at the bottom: transport on the left, where the cursor is in the middle, menus on the right. */
+/** The dock at the bottom: transport on the left, where the cursor is in the middle, editing then the song and the read-only switch on the right. */
 export const CommandBar = ({
-  openMenu, toggleMenu, readOnly, status, transport, playback, song, measure, edit, view,
+  openMenu, toggleMenu, readOnly, status, transport, playback, song, measure, history, view, readOnlyToggle,
 }: CommandBarProps) => {
   const menu = (id: MenuId): MenuState => ({ open: openMenu === id, onToggle: () => toggleMenu(id) });
   return (
@@ -477,11 +484,12 @@ export const CommandBar = ({
       <p className="cmd-status" aria-live="polite">{status}</p>
 
       <div className="bottom-cluster">
-        <SongMenu {...song} {...menu('song')} readOnly={readOnly} />
+        {!readOnly && <HistoryButtons {...history} />}
         {!readOnly && <MeasureMenu {...measure} {...menu('measure')} />}
-        {!readOnly && <EditMenu {...edit} {...menu('edit')} />}
-        <div className="toolbar-divider" />
         <ViewMenu {...view} {...menu('view')} />
+        <div className="toolbar-divider" />
+        <SongMenu {...song} {...menu('song')} readOnly={readOnly} />
+        <ReadOnlyToggle {...readOnlyToggle} />
       </div>
     </div>
   );

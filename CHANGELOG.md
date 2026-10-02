@@ -54,6 +54,11 @@ still change the song format or the API; from `1.0.0` on, only a major release w
 - The TAB cursor is drawn in your colour style instead of yellow, and only on an empty string: on a
   note, the note's own highlight is the only ring. The beat's outline widens to fit a harmonic's
   `<12>`.
+- The command bar has undo and redo buttons and a one-click Read-only toggle at its far right, next
+  to the Song menu. The Edit menu is gone: inserting and deleting a beat moved to the Measure menu,
+  and copy, cut and paste stay on Ctrl+C, X and V.
+- I inserts a beat after the cursor and Shift+I a bar; Shift+Delete deletes the beat and
+  Ctrl+Delete the bar. The Measure menu shows each key.
 
 ### Fixed
 
