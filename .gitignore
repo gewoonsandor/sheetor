@@ -37,4 +37,4 @@ result-*
 *.sw?
 
 # Per-user agent settings; the shared .claude/settings.json stays tracked
-.claude/settings.local.json
+.claude/*
