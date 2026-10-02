@@ -63,6 +63,8 @@ still change the song format or the API; from `1.0.0` on, only a major release w
   it, not across a rest or a beat on other strings.
 - Note techniques that cannot go together (ghost note with harmonic, bend or vibrato; a slur with a
   slide into the note; palm mute with let ring in one beat) are greyed out instead of combined.
+- A menu closes when you click anywhere outside it, not only inside the command bar, and that
+  click still does what it was aimed at.
 - A digit typed quickly after moving to another note no longer joins the fret typed before it: 2,
   →, 2 writes two 2s, not a 22. Any other key also ends a two-digit fret.
 - A slur or a slide into a note now connects to the note before it in the previous bar too, and

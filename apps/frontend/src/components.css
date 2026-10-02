@@ -392,13 +392,6 @@ kbd {
   margin: var(--sp-1) calc(-1 * var(--sp-1));
 }
 
-/* Invisible catcher so a click anywhere else closes the open menu. */
-.popover-scrim {
-  position: fixed;
-  inset: 0;
-  z-index: calc(var(--z-popover) - 1);
-}
-
 /* `translate`/`scale`, not `transform`, so an element that positions itself
    with a transform keeps it while animating. */
 @keyframes popoverIn {
