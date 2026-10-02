@@ -1,6 +1,7 @@
 import type { NoteTechniques } from './components/types';
 
-export type TechniqueId = keyof NoteTechniques;
+/** A technique with a key of its own; the release rides on the bend's key with Shift. */
+export type TechniqueId = Exclude<keyof NoteTechniques, 'bendRelease'>;
 
 export interface Shortcut {
   keys: string[];
@@ -24,7 +25,7 @@ export const TECHNIQUE_LABELS: Record<TechniqueId, string> = {
   slur: 'Slur',
   legatoSlide: 'Legato slide',
   vibrato: 'Vibrato',
-  bend: 'Bend',
+  bend: 'Bend: ½, full, off',
   palmMute: 'Palm mute',
   letRing: 'Let ring',
   harmonic: 'Harmonic',
@@ -56,4 +57,5 @@ export const SHORTCUTS: Shortcut[] = [
     action: TECHNIQUE_LABELS[id as TechniqueId],
     group: 'Techniques',
   })),
+  { keys: ['Shift', 'B'], action: 'Release the bend', group: 'Techniques' },
 ];

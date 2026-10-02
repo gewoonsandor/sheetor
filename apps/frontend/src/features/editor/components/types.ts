@@ -46,6 +46,9 @@ export type Clef = 'treble' | 'bass';
  */
 export type TrackKind = 'fretted' | 'pitched';
 
+/** How far a bend raises the string, in semitones: half a step or a full one. */
+export type BendAmount = 1 | 2;
+
 export interface NoteTechniques {
   harmonic?: boolean;
   palmMute?: boolean;
@@ -54,7 +57,9 @@ export interface NoteTechniques {
   ghostNote?: boolean;
   slur?: boolean;       // hammer-on/pull-off (curved bow to previous note on same string)
   legatoSlide?: boolean; // slide (diagonal line to previous note on same string)
-  bend?: boolean;
+  bend?: BendAmount;
+  /** The bend lets back down to the fretted pitch within the note; only read with a bend. */
+  bendRelease?: boolean;
 }
 
 export interface FrettedNote extends NoteTechniques {

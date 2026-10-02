@@ -18,11 +18,14 @@ still change the song format or the API; from `1.0.0` on, only a major release w
   version for each theme.
 - An Emerald colour style that matches the logo, now the default. Anyone who already has a colour
   style keeps it until they pick Emerald in Settings.
+- Bends have a size. B steps the note through a ½ bend, a full bend and none, and Shift+B lets the
+  bend back down (a release). The TAB labels the size and draws the release, and the notation
+  curves to the pitch the bend reaches. Bends in songs saved earlier read as full.
 
 ### Changed
 
 - Vibrato is a wavy line over the note, in the notation and above the TAB, and a bend is an arrow
-  rising from the fret number, labelled "full", instead of a `~` or `b` after the fret.
+  rising from the fret number instead of a `~` or `b` after the fret.
 - Secondary text has more contrast in both themes, and every control shows a ring when it has
   keyboard focus.
 - Menus and dialogs work from the keyboard: opening one moves focus into it, and Escape closes it

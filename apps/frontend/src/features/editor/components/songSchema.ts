@@ -88,6 +88,12 @@ const parseNote = (value: unknown, where: string): TabNote | string => {
   for (const key of TECHNIQUE_KEYS) {
     if (value[key] === true) note[key] = true;
   }
+  // A bend is ½ or a full step; one saved before bends had amounts was drawn as full.
+  const bend = value.bend === true ? 2 : value.bend;
+  if (bend === 1 || bend === 2) {
+    note.bend = bend;
+    if (value.bendRelease === true) note.bendRelease = true;
+  }
   return note;
 };
 

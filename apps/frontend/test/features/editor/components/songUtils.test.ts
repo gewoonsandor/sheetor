@@ -38,6 +38,7 @@ import {
   beatAt,
   beatOnset,
   beatRuns,
+  withNextBend,
 } from '../../../../src/features/editor/components/songUtils';
 
 const beat = (duration: TabBeat['duration'], notes: TabBeat['notes'] = [{ stringIndex: 0, fret: 3 }]): TabBeat => ({
@@ -464,10 +465,10 @@ describe('switching a track instrument', () => {
     expect(notesOf(retuneTrack(guitar, 'piano'))).toEqual([{ midi: 67 }]);
   });
 
-  it('carries technique flags across the boundary and leaves no stale shape', () => {
-    const guitar = withNotes(createTrack('guitar'), [{ stringIndex: 0, fret: 3, vibrato: true }]);
+  it('carries technique flags and bends across the boundary and leaves no stale shape', () => {
+    const guitar = withNotes(createTrack('guitar'), [{ stringIndex: 0, fret: 3, vibrato: true, bend: 1, bendRelease: true }]);
     const [note] = notesOf(retuneTrack(guitar, 'piano'));
-    expect(note).toEqual({ midi: 67, vibrato: true });
+    expect(note).toEqual({ midi: 67, vibrato: true, bend: 1, bendRelease: true });
     expect(isFrettedNote(note)).toBe(false);
   });
 
@@ -662,6 +663,16 @@ describe('beat timing', () => {
     expect(runs.map(run => run.map(at => `${at.measureIndex}:${at.beatIndex}`))).toEqual([
       ['0:0'], ['0:2', '0:3', '1:0'], ['1:2'],
     ]);
+  });
+});
+
+describe('withNextBend', () => {
+  it('steps a bend through ½ and full to none, dropping the release with it', () => {
+    const half = withNextBend({ stringIndex: 0, fret: 7 });
+    expect(half).toEqual({ stringIndex: 0, fret: 7, bend: 1 });
+    const full = withNextBend({ ...half, bendRelease: true });
+    expect(full).toEqual({ stringIndex: 0, fret: 7, bend: 2, bendRelease: true });
+    expect(withNextBend(full)).toEqual({ stringIndex: 0, fret: 7 });
   });
 });
 

@@ -51,6 +51,8 @@ import {
   conductorChanges,
   sameTimeSignature,
   beatRuns,
+  BEND_LABELS,
+  withNextBend,
 } from './songUtils';
 import type { CursorIds, CursorIndices } from './songUtils';
 import { getClip, setClip, subscribeClip } from '../clipboard';
@@ -746,10 +748,12 @@ export const TabSheetEditor: React.FC<TabSheetEditorProps> = ({ meta, channel })
     playback.playTone(targetMidi);
   };
 
+  /** Turns a technique on or off on the cursor note; a bend steps through its amounts instead. */
   const toggleNoteTechnique = (technique: keyof NoteTechniques) => {
     updateActiveBeatNotes(currentNotes => {
       const idx = cursorNoteIndex(currentNotes);
       if (idx === -1) return currentNotes;
+      if (technique === 'bend') return currentNotes.map((n, i) => (i === idx ? withNextBend(n) : n));
       const on = !currentNotes[idx][technique];
       const other = on ? EXCLUDES[technique] : undefined;
       return currentNotes.map((n, i) => {
@@ -1075,6 +1079,11 @@ export const TabSheetEditor: React.FC<TabSheetEditorProps> = ({ meta, channel })
     const beat = measure.beats[activeBeatIndex];
 
     if (!e.ctrlKey && !e.metaKey && !e.altKey) {
+      if (e.shiftKey && key === 'b') {
+        e.preventDefault();
+        if (getCursorNote()?.bend) toggleNoteTechnique('bendRelease');
+        return;
+      }
       const technique = Object.entries(TECHNIQUE_SHORTCUTS).find(([, k]) => k.toLowerCase() === key);
       if (technique) {
         e.preventDefault();
@@ -2442,6 +2451,25 @@ export const TabSheetEditor: React.FC<TabSheetEditorProps> = ({ meta, channel })
                         {b.dot && (
                           <circle cx={beatX + 8} cy={n.y} r="2.2" className="glyph-ink" pointerEvents="none" />
                         )}
+                        {/* Bend: a curve from the notehead up to where the bent pitch sits, and
+                            for a release back down again, always rising enough to be seen. */}
+                        {n.note.bend && (() => {
+                          const x0 = beatX + 6;
+                          const x1 = Math.min(beatX + 20, vibratoEnd(mIdx, bIdx, staff));
+                          const y0 = n.y - 2;
+                          const top = Math.min(y0 - 4, staffY + Y_of_step(staffStep(n.midi + n.note.bend, staff, mIdx)));
+                          return (
+                            <path
+                              d={n.note.bendRelease
+                                ? `M ${x0} ${y0} Q ${(x0 + x1) / 2} ${2 * top - y0}, ${x1} ${y0}`
+                                : `M ${x0} ${y0} Q ${x1} ${y0}, ${x1} ${top}`}
+                              fill="none"
+                              className="glyph-ink-stroke"
+                              strokeWidth="1"
+                              style={{ pointerEvents: 'none' }}
+                            />
+                          );
+                        })()}
                       </g>
                     );
                   })}
@@ -2573,18 +2601,26 @@ export const TabSheetEditor: React.FC<TabSheetEditorProps> = ({ meta, channel })
                         >
                           {displayText}
                         </text>
-                        {/* Bend: an arrow from the fret number up above the staff. A bend
-                            has no amount, so it reads as a full one; a chord labels it once. */}
+                        {/* Bend: an arrow from the fret number up above the staff, labelled with its
+                            amount once per beat; a release curves back down to the fret number. */}
                         {n.bend && (() => {
                           const x0 = beatX + bgWidth / 2;
                           const ax = x0 + 6;
                           const tip = rowY + tabTop + ts - 14;
                           const labelled = b.notes.findIndex(nn => nn.bend) === noteIndex;
+                          const rx = Math.min(ax + 12, vibratoEnd(mIdx, bIdx, staff) - 2);
+                          const land = stringY - TAB_FRET_FONT_SIZE / 2;
                           return (
                             <g style={{ pointerEvents: 'none' }}>
                               <path d={`M ${x0} ${stringY} Q ${ax} ${stringY}, ${ax} ${tip + 4}`} fill="none" className="glyph-ink-stroke" strokeWidth="1" />
                               <path d={`M ${ax} ${tip} l 2.5 4.5 h -5 Z`} className="glyph-ink" />
-                              {labelled && <text x={ax} y={tip - 2} textAnchor="middle" fontSize="8" className="music-text glyph-ink">full</text>}
+                              {n.bendRelease && (
+                                <>
+                                  <path d={`M ${ax} ${tip} Q ${rx} ${tip}, ${rx} ${land - 4}`} fill="none" className="glyph-ink-stroke" strokeWidth="1" />
+                                  <path d={`M ${rx} ${land} l -2.5 -4.5 h 5 Z`} className="glyph-ink" />
+                                </>
+                              )}
+                              {labelled && <text x={ax} y={tip - 2} textAnchor="middle" fontSize="8" className="music-text glyph-ink">{BEND_LABELS[n.bend]}</text>}
                             </g>
                           );
                         })()}

@@ -1,5 +1,6 @@
 import type {
   BeatPosition,
+  BendAmount,
   Clef,
   Duration,
   FrettedNote,
@@ -74,8 +75,9 @@ export const MIN_REPEAT = 2;
 export const MAX_REPEAT = 99;
 
 /**
- * Every technique flag a note can carry. Both the parse boundary and note
- * conversion copy flags one by one, so the list has to live in one place.
+ * Every on/off technique flag a note can carry. Both the parse boundary and note
+ * conversion copy flags one by one, so the list has to live in one place. A bend
+ * is an amount, not a flag, and is copied beside them.
  */
 export const TECHNIQUE_KEYS = [
   'harmonic',
@@ -85,8 +87,22 @@ export const TECHNIQUE_KEYS = [
   'ghostNote',
   'slur',
   'legatoSlide',
-  'bend',
 ] as const;
+
+/** How the score labels each bend amount. */
+export const BEND_LABELS: Record<BendAmount, string> = { 1: '½', 2: 'full' };
+
+/** B steps a note's bend through ½ and full to none; dropping the bend drops its release. */
+export const withNextBend = (note: TabNote): TabNote => {
+  const next = { ...note };
+  if (note.bend === 2) {
+    delete next.bend;
+    delete next.bendRelease;
+  } else {
+    next.bend = note.bend === 1 ? 2 : 1;
+  }
+  return next;
+};
 
 // Helper to convert duration string to beat multiplier (relative to quarter note)
 export const getDurationVal = (dur: Duration, dot?: boolean): number => {
@@ -467,12 +483,14 @@ const convertNote = (note: TabNote, track: TabTrack, tuning?: number[]): TabNote
   return [{ ...techniquesOf(note), ...(tuning ? placeMidiOnStrings(midi, tuning) : { midi }) }];
 };
 
-/** The technique flags only — the two note shapes share nothing else. */
+/** The technique flags and the bend only — the two note shapes share nothing else. */
 const techniquesOf = (note: TabNote): NoteTechniques => {
   const flags: NoteTechniques = {};
   for (const key of TECHNIQUE_KEYS) {
     if (note[key]) flags[key] = true;
   }
+  if (note.bend) flags.bend = note.bend;
+  if (note.bend && note.bendRelease) flags.bendRelease = true;
   return flags;
 };
 

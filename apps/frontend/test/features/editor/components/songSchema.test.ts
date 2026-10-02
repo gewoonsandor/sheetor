@@ -260,4 +260,21 @@ describe('parseSong', () => {
     if (!result.ok) return;
     expect(result.song.tracks[0].measures[0].beats[0].notes[0]).toEqual({ stringIndex: 0, fret: 3, vibrato: true });
   });
+
+  it('reads a bend as ½ or full, an old on/off bend as full, and a release only with a bend', () => {
+    const song = valid();
+    song.measures[0].beats[0].notes = [
+      { stringIndex: 0, fret: 7, bend: true },
+      { stringIndex: 1, fret: 7, bend: 1, bendRelease: true },
+      { stringIndex: 2, fret: 7, bend: 3, bendRelease: true },
+    ] as never;
+    const result = parseSong(song);
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.song.tracks[0].measures[0].beats[0].notes).toEqual([
+      { stringIndex: 0, fret: 7, bend: 2 },
+      { stringIndex: 1, fret: 7, bend: 1, bendRelease: true },
+      { stringIndex: 2, fret: 7 },
+    ]);
+  });
 });

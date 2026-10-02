@@ -1,7 +1,8 @@
 import type { MouseEvent } from 'react';
 
 import { DurationPicker } from './DurationPicker';
-import type { Duration, TabNote } from './types';
+import { BEND_LABELS } from './songUtils';
+import type { Duration, NoteTechniques, TabNote } from './types';
 import { TECHNIQUE_LABELS, TECHNIQUE_SHORTCUTS } from '../shortcuts';
 import type { TechniqueId } from '../shortcuts';
 
@@ -10,6 +11,8 @@ const TECHNIQUES: [TechniqueId, string][] = [
   ['slur', '⌢'], ['legatoSlide', '╱'], ['bend', 'b'], ['vibrato', '~~'],
   ['palmMute', 'P.M.'], ['letRing', 'Ring'], ['harmonic', '</>'], ['ghostNote', '(x)'],
 ];
+
+const RELEASE_LABEL = 'Release the bend (Shift+B)';
 
 // A toolbar button never takes focus from the score, so digits keep entering frets.
 const keepFocus = (e: MouseEvent) => e.preventDefault();
@@ -22,7 +25,7 @@ interface NoteToolbarProps {
   isRest: boolean;
   toggleActiveBeatRest: () => void;
   activeNote: TabNote | undefined;
-  toggleNoteTechnique: (technique: TechniqueId) => void;
+  toggleNoteTechnique: (technique: keyof NoteTechniques) => void;
   clearBeat: () => void;
   midiInput: boolean;
   midiAvailable: boolean;
@@ -50,7 +53,8 @@ export const NoteToolbar = ({
     <div className="toolbar-divider" />
     {TECHNIQUES.map(([technique, glyph]) => {
       const label = `${TECHNIQUE_LABELS[technique]} (${TECHNIQUE_SHORTCUTS[technique]})`;
-      return (
+      const bend = technique === 'bend' ? activeNote?.bend : undefined;
+      return [
         <button
           key={technique}
           type="button"
@@ -62,9 +66,24 @@ export const NoteToolbar = ({
           onMouseDown={keepFocus}
           onClick={() => toggleNoteTechnique(technique)}
         >
-          {glyph}
-        </button>
-      );
+          {bend ? `${glyph} ${BEND_LABELS[bend]}` : glyph}
+        </button>,
+        technique === 'bend' && (
+          <button
+            key="bendRelease"
+            type="button"
+            className="btn btn-sm"
+            aria-pressed={!!activeNote?.bend && !!activeNote.bendRelease}
+            aria-label={RELEASE_LABEL}
+            title={RELEASE_LABEL}
+            disabled={!activeNote?.bend}
+            onMouseDown={keepFocus}
+            onClick={() => toggleNoteTechnique('bendRelease')}
+          >
+            ↗↘
+          </button>
+        ),
+      ];
     })}
     <div className="toolbar-divider" />
     <button
