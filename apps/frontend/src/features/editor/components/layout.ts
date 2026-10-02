@@ -212,28 +212,25 @@ export const checkMeasureBeats = (measure: TabMeasure, measureIndex: number, get
 export const vibratoPath = (x0: number, x1: number, y: number): string =>
   `M ${x0} ${y}` + ' l 1 -1.5 l 2 3 l 1 -1.5'.repeat(Math.max(2, Math.floor((x1 - x0) / 4)));
 
-/* What every TAB row leaves above its top string for marks: up to the top of a bend's label. */
-const TAB_MARK_ROOM = 22;
-/* The height of a lane in use: a bend's arrow and label, then the vibrato's wavy line. */
-const BEND_LANE = 21;
-const VIBRATO_LANE = 5;
+// Marks over the TAB, as heights up from its top string. Each rises only over what it would
+// cross: a vibrato over its own beat's bend, a P.M./let ring line over the marks under it.
 
-/**
- * Where the marks over a TAB row sit, up from its top string, each in a lane of its own so none
- * crosses another: bends nearest the staff, then vibrato, then palm mute and let ring (`run` is
- * their label's baseline). A lane takes room only in a row that uses it, and `room` is how much
- * more than every row leaves anyway they need.
- */
-export const tabMarkLanes = (notes: NoteTechniques[]): { vibrato: number; run: number; room: number } => {
-  const bend = notes.some(n => n.bend) ? BEND_LANE : 0;
-  const vibrato = notes.some(n => n.vibrato) ? VIBRATO_LANE : 0;
-  const lanes = { vibrato: 7 + bend, run: 9 + bend + vibrato };
-  // The highest mark: a run's closing bar, else the vibrato's crest, else a bend's label.
-  const top = notes.some(n => n.palmMute || n.letRing) ? lanes.run + 7
-    : vibrato ? lanes.vibrato + 1.5
-      : bend ? TAB_MARK_ROOM : 0;
-  return { ...lanes, room: Math.max(0, Math.ceil(top - TAB_MARK_ROOM)) };
-};
+/* What every TAB row leaves above its top string for marks: up to the top of a bend's label. */
+export const TAB_MARK_ROOM = 22;
+/* How far a vibrato rises over a bend on its beat: clear of the bend's arrow and label. */
+const BEND_LANE = 21;
+
+/** Where a beat's vibrato runs: just over the staff, or above the beat's own bend. */
+export const vibratoHeight = (notes: NoteTechniques[]): number =>
+  notes.some(n => n.bend) ? 7 + BEND_LANE : 7;
+
+/** How high a beat's bend and vibrato reach: the vibrato's crest, else the bend's label. */
+export const marksTop = (notes: NoteTechniques[]): number =>
+  notes.some(n => n.vibrato) ? vibratoHeight(notes) + 1.5
+    : notes.some(n => n.bend) ? TAB_MARK_ROOM : 0;
+
+/** The baseline of a P.M./let ring line over marks reaching `top`; its closing bar spans 1 below to 7 above. */
+export const runHeight = (top: number): number => Math.max(9, top + 5.5);
 
 // Virtual fretboard logarithmic layout
 export const FRET_COUNT = 15;

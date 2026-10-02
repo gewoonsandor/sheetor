@@ -103,7 +103,10 @@ import {
   alignBars,
   CLEF_CHANGE_ROOM,
   vibratoPath,
-  tabMarkLanes,
+  vibratoHeight,
+  marksTop,
+  runHeight,
+  TAB_MARK_ROOM,
 } from './layout';
 
 // Treble clef outline traced from the public-domain "Treble clef with empty staff.svg"
@@ -1345,15 +1348,42 @@ export const TabSheetEditor: React.FC<TabSheetEditorProps> = ({ meta, channel })
     rowExtra[r] = Math.max(rowExtra[r] || 0, measureTabOffsets[i]);
   });
 
-  // The marks over each row's TAB stack in lanes; what they need beyond the room every row
-  // leaves pushes that row's TAB down too.
-  const rowNotes: TabNote[][] = [];
-  measures.forEach((measure, i) => {
-    (rowNotes[measureLayouts[i]?.row ?? 0] ??= []).push(...measure.beats.flatMap(b => b.notes));
-  });
-  const rowLanes = rowNotes.map(tabMarkLanes);
-  if (showTab) rowLanes.forEach((lanes, r) => { rowExtra[r] = (rowExtra[r] || 0) + lanes.room; });
-  const lanesOf = (index: number) => rowLanes[measureLayouts[index]?.row ?? 0];
+  // Palm mute and let ring runs, split per row, each line just clear of the highest mark under
+  // it. The beat before in the same bar counts too: its vibrato and bend label reach under the
+  // run's label. Nothing reaches across a bar line, whose padding keeps them apart.
+  const rowOf = (at: BeatPosition): number | undefined => measureLayouts[at.measureIndex]?.row;
+  const notesAt = (at: BeatPosition): TabNote[] => measures[at.measureIndex]?.beats[at.beatIndex]?.notes ?? [];
+  const runPieces = !showTab ? [] : RUN_MARKS.flatMap(({ technique, label, dashFrom }) =>
+    beatRuns(measures, b => !b.isRest && b.notes.some(n => n[technique])).flatMap(run => {
+      const pieces: BeatPosition[][] = [];
+      for (const at of run) {
+        const piece = pieces[pieces.length - 1];
+        if (piece && rowOf(piece[0]) === rowOf(at)) piece.push(at);
+        else pieces.push([at]);
+      }
+      return pieces.map((piece, i) => {
+        const { measureIndex, beatIndex } = piece[0];
+        const under = beatIndex > 0 ? [{ measureIndex, beatIndex: beatIndex - 1 }, ...piece] : piece;
+        return {
+          technique, label, dashFrom, piece,
+          line: run.length > 1,
+          // A run that goes on to the next row runs to this row's end, with no closing bar.
+          closes: i === pieces.length - 1,
+          height: runHeight(Math.max(...under.map(at => marksTop(notesAt(at))))),
+        };
+      });
+    }));
+
+  // Marks reaching above the room every row leaves push that row's TAB down by the difference.
+  if (showTab) {
+    const tops: number[] = [];
+    const reach = (row: number | undefined, top: number) => {
+      if (row !== undefined) tops[row] = Math.max(tops[row] ?? 0, top);
+    };
+    measures.forEach((measure, i) => measure.beats.forEach(b => reach(measureLayouts[i]?.row, marksTop(b.notes))));
+    runPieces.forEach(p => reach(rowOf(p.piece[0]), p.height + 7));
+    tops.forEach((top, r) => { rowExtra[r] = (rowExtra[r] || 0) + Math.max(0, Math.ceil(top - TAB_MARK_ROOM)); });
+  }
 
   // Per-row extra top padding for very high notes (stems/beams above the staff)
   const rowHighExtra: number[] = [];
@@ -2597,10 +2627,10 @@ export const TabSheetEditor: React.FC<TabSheetEditorProps> = ({ meta, channel })
                     </g>
                   )}
 
-                  {/* Vibrato over the TAB, in its lane above any bends. */}
+                  {/* Vibrato over the TAB, raised only over its own beat's bend. */}
                   {showTab && b.notes.some(n => n.vibrato) && (
                     <path
-                      d={vibratoPath(beatX - 4, vibratoEnd(mIdx, bIdx, staff), rowY + tabTop + ts - lanesOf(mIdx).vibrato)}
+                      d={vibratoPath(beatX - 4, vibratoEnd(mIdx, bIdx, staff), rowY + tabTop + ts - vibratoHeight(b.notes))}
                       fill="none"
                       className="glyph-ink-stroke"
                       strokeWidth="1"
@@ -3005,43 +3035,30 @@ export const TabSheetEditor: React.FC<TabSheetEditorProps> = ({ meta, channel })
 
           {/* Palm mute and let ring: the label over a lone note; a run of them opens with the label, then a
               dashed line to a bar halfway between its last note and the next. A run that wraps restates it on each row. */}
-          {showTab && RUN_MARKS.flatMap(({ technique, label, dashFrom }) => (
-            beatRuns(measures, b => !b.isRest && b.notes.some(n => n[technique])).flatMap(run => {
-              const rowOf = (at: BeatPosition) => measureLayouts[at.measureIndex]?.row;
-              const pieces: BeatPosition[][] = [];
-              for (const at of run) {
-                const piece = pieces[pieces.length - 1];
-                if (piece && rowOf(piece[0]) === rowOf(at)) piece.push(at);
-                else pieces.push([at]);
-              }
-              return pieces.map((piece, i) => {
-                const first = piece[0];
-                const last = piece[piece.length - 1];
-                const y = getRowY(first.measureIndex) + tabTop + getRowShift(first.measureIndex) - lanesOf(first.measureIndex).run;
-                const x = getBeatCoordinates(first.measureIndex, first.beatIndex);
-                const lastX = getBeatCoordinates(last.measureIndex, last.beatIndex);
-                const barEnd = getMeasureX(last.measureIndex) + getMeasureWidth(last.measureIndex);
-                const next = nextBeatPosition(measures, last, false);
-                const nextX = next !== null && rowOf(next) === rowOf(last)
-                  ? getBeatCoordinates(next.measureIndex, next.beatIndex)
-                  : barEnd;
-                // A run that goes on to the next row runs to this row's end, with no closing bar.
-                const closes = i === pieces.length - 1;
-                const endX = closes ? (lastX + nextX) / 2 : barEnd;
-                return (
-                  <g key={`${technique}-${first.measureIndex}-${first.beatIndex}`} style={{ pointerEvents: 'none' }}>
-                    <text x={x - 12} y={y} className="music-text technique-mark" fontSize="8">{label}</text>
-                    {run.length > 1 && (
-                      <g className="technique-mark-line" strokeWidth="1">
-                        <line x1={x + dashFrom} y1={y - 3} x2={endX} y2={y - 3} strokeDasharray="2 2" />
-                        {closes && <line x1={endX} y1={y - 7} x2={endX} y2={y + 1} />}
-                      </g>
-                    )}
+          {runPieces.map(({ technique, label, dashFrom, piece, line, closes, height }) => {
+            const first = piece[0];
+            const last = piece[piece.length - 1];
+            const y = getRowY(first.measureIndex) + tabTop + getRowShift(first.measureIndex) - height;
+            const x = getBeatCoordinates(first.measureIndex, first.beatIndex);
+            const lastX = getBeatCoordinates(last.measureIndex, last.beatIndex);
+            const barEnd = getMeasureX(last.measureIndex) + getMeasureWidth(last.measureIndex);
+            const next = nextBeatPosition(measures, last, false);
+            const nextX = next !== null && rowOf(next) === rowOf(last)
+              ? getBeatCoordinates(next.measureIndex, next.beatIndex)
+              : barEnd;
+            const endX = closes ? (lastX + nextX) / 2 : barEnd;
+            return (
+              <g key={`${technique}-${first.measureIndex}-${first.beatIndex}`} style={{ pointerEvents: 'none' }}>
+                <text x={x - 12} y={y} className="music-text technique-mark" fontSize="8">{label}</text>
+                {line && (
+                  <g className="technique-mark-line" strokeWidth="1">
+                    <line x1={x + dashFrom} y1={y - 3} x2={endX} y2={y - 3} strokeDasharray="2 2" />
+                    {closes && <line x1={endX} y1={y - 7} x2={endX} y2={y + 1} />}
                   </g>
-                );
-              });
-            })
-          ))}
+                )}
+              </g>
+            );
+          })}
         </svg>
       </div>
 
