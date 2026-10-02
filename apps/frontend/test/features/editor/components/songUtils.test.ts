@@ -39,6 +39,7 @@ import {
   beatOnset,
   beatRuns,
   withNextBend,
+  previousNoteOnString,
 } from '../../../../src/features/editor/components/songUtils';
 
 const beat = (duration: TabBeat['duration'], notes: TabBeat['notes'] = [{ stringIndex: 0, fret: 3 }]): TabBeat => ({
@@ -673,6 +674,19 @@ describe('withNextBend', () => {
     const full = withNextBend({ ...half, bendRelease: true });
     expect(full).toEqual({ stringIndex: 0, fret: 7, bend: 2, bendRelease: true });
     expect(withNextBend(full)).toEqual({ stringIndex: 0, fret: 7 });
+  });
+});
+
+describe('previousNoteOnString', () => {
+  it('finds the nearest earlier note on the string across one bar line, but not two', () => {
+    const on0 = { stringIndex: 0, fret: 5 };
+    const on1 = { stringIndex: 1, fret: 7 };
+    const bars = [measure([beat('4', [on0])]), measure([beat('4', [on1])]), measure([beat('4', [on1]), beat('4', [on0])])];
+    // In the same bar, then over the bar line.
+    expect(previousNoteOnString(bars, { measureIndex: 2, beatIndex: 1 }, 1)).toEqual({ at: { measureIndex: 2, beatIndex: 0 }, note: on1 });
+    expect(previousNoteOnString(bars, { measureIndex: 2, beatIndex: 0 }, 1)).toEqual({ at: { measureIndex: 1, beatIndex: 0 }, note: on1 });
+    // String 0's earlier note is in bar 0, two bar lines back.
+    expect(previousNoteOnString(bars, { measureIndex: 2, beatIndex: 1 }, 0)).toBeNull();
   });
 });
 

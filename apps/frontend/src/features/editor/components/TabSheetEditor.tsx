@@ -53,6 +53,7 @@ import {
   beatRuns,
   BEND_LABELS,
   withNextBend,
+  previousNoteOnString,
 } from './songUtils';
 import type { CursorIds, CursorIndices } from './songUtils';
 import { getClip, setClip, subscribeClip } from '../clipboard';
@@ -2609,26 +2610,25 @@ export const TabSheetEditor: React.FC<TabSheetEditorProps> = ({ meta, channel })
                           );
                         })()}
                         {(n.slur || n.legatoSlide) && (() => {
-                          let prevPos: { x: number; y: number; fret: number } | null = null;
-                          for (let i = bIdx - 1; i >= 0; i--) {
-                            const prevBeat = measure.beats[i];
-                            const prevNote = prevBeat?.notes.find(nn => isFrettedNote(nn) && nn.stringIndex === n.stringIndex);
-                            if (prevNote) {
-                              prevPos = {
-                                x: getBeatCoordinates(mIdx, i, staff),
-                                y: getRowY(mIdx) + tabTop + ts + n.stringIndex * 10,
-                                fret: isFrettedNote(prevNote) ? prevNote.fret : n.fret,
-                              };
-                              break;
-                            }
-                          }
-                          if (!prevPos) return null;
+                          const from = previousNoteOnString(song.tracks[staff.track].measures, { measureIndex: mIdx, beatIndex: bIdx }, n.stringIndex);
+                          if (!from) return null;
+                          const pm = from.at.measureIndex;
+                          const prevX = getBeatCoordinates(pm, from.at.beatIndex, staff);
+                          const prevY = getRowY(pm) + tabTop + getRowShift(pm) + n.stringIndex * 10;
+                          // A pair split by a row break is drawn in two halves: out to the end of
+                          // the earlier row, then in from the start of this one.
+                          const split = measureLayouts[pm]?.row !== measureLayouts[mIdx]?.row;
+                          const rowEnd = getMeasureX(pm) + getMeasureWidth(pm);
+                          const rowStart = getBeatCoordinates(mIdx, 0, staff) - 24;
                           if (n.slur) {
-                            const dx = beatX - prevPos.x;
-                            const cy = Math.min(prevPos.y, stringY) - 6;
+                            const arc = (x1: number, y1: number, x2: number, y2: number): string => {
+                              const dx = x2 - x1;
+                              const cy = Math.min(y1, y2) - 12;
+                              return `M ${x1} ${y1 - 3} C ${x1 + dx * 0.35} ${cy}, ${x2 - dx * 0.35} ${cy}, ${x2} ${y2 - 3}`;
+                            };
                             return (
                               <path
-                                d={`M ${prevPos.x} ${prevPos.y - 3} C ${prevPos.x + dx * 0.35} ${cy - 6}, ${beatX - dx * 0.35} ${cy - 6}, ${beatX} ${stringY - 3}`}
+                                d={split ? `${arc(prevX, prevY, rowEnd, prevY)} ${arc(rowStart, stringY, beatX, stringY)}` : arc(prevX, prevY, beatX, stringY)}
                                 fill="none"
                                 className="slur-line"
                                 strokeWidth="1.2"
@@ -2636,22 +2636,18 @@ export const TabSheetEditor: React.FC<TabSheetEditorProps> = ({ meta, channel })
                               />
                             );
                           }
-                          if (n.legatoSlide) {
-                            // Slanted the way the hand moves: up the neck climbs, down it falls.
-                            const rise = n.fret >= prevPos.fret ? 3 : -3;
-                            return (
-                              <line
-                                x1={prevPos.x + 7}
-                                y1={prevPos.y + rise}
-                                x2={beatX - 7}
-                                y2={stringY - rise}
-                                className="slur-line"
-                                strokeWidth="1"
-                                style={{ pointerEvents: 'none' }}
-                              />
-                            );
-                          }
-                          return null;
+                          // Slanted the way the hand moves: up the neck climbs, down it falls.
+                          const rise = n.fret >= from.note.fret ? 3 : -3;
+                          return (
+                            <path
+                              d={split
+                                ? `M ${prevX + 7} ${prevY + rise} L ${rowEnd} ${prevY} M ${rowStart} ${stringY} L ${beatX - 7} ${stringY - rise}`
+                                : `M ${prevX + 7} ${prevY + rise} L ${beatX - 7} ${stringY - rise}`}
+                              className="slur-line"
+                              strokeWidth="1"
+                              style={{ pointerEvents: 'none' }}
+                            />
+                          );
                         })()}
                       </g>
                     );

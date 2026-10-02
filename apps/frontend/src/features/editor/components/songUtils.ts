@@ -700,6 +700,25 @@ export const beatAt = (measure: TabMeasure, time: number): number => {
   return measure.beats.findIndex(b => (end += getDurationVal(b.duration, b.dot)) > time);
 };
 
+/**
+ * The nearest earlier note on a string, in this bar or the one before: what a slur
+ * or a slide into a note starts from. Neither reaches further back than one bar line.
+ */
+export const previousNoteOnString = (
+  measures: TabMeasure[],
+  at: BeatPosition,
+  stringIndex: number,
+): { at: BeatPosition; note: FrettedNote } | null => {
+  for (let m = at.measureIndex; m >= Math.max(0, at.measureIndex - 1); m--) {
+    const beats = measures[m]?.beats ?? [];
+    for (let b = (m === at.measureIndex ? at.beatIndex : beats.length) - 1; b >= 0; b--) {
+      const note = beats[b].notes.find((nn): nn is FrettedNote => isFrettedNote(nn) && nn.stringIndex === stringIndex);
+      if (note) return { at: { measureIndex: m, beatIndex: b }, note };
+    }
+  }
+  return null;
+};
+
 const coversWholeBars = (measures: TabMeasure[], from: BeatPosition, to: BeatPosition): boolean =>
   from.beatIndex === 0 && to.beatIndex === (measures[to.measureIndex]?.beats.length ?? 0) - 1;
 

@@ -48,6 +48,8 @@ still change the song format or the API; from `1.0.0` on, only a major release w
   starting on the last sixteenth of a beat.
 - A digit typed quickly after moving to another note no longer joins the fret typed before it: 2,
   →, 2 writes two 2s, not a 22. Any other key also ends a two-digit fret.
+- A slur or a slide into a note now connects to the note before it in the previous bar too, and
+  one that crosses a row break is drawn in two halves.
 
 ## [1.0.0] - 2026-10-01
 
