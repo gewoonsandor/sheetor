@@ -28,6 +28,7 @@ still change the song format or the API; from `1.0.0` on, only a major release w
   neither, and the next beat you add keeps it, so a run of triplets types straight on. The score
   shows the count over each group, on a bracket when the notes are not beamed together, and
   playback plays them in time.
+- D deletes the same way Delete does: the note under the cursor, a rest beat, or the selection.
 
 ### Changed
 

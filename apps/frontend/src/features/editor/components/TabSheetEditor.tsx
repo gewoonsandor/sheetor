@@ -1133,6 +1133,13 @@ export const TabSheetEditor: React.FC<TabSheetEditorProps> = ({ meta, channel })
       return;
     }
 
+    /** What Delete and D do: the selection, else a rest beat, else the cursor note. */
+    const deleteAtCursor = () => {
+      if (hasSelection) deleteSelection();
+      else if (beat?.isRest) deleteActiveBeat();
+      else removeCursorNote();
+    };
+
     switch (e.key) {
       // Arrow navigation — with Shift held, the arrows retune the selected note
       // instead of moving the cursor (Shift+Ctrl/Cmd for whole octaves).
@@ -1193,19 +1200,20 @@ export const TabSheetEditor: React.FC<TabSheetEditorProps> = ({ meta, channel })
         }
         break;
 
-      // Delete / Backspace removes a note, or deletes the beat if it's a rest
+      // Delete, Backspace and D remove a note, or delete the beat if it's a rest;
+      // Ctrl+Delete deletes the bar, and Ctrl+D stays the browser's bookmark key.
       case 'Backspace':
       case 'Delete':
         e.preventDefault();
-        if (e.ctrlKey || e.metaKey) {
-          deleteActiveMeasure();
-        } else if (hasSelection) {
-          deleteSelection();
-        } else if (beat?.isRest) {
-          deleteActiveBeat();
-        } else {
-          removeCursorNote();
-        }
+        if (e.ctrlKey || e.metaKey) deleteActiveMeasure();
+        else deleteAtCursor();
+        break;
+
+      case 'd':
+      case 'D':
+        if (e.ctrlKey || e.metaKey) break;
+        e.preventDefault();
+        deleteAtCursor();
         break;
 
       // Rest hotkey

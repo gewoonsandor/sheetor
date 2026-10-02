@@ -122,7 +122,7 @@ export const NoteToolbar = ({
       type="button"
       className="btn btn-sm btn-icon btn-danger"
       aria-label="Clear beat"
-      title="Clear beat (Delete removes one note)"
+      title="Clear beat (Delete or D removes one note)"
       onMouseDown={keepFocus}
       onClick={clearBeat}
     >
