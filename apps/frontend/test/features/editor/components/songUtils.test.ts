@@ -5,8 +5,10 @@ import {
   computeBeamGroups,
   createEmptyMeasure,
   firstBeatPosition,
-  getBeatDurationInSeconds,
-  getDurationVal,
+  beatLength,
+  beatSeconds,
+  beatTicks,
+  tupletGroups,
   getEffectiveBpm,
   conductorChanges,
   getEffectiveTimeSignature,
@@ -81,16 +83,33 @@ describe('resizeTuning', () => {
 });
 
 describe('durations', () => {
-  it('measures a quarter note as one beat', () => {
-    expect(getDurationVal('4')).toBe(1);
+  it('measures a quarter as one beat and a dotted eighth as three quarters of one', () => {
+    expect(beatLength(beat('4'))).toBe(1);
+    expect(beatLength({ ...beat('8'), dot: true })).toBe(0.75);
   });
 
-  it('extends a dotted eighth by half', () => {
-    expect(getDurationVal('8', true)).toBe(0.75);
+  it('fits three triplet eighths or six sextuplet sixteenths exactly into one beat', () => {
+    const triplet = { ...beat('8'), tuplet: 3 as const };
+    const sextuplet = { ...beat('16'), tuplet: 6 as const };
+    expect(3 * beatTicks(triplet)).toBe(beatTicks(beat('4')));
+    expect(6 * beatTicks(sextuplet)).toBe(beatTicks(beat('4')));
+    expect(beatLength(triplet)).toBeCloseTo(1 / 3);
   });
 
   it('converts a quarter at 120 bpm to half a second', () => {
-    expect(getBeatDurationInSeconds('4', false, 120)).toBe(0.5);
+    expect(beatSeconds(beat('4'), 120)).toBe(0.5);
+  });
+});
+
+describe('tupletGroups', () => {
+  it('brackets each run of a tuplet once it holds as many notes as its count', () => {
+    const t = (duration: TabBeat['duration'], tuplet: 3 | 6): TabBeat => ({ ...beat(duration), tuplet });
+    const beats = [t('8', 3), t('8', 3), t('8', 3), t('8', 3), t('8', 3), t('8', 3), t('16', 6), t('16', 6), t('16', 6), t('16', 6), t('16', 6), t('16', 6), beat('4')];
+    expect(tupletGroups(beats)).toEqual([
+      { start: 0, end: 2, tuplet: 3 },
+      { start: 3, end: 5, tuplet: 3 },
+      { start: 6, end: 11, tuplet: 6 },
+    ]);
   });
 });
 
@@ -165,6 +184,14 @@ describe('computeBeamGroups', () => {
     // At 0, 0.75 (across beat 2), 1.25 and 1.5: the bar that used to hang the editor.
     expect(computeBeamGroups([dotted, beat('8'), beat('16'), beat('8'), beat('8')], { numerator: 4, denominator: 4 })).toEqual([
       { startIdx: 2, endIdx: 3, duration: '8' },
+    ]);
+  });
+
+  it('beams triplet eighths in threes, one group per beat', () => {
+    const triplet = (): TabBeat => ({ ...beat('8'), tuplet: 3 });
+    expect(computeBeamGroups([triplet(), triplet(), triplet(), triplet(), triplet(), triplet()], { numerator: 4, denominator: 4 })).toEqual([
+      { startIdx: 0, endIdx: 2, duration: '8' },
+      { startIdx: 3, endIdx: 5, duration: '8' },
     ]);
   });
 });

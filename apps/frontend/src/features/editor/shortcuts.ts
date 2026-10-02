@@ -66,6 +66,7 @@ export const SHORTCUTS: Shortcut[] = [
   { keys: ['R'], action: 'Rest', group: 'Write' },
   { keys: ['.'], action: 'Dot', group: 'Write' },
   { keys: ['+', '−'], action: 'Duration', group: 'Write' },
+  { keys: ['T'], action: 'Tuplet: triplet, sextuplet, off', group: 'Write' },
   { keys: ['Delete'], action: 'Remove', group: 'Write' },
   { keys: ['Ctrl', 'Delete'], action: 'Delete bar', group: 'Write' },
   { keys: ['Ctrl', 'C', 'X', 'V'], action: 'Copy, cut, paste', group: 'Edit' },

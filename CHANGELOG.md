@@ -24,6 +24,10 @@ still change the song format or the API; from `1.0.0` on, only a major release w
 - Slides into a note from below or above, and out of a note down or up. S steps the slide into a
   note: from the note before, from below, from above, off. Shift+S steps the slide out: down, up,
   off. A note can have both.
+- Triplets and sextuplets. T steps the beat under the cursor through a triplet, a sextuplet and
+  neither, and the next beat you add keeps it, so a run of triplets types straight on. The score
+  shows the count over each group, on a bracket when the notes are not beamed together, and
+  playback plays them in time.
 
 ### Changed
 

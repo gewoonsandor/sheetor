@@ -1,6 +1,8 @@
 import type { ReactNode } from 'react';
 
-import type { Duration } from './types';
+import type { Duration, Tuplet } from './types';
+
+const TUPLET_LABEL = 'Tuplet: triplet, sextuplet, off (T)';
 
 const NAMES: Record<Duration, string> = {
   '1': 'Whole', '2': 'Half', '4': 'Quarter', '8': 'Eighth', '16': 'Sixteenth', '32': 'Thirty-second',
@@ -40,12 +42,14 @@ const glyph = (duration: Duration): ReactNode => {
   );
 };
 
-/** The note lengths and the dot, as one segmented group. */
-export const DurationPicker = ({ duration, dotted, onDuration, onToggleDot }: {
+/** The note lengths, the dot and the tuplet, as one segmented group. */
+export const DurationPicker = ({ duration, dotted, tuplet, onDuration, onToggleDot, onCycleTuplet }: {
   duration: Duration;
   dotted: boolean;
+  tuplet: Tuplet | undefined;
   onDuration: (d: Duration) => void;
   onToggleDot: () => void;
+  onCycleTuplet: () => void;
 }) => (
   <div className="duration-selector" role="group" aria-label="Note length">
     {(['1', '2', '4', '8', '16', '32'] as const).map(d => (
@@ -76,6 +80,17 @@ export const DurationPicker = ({ duration, dotted, onDuration, onToggleDot }: {
         {HEAD}
         {STEM}
       </svg>
+    </button>
+    <button
+      type="button"
+      className="btn btn-sm btn-icon btn-ghost duration-tuplet"
+      aria-pressed={tuplet !== undefined}
+      aria-label={TUPLET_LABEL}
+      title={TUPLET_LABEL}
+      onMouseDown={e => e.preventDefault()}
+      onClick={onCycleTuplet}
+    >
+      {tuplet ?? 3}
     </button>
   </div>
 );

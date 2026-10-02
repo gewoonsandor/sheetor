@@ -82,10 +82,18 @@ export interface PitchedNote extends NoteTechniques {
 
 export type TabNote = FrettedNote | PitchedNote;
 
+/**
+ * A tuplet's count: three notes in the time of two, or six in the time of four.
+ * Either way each note plays at ⅔ of its written length; the count only decides
+ * how many notes one bracket holds.
+ */
+export type Tuplet = 3 | 6;
+
 export interface TabBeat {
   id: string;
   duration: Duration;
   dot?: boolean;
+  tuplet?: Tuplet;
   notes: TabNote[];
   isRest?: boolean;
 }

@@ -15,6 +15,7 @@ import type {
   TrackKind,
   BeamGroup,
   TimeSignature,
+  Tuplet,
 } from './types';
 
 /** Most strings a fretted track may have. */
@@ -124,29 +125,63 @@ export const withNextSlideOut = (note: TabNote): TabNote => {
   return next;
 };
 
-// Helper to convert duration string to beat multiplier (relative to quarter note)
-export const getDurationVal = (dur: Duration, dot?: boolean): number => {
-  let base: number;
-  switch (dur) {
-    case '1': base = 4.0; break;
-    case '2': base = 2.0; break;
-    case '4': base = 1.0; break;
-    case '8': base = 0.5; break;
-    case '16': base = 0.25; break;
-    case '32': base = 0.125; break;
-    default: base = 1.0;
-  }
-  return dot ? base * 1.5 : base;
+/** Ticks per quarter note: enough that every length, dotted or in a tuplet, is a whole number. */
+export const TICKS_PER_QUARTER = 48;
+
+const DURATION_TICKS: Record<Duration, number> = { '1': 192, '2': 96, '4': 48, '8': 24, '16': 12, '32': 6 };
+
+/**
+ * A beat's length in ticks. Whole numbers, so lengths add up exactly, thirds
+ * included; anything that compares or sums positions in a bar works in ticks.
+ */
+export const beatTicks = (beat: Pick<TabBeat, 'duration' | 'dot' | 'tuplet'>): number => {
+  const ticks = DURATION_TICKS[beat.duration] * (beat.dot ? 1.5 : 1);
+  return beat.tuplet ? (ticks * 2) / 3 : ticks;
 };
 
-export const getBeatDurationInSeconds = (dur: Duration, dot: boolean | undefined, bpm: number): number => {
-  const beatLength = 60 / bpm;
-  return getDurationVal(dur, dot) * beatLength;
+/** A beat's length in quarter notes. */
+export const beatLength = (beat: Pick<TabBeat, 'duration' | 'dot' | 'tuplet'>): number =>
+  beatTicks(beat) / TICKS_PER_QUARTER;
+
+/** How long a bar of a time signature is, in ticks. */
+export const barTicks = (ts: TimeSignature): number => (ts.numerator * 4 * TICKS_PER_QUARTER) / ts.denominator;
+
+export const beatSeconds = (beat: Pick<TabBeat, 'duration' | 'dot' | 'tuplet'>, bpm: number): number =>
+  (beatLength(beat) * 60) / bpm;
+
+/** T steps a beat through a triplet and a sextuplet to neither. */
+export const nextTuplet = (tuplet: Tuplet | undefined): Tuplet | undefined =>
+  tuplet === undefined ? 3 : tuplet === 3 ? 6 : undefined;
+
+/**
+ * The beats each tuplet number is drawn over: a run of beats with the same count,
+ * closed once it holds as many notes as the count, at the first one's length.
+ */
+export const tupletGroups = (beats: TabBeat[]): { start: number; end: number; tuplet: Tuplet }[] => {
+  const groups: { start: number; end: number; tuplet: Tuplet }[] = [];
+  let i = 0;
+  while (i < beats.length) {
+    const tuplet = beats[i].tuplet;
+    if (!tuplet) {
+      i++;
+      continue;
+    }
+    const start = i;
+    const span = tuplet * beatTicks(beats[i]);
+    let filled = 0;
+    while (i < beats.length && beats[i].tuplet === tuplet && filled < span) {
+      filled += beatTicks(beats[i]);
+      i++;
+    }
+    groups.push({ start, end: i - 1, tuplet });
+  }
+  return groups;
 };
 
 export function computeBeamGroups(beats: TabBeat[], timeSig?: TimeSignature): BeamGroup[] {
   const ts = timeSig || { numerator: 4, denominator: 4 };
-  const beatQuarterValue = (ts.denominator === 8 && ts.numerator % 3 === 0) ? 1.5 : 4 / ts.denominator;
+  // The beat beams group within, in ticks: a dotted quarter in compound time.
+  const unit = (ts.denominator === 8 && ts.numerator % 3 === 0) ? 72 : (4 * TICKS_PER_QUARTER) / ts.denominator;
 
   const groups: BeamGroup[] = [];
   let i = 0;
@@ -154,16 +189,14 @@ export function computeBeamGroups(beats: TabBeat[], timeSig?: TimeSignature): Be
   while (i < beats.length) {
     const beat = beats[i];
     if (!beat || beat.isRest || beat.notes.length === 0) {
-      beatPos += beat ? getDurationVal(beat.duration, beat.dot) : 0;
+      beatPos += beat ? beatTicks(beat) : 0;
       i++;
       continue;
     }
     const dur = beat.duration;
     if (dur === '8' || dur === '16' || dur === '32') {
       const start = i;
-      const startPos = beatPos;
-      const boundaryLimit = Math.floor(startPos / beatQuarterValue) * beatQuarterValue + beatQuarterValue;
-      const maxGroupDur = boundaryLimit - startPos;
+      const maxGroupDur = (Math.floor(beatPos / unit) + 1) * unit - beatPos;
       let accumulated = 0;
       let hasEighth = false;
       let hasSixteenth = false;
@@ -172,9 +205,9 @@ export function computeBeamGroups(beats: TabBeat[], timeSig?: TimeSignature): Be
         if (!b || b.isRest || b.notes.length === 0) break;
         const bDur = b.duration;
         if (bDur !== '8' && bDur !== '16' && bDur !== '32') break;
-        const val = getDurationVal(bDur, b.dot);
+        const val = beatTicks(b);
         // The first note always joins, even one that crosses the beat: left out, it would start this group again forever.
-        if (i > start && accumulated + val > maxGroupDur + 0.001) break;
+        if (i > start && accumulated + val > maxGroupDur) break;
         accumulated += val;
         if (bDur === '8') hasEighth = true;
         else if (bDur === '16') hasSixteenth = true;
@@ -186,7 +219,7 @@ export function computeBeamGroups(beats: TabBeat[], timeSig?: TimeSignature): Be
         groups.push({ startIdx: start, endIdx: i - 1, duration: gDur });
       }
     } else {
-      beatPos += getDurationVal(dur, beat.dot);
+      beatPos += beatTicks(beat);
       i++;
     }
   }
@@ -714,12 +747,12 @@ export const beatSpan = (m: number, beatCount: number, from: BeatPosition, to: B
 
 /** Where a beat starts in its bar, in quarter notes. */
 export const beatOnset = (measure: TabMeasure, beatIndex: number): number =>
-  measure.beats.slice(0, beatIndex).reduce((at, b) => at + getDurationVal(b.duration, b.dot), 0);
+  measure.beats.slice(0, beatIndex).reduce((at, b) => at + beatTicks(b), 0) / TICKS_PER_QUARTER;
 
 /** The beat of a bar still sounding `time` quarter notes in, or -1 once the bar is over. */
 export const beatAt = (measure: TabMeasure, time: number): number => {
   let end = 0;
-  return measure.beats.findIndex(b => (end += getDurationVal(b.duration, b.dot)) > time);
+  return measure.beats.findIndex(b => (end += beatTicks(b)) / TICKS_PER_QUARTER > time);
 };
 
 /**

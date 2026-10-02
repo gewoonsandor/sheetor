@@ -8,7 +8,10 @@ import type {
   Staff, TabNote, TabBeat, TabMeasure, TabSong, TabTrack, BeamGroup, MLayout,
 } from './types';
 import {
-  getDurationVal,
+  barTicks,
+  beatTicks,
+  nextTuplet,
+  tupletGroups,
   computeBeamGroups,
   createTrack,
   isFretted,
@@ -814,6 +817,15 @@ export const TabSheetEditor: React.FC<TabSheetEditorProps> = ({ meta, channel })
     setDotSelect(prev => !prev);
   };
 
+  /** T steps the cursor beat through a triplet and a sextuplet to neither. */
+  const cycleTupletForActiveBeat = () => {
+    updateActiveBeat(b => {
+      const { tuplet, ...rest } = b;
+      const next = nextTuplet(tuplet);
+      return next ? { ...rest, tuplet: next } : rest;
+    });
+  };
+
   // Grid/beat manipulation. Beats belong to one track; bars belong to all of
   // them, so bar operations go through setAllTrackMeasures to keep the score
   // aligned.
@@ -985,17 +997,18 @@ export const TabSheetEditor: React.FC<TabSheetEditorProps> = ({ meta, channel })
     const measure = measures[activeMeasureIndex];
     if (!measure) return;
     const beat = measure.beats[activeBeatIndex];
-    const measureDur = measure.beats.reduce((acc, b) => acc + getDurationVal(b.duration, b.dot), 0);
-    const timeSignature = getEffectiveTimeSignature(song, activeMeasureIndex);
-    const targetDur = timeSignature.numerator * (4 / timeSignature.denominator);
+    const filled = measure.beats.reduce((acc, b) => acc + beatTicks(b), 0);
+    // A beat appended after this one keeps its length and its tuplet, so triplets type on.
+    const carried = beat?.tuplet ? { tuplet: beat.tuplet } : {};
 
     if (activeBeatIndex < measure.beats.length - 1) {
       setActiveBeatIndex(prev => prev + 1);
-    } else if (measureDur < targetDur - 0.001) {
+    } else if (filled < barTicks(getEffectiveTimeSignature(song, activeMeasureIndex))) {
       // Bar is not filled yet, create a new beat with same length
       const newBeat: TabBeat = {
         id: createId(),
         duration: beat ? beat.duration : durationSelect,
+        ...carried,
         notes: [],
         isRest: true
       };
@@ -1012,6 +1025,7 @@ export const TabSheetEditor: React.FC<TabSheetEditorProps> = ({ meta, channel })
         beats: [{
           id: createId(),
           duration: beat ? beat.duration : durationSelect,
+          ...carried,
           notes: [],
           isRest: true
         }]
@@ -1205,6 +1219,11 @@ export const TabSheetEditor: React.FC<TabSheetEditorProps> = ({ meta, channel })
       case '.':
         e.preventDefault();
         toggleDotForActiveBeat();
+        break;
+
+      case 't':
+        e.preventDefault();
+        cycleTupletForActiveBeat();
         break;
 
       // Plus / Equals / Minus to change duration (increase/decrease)
@@ -1808,11 +1827,13 @@ export const TabSheetEditor: React.FC<TabSheetEditorProps> = ({ meta, channel })
         <NoteToolbar
           duration={activeBeat?.duration ?? durationSelect}
           dotted={activeBeat ? !!activeBeat.dot : dotSelect}
+          tuplet={activeBeat?.tuplet}
           onDuration={(dur) => {
             setDurationSelect(dur);
             setDurationForActiveBeat(dur);
           }}
           onToggleDot={toggleDotForActiveBeat}
+          onCycleTuplet={cycleTupletForActiveBeat}
           isRest={!!activeBeat?.isRest}
           toggleActiveBeatRest={toggleActiveBeatRest}
           activeNote={activeNote}
@@ -2016,7 +2037,7 @@ export const TabSheetEditor: React.FC<TabSheetEditorProps> = ({ meta, channel })
                       {actual > expected ? 'over' : 'short'} {Math.round(Math.abs(actual - expected) * 100) / 100}
                     </text>
                     <title>
-                      {`Bar length mismatch: ${actual} quarter notes, expected ${expected}.`}
+                      {`Bar length mismatch: ${Math.round(actual * 100) / 100} quarter notes, expected ${expected}.`}
                     </title>
                   </g>
                 )}
@@ -2908,6 +2929,46 @@ export const TabSheetEditor: React.FC<TabSheetEditorProps> = ({ meta, channel })
                         />
                       );
                     })}
+                  </g>
+                );
+              })}
+
+              {/* Tuplets: the count over each group, on a bracket when its notes are not beamed
+                  together, clear of the staff, every notehead and every up stem; the TAB repeats
+                  the count under its rhythm stems. */}
+              {tupletGroups(measure.beats).map(g => {
+                const x1 = getBeatCoordinates(mIdx, g.start, staff);
+                const x2 = getBeatCoordinates(mIdx, g.end, staff);
+                const beamed = beamGroups.find(bg => bg.startIdx <= g.start && g.end <= bg.endIdx);
+                const beamUp = beamed ? getBeamStemUp(mIdx, beamed, staff) : false;
+                let top = staffY + 10;
+                for (let i = g.start; i <= g.end; i++) {
+                  const beat = measure.beats[i];
+                  if (beat.isRest || beat.notes.length === 0) continue;
+                  const steps = beat.notes.map(n => staffStep(noteMidi(n, staff), staff, mIdx));
+                  const head = staffY + Y_of_step(Math.max(...steps));
+                  const up = beamed ? beamUp : steps.reduce((sum, s) => sum + s, 0) / steps.length < 6;
+                  const stemTop = beamed ? getBeamY(mIdx, beamed, true, staff, staffY) - 2 : head - 30;
+                  top = Math.min(top, up && beat.duration !== '1' ? stemTop : head - 5);
+                }
+                const mid = (x1 + x2) / 2 + (beamUp ? 4 : 0);
+                const y = top - 5;
+                return (
+                  <g key={`tuplet-${g.start}`} style={{ pointerEvents: 'none' }}>
+                    {showNotation && !beamed && (
+                      <path
+                        d={`M ${x1 - 4} ${y + 1} V ${y - 3} H ${mid - 6} M ${mid + 6} ${y - 3} H ${x2 + 4} V ${y + 1}`}
+                        fill="none"
+                        className="glyph-ink-stroke"
+                        strokeWidth="1"
+                      />
+                    )}
+                    {showNotation && (
+                      <text x={mid} y={y} textAnchor="middle" fontSize="9" fontStyle="italic" className="music-text glyph-ink">{g.tuplet}</text>
+                    )}
+                    {showTab && (
+                      <text x={(x1 + x2) / 2} y={rowY + tabTop + ts + stringCount * 10 + 24} textAnchor="middle" fontSize="8" fontStyle="italic" className="music-text glyph-ink">{g.tuplet}</text>
+                    )}
                   </g>
                 );
               })}

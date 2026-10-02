@@ -1,5 +1,5 @@
 import type { Duration, TabMeasure, MLayout } from './types';
-import { getDurationVal } from './songUtils';
+import { barTicks, beatTicks, TICKS_PER_QUARTER } from './songUtils';
 export const SLOT_WIDTH = 22;
 
 export const MIN_BEAT_WIDTH = 30;
@@ -44,12 +44,12 @@ export const getBeatMinContribution = (duration: Duration): number => {
  * has, and a lone onset is centred.
  */
 export const alignBars = (bars: TabMeasure[]): { positions: number[][]; minWidth: number } => {
-  // Onsets are sums of dyadic durations, so they compare exactly as map keys.
+  // Onsets are whole ticks, so they compare exactly as map keys, triplets included.
   const onsets = bars.map(bar => {
     let at = 0;
     return bar.beats.map(b => {
       const start = at;
-      at += getDurationVal(b.duration, b.dot);
+      at += beatTicks(b);
       return start;
     });
   });
@@ -58,14 +58,14 @@ export const alignBars = (bars: TabMeasure[]): { positions: number[][]; minWidth
   bars.forEach((bar, i) => bar.beats.forEach((b, j) => {
     const at = onsets[i][j];
     room.set(at, Math.max(room.get(at) ?? 0, getBeatMinContribution(b.duration)));
-    end = Math.max(end, at + getDurationVal(b.duration, b.dot));
+    end = Math.max(end, at + beatTicks(b));
   }));
   const times = [...room.keys()].sort((a, b) => a - b);
   const offsets = new Map<number, number>();
   let total = 0;
   times.forEach((at, k) => {
     offsets.set(at, total);
-    total += Math.sqrt((times[k + 1] ?? end) - at);
+    total += Math.sqrt(((times[k + 1] ?? end) - at) / TICKS_PER_QUARTER);
   });
   return {
     positions: onsets.map(list => list.map(at => (times.length === 1 ? 0.5 : (offsets.get(at) ?? 0) / total))),
@@ -199,13 +199,12 @@ export const computeMeasureLayouts = (
 };
 
 export const checkMeasureBeats = (measure: TabMeasure, measureIndex: number, getEffectiveTimeSignature: (idx: number) => { numerator: number; denominator: number }) => {
-  const actual = measure.beats.reduce((acc, b) => acc + getDurationVal(b.duration, b.dot), 0);
-  const timeSignature = getEffectiveTimeSignature(measureIndex);
-  const expected = timeSignature.numerator * (4 / timeSignature.denominator);
+  const actual = measure.beats.reduce((acc, b) => acc + beatTicks(b), 0);
+  const expected = barTicks(getEffectiveTimeSignature(measureIndex));
   return {
-    isValid: Math.abs(actual - expected) < 0.001,
-    actual,
-    expected
+    isValid: actual === expected,
+    actual: actual / TICKS_PER_QUARTER,
+    expected: expected / TICKS_PER_QUARTER,
   };
 };
 

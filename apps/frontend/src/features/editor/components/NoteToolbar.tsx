@@ -2,7 +2,7 @@ import type { MouseEvent } from 'react';
 
 import { DurationPicker } from './DurationPicker';
 import { BEND_LABELS } from './songUtils';
-import type { Duration, NoteTechniques, TabNote } from './types';
+import type { Duration, NoteTechniques, TabNote, Tuplet } from './types';
 import { TECHNIQUE_LABELS, TECHNIQUE_SHORTCUTS } from '../shortcuts';
 import type { TechniqueId } from '../shortcuts';
 
@@ -28,8 +28,10 @@ const keepFocus = (e: MouseEvent) => e.preventDefault();
 interface NoteToolbarProps {
   duration: Duration;
   dotted: boolean;
+  tuplet: Tuplet | undefined;
   onDuration: (d: Duration) => void;
   onToggleDot: () => void;
+  onCycleTuplet: () => void;
   isRest: boolean;
   toggleActiveBeatRest: () => void;
   activeNote: TabNote | undefined;
@@ -43,11 +45,18 @@ interface NoteToolbarProps {
 
 /** Everything that writes the beat under the cursor, always in view above the score. */
 export const NoteToolbar = ({
-  duration, dotted, onDuration, onToggleDot, isRest, toggleActiveBeatRest, activeNote,
+  duration, dotted, tuplet, onDuration, onToggleDot, onCycleTuplet, isRest, toggleActiveBeatRest, activeNote,
   toggleNoteTechnique, clearBeat, midiInput, midiAvailable, toggleMidiInput, midiStatus,
 }: NoteToolbarProps) => (
   <div className="note-toolbar card" role="toolbar" aria-label="Note">
-    <DurationPicker duration={duration} dotted={dotted} onDuration={onDuration} onToggleDot={onToggleDot} />
+    <DurationPicker
+      duration={duration}
+      dotted={dotted}
+      tuplet={tuplet}
+      onDuration={onDuration}
+      onToggleDot={onToggleDot}
+      onCycleTuplet={onCycleTuplet}
+    />
     <button
       type="button"
       className="btn btn-sm"

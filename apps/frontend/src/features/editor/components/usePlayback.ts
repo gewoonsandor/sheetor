@@ -3,7 +3,7 @@ import { useEffect, useRef, useState } from 'react';
 import type { BeatPosition, TabBeat, TabSong, TabTrack } from './types';
 import { getVoice } from './audioEngine';
 import {
-  firstBeatPosition, getBeatDurationInSeconds, getEffectiveBpm, isAudible,
+  firstBeatPosition, beatSeconds, getEffectiveBpm, isAudible,
   nextPlayPosition, resolveNoteMidi,
 } from './songUtils';
 
@@ -96,7 +96,7 @@ export const usePlayback = (
     trackGain.connect(ctx.destination);
 
     const build = getVoice(track.instrument);
-    const duration = getBeatDurationInSeconds(beat.duration, beat.dot, bpm) / speed;
+    const duration = beatSeconds(beat, bpm) / speed;
     beat.notes.forEach(note => {
       // A fretted note stranded above the track's string count has no pitch.
       const midi = resolveNoteMidi(note, track);
@@ -200,7 +200,7 @@ export const usePlayback = (
             cursorTimersRef.current.push(timerId);
           }
 
-          cursor.nextTime += getBeatDurationInSeconds(beat.duration, beat.dot, bpm) / current.speed;
+          cursor.nextTime += beatSeconds(beat, bpm) / current.speed;
 
           const conductor = current.song.tracks[0]?.measures ?? [];
           const next = nextPlayPosition(track.measures, conductor, cursor.position, current.loop, cursor.passes);

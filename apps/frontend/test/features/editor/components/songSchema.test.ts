@@ -294,4 +294,17 @@ describe('parseSong', () => {
       { stringIndex: 2, fret: 7 },
     ]);
   });
+
+  it('keeps a triplet or sextuplet and drops any other tuplet', () => {
+    const song = valid();
+    song.measures[0].beats = [
+      { duration: '8', tuplet: 3, notes: [] },
+      { duration: '16', tuplet: 6, notes: [] },
+      { duration: '8', tuplet: 5, notes: [] },
+    ] as never;
+    const result = parseSong(song);
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.song.tracks[0].measures[0].beats.map(b => b.tuplet)).toEqual([3, 6, undefined]);
+  });
 });

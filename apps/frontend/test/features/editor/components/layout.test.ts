@@ -23,6 +23,18 @@ describe('alignBars', () => {
     expect(positions[1]).toEqual([positions[0][0], positions[0][4]]);
     expect(minWidth).toBe(alignBars([eighths]).minWidth);
   });
+
+  it('lines up a hand playing triplets with one playing quarters on every shared beat', () => {
+    const triplets: TabMeasure = {
+      id: 't',
+      beats: [
+        ...Array.from({ length: 6 }, (_, i): TabBeat => ({ id: `t${i}`, duration: '8', tuplet: 3, notes: [] })),
+        { id: 'h', duration: '2', notes: [] },
+      ],
+    };
+    const { positions } = alignBars([triplets, bar(['4', '4', '2'])]);
+    expect(positions[1]).toEqual([positions[0][0], positions[0][3], positions[0][6]]);
+  });
 });
 
 describe('scoreRowWidth', () => {

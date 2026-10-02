@@ -123,6 +123,7 @@ const parseBeat = (value: unknown, where: string): TabBeat | string => {
     notes,
   };
   if (value.dot === true) beat.dot = true;
+  if (value.tuplet === 3 || value.tuplet === 6) beat.tuplet = value.tuplet;
   if (value.isRest === true) beat.isRest = true;
   return beat;
 };
