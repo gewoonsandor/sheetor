@@ -49,6 +49,8 @@ still change the song format or the API; from `1.0.0` on, only a major release w
   on a touch screen every control grows to a finger's size.
 - The library is a list: search finds songs in every folder, songs sort by title or by last edit,
   and each row has a ⋯ menu for its actions. A whole row opens its song.
+- In read-only mode the song title and artist can no longer be clicked into, and Escape leaves
+  either field and returns to the score.
 
 ### Fixed
 

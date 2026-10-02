@@ -67,8 +67,8 @@
   color: var(--text-dim);
 }
 
-.song-title-input:hover,
-.song-artist-input:hover {
+.song-title-input:enabled:hover,
+.song-artist-input:enabled:hover {
   background: var(--surface-1);
   border-color: var(--border);
 }

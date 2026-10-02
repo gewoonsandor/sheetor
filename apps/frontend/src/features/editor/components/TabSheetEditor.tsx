@@ -1759,12 +1759,17 @@ export const TabSheetEditor: React.FC<TabSheetEditorProps> = ({ meta, channel })
       onKeyDown={handleKeyDown}
     >
       <div className="song-bar">
-        <div className="song-title">
+        <div
+          className="song-title"
+          onKeyDown={(e) => {
+            if (e.key === 'Escape') containerRef.current?.focus({ preventScroll: true });
+          }}
+        >
           <input
             className="song-title-input"
             aria-label="Song title"
             value={song.title}
-            readOnly={readOnly}
+            disabled={readOnly}
             onChange={(e) => editSong({ ...song, title: e.target.value })}
             placeholder="Song title"
           />
@@ -1772,7 +1777,7 @@ export const TabSheetEditor: React.FC<TabSheetEditorProps> = ({ meta, channel })
             className="song-artist-input"
             aria-label="Artist"
             value={song.artist}
-            readOnly={readOnly}
+            disabled={readOnly}
             onChange={(e) => editSong({ ...song, artist: e.target.value })}
             placeholder="Artist"
           />
