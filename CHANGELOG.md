@@ -46,6 +46,8 @@ still change the song format or the API; from `1.0.0` on, only a major release w
 
 - The editor froze on a bar where an eighth or shorter note crosses a beat, for example an eighth
   starting on the last sixteenth of a beat.
+- A digit typed quickly after moving to another note no longer joins the fret typed before it: 2,
+  →, 2 writes two 2s, not a 22. Any other key also ends a two-digit fret.
 
 ## [1.0.0] - 2026-10-01
 

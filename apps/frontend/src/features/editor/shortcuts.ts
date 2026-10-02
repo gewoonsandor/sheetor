@@ -1,4 +1,24 @@
 import type { NoteTechniques } from './components/types';
+import { MAX_FRET } from './components/songUtils';
+
+/** How soon a second digit must follow the first to join it into one fret. */
+const FRET_ENTRY_MS = 800;
+
+/** A fret being typed: its digits so far, the spot (bar, beat, string) they went to, and when. */
+export interface FretEntry {
+  digits: string;
+  at: string;
+  time: number;
+}
+
+/**
+ * Two digits within a moment at the same spot make one fret, up to MAX_FRET; a digit
+ * anywhere else, later, or past MAX_FRET starts a new fret.
+ */
+export const typeFretDigit = (entry: FretEntry | null, digit: string, at: string, time: number): FretEntry => {
+  const joined = entry && entry.at === at && time - entry.time < FRET_ENTRY_MS ? entry.digits + digit : digit;
+  return { digits: Number(joined) <= MAX_FRET ? joined : digit, at, time };
+};
 
 /** A technique with a key of its own; the release rides on the bend's key with Shift. */
 export type TechniqueId = Exclude<keyof NoteTechniques, 'bendRelease'>;

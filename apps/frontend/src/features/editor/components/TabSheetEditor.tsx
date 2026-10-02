@@ -67,8 +67,8 @@ import { FretboardPanel } from './FretboardPanel';
 import { TrackSettings } from './TrackSettings';
 import { ShortcutsDialog } from './ShortcutsDialog';
 import { JsonDialog } from './JsonDialog';
-import { TECHNIQUE_SHORTCUTS } from '../shortcuts';
-import type { TechniqueId } from '../shortcuts';
+import { TECHNIQUE_SHORTCUTS, typeFretDigit } from '../shortcuts';
+import type { FretEntry, TechniqueId } from '../shortcuts';
 import { parseSong } from './songSchema';
 import { canEdit } from '../../library/libraryStore';
 import type { LibraryEntry } from '../../library/libraryStore';
@@ -273,10 +273,8 @@ export const TabSheetEditor: React.FC<TabSheetEditorProps> = ({ meta, channel })
   const [jsonText, setJsonText] = useState<string>('');
   const [modalStatus, setModalStatus] = useState<string>('');
 
-  // Keyboard navigation & double-digit entry ref
-
-  const lastKeyTimeRef = useRef<number>(0);
-  const lastKeyStringRef = useRef<string>('');
+  /** The fret being typed; any other key or a cursor move ends it. */
+  const fretEntryRef = useRef<FretEntry | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLDivElement>(null);
   // The score reflows to its card: a narrow screen breaks rows narrower instead of scrolling.
@@ -1058,6 +1056,8 @@ export const TabSheetEditor: React.FC<TabSheetEditorProps> = ({ meta, channel })
     if (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.tagName === 'SELECT') return;
     if (target.closest('.popover, dialog')) return;
     if (target.tagName === 'BUTTON' && (e.key === ' ' || e.key === 'Enter')) return;
+    // Any key but a digit ends the fret being typed: 1, Delete, 2 is fret 2, not 12.
+    if (!/^[0-9]$/.test(e.key)) fretEntryRef.current = null;
 
     if (e.key === '?') {
       e.preventDefault();
@@ -1217,27 +1217,11 @@ export const TabSheetEditor: React.FC<TabSheetEditorProps> = ({ meta, channel })
       }
 
       default:
-        // Handle number entry (0 to 9) with multi-digit parsing (e.g. typing 1 then 2 = fret 12)
-        if (/[0-9]/.test(e.key)) {
+        if (/^[0-9]$/.test(e.key)) {
           e.preventDefault();
-          const now = e.timeStamp;
-          let fretVal = parseInt(e.key);
-
-          // If the last key was pressed less than 800ms ago and was a number
-          if (now - lastKeyTimeRef.current < 800 && /[0-9]/.test(lastKeyStringRef.current)) {
-            const combinedStr = lastKeyStringRef.current + e.key;
-            const combinedVal = parseInt(combinedStr);
-            if (combinedVal <= 24) {
-              fretVal = combinedVal;
-              lastKeyStringRef.current = combinedStr;
-            } else {
-              lastKeyStringRef.current = e.key;
-            }
-          } else {
-            lastKeyStringRef.current = e.key;
-          }
-          lastKeyTimeRef.current = now;
-          setFretForActiveNote(activeStringIndex, fretVal);
+          const entry = typeFretDigit(fretEntryRef.current, e.key, `${activeMeasureIndex}:${activeBeatIndex}:${activeStringIndex}`, e.timeStamp);
+          fretEntryRef.current = entry;
+          setFretForActiveNote(activeStringIndex, Number(entry.digits));
         }
         break;
     }
