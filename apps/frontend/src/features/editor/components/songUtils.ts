@@ -93,6 +93,28 @@ export const TECHNIQUE_KEYS = [
 /** How the score labels each bend amount. */
 export const BEND_LABELS: Record<BendAmount, string> = { 1: '½', 2: 'full' };
 
+type Technique = keyof NoteTechniques;
+
+/** Techniques one note cannot carry together: a dead note has no pitch, and a note comes from the one before by one route. */
+const NOTE_CONFLICTS: Partial<Record<Technique, Technique[]>> = {
+  ghostNote: ['harmonic', 'bend', 'vibrato'],
+  harmonic: ['ghostNote'],
+  bend: ['ghostNote'],
+  vibrato: ['ghostNote'],
+  slur: ['legatoSlide', 'slideIn'],
+  legatoSlide: ['slur'],
+  slideIn: ['slur'],
+};
+
+/** Palm mute and let ring share one line over the TAB, so they cannot share a beat. */
+const BEAT_CONFLICTS: Partial<Record<Technique, Technique[]>> = { palmMute: ['letRing'], letRing: ['palmMute'] };
+
+/** Whether `technique` cannot be turned on for `note` (in a beat holding `notes`) because a conflicting one is set. */
+export const techniqueBlocked = (notes: TabNote[], note: TabNote | undefined, technique: Technique): boolean =>
+  !!note && !note[technique]
+  && ((NOTE_CONFLICTS[technique] ?? []).some(t => note[t])
+    || (BEAT_CONFLICTS[technique] ?? []).some(t => notes.some(n => n[t])));
+
 /** B steps a note's bend through ½ and full to none; dropping the bend drops its release. */
 export const withNextBend = (note: TabNote): TabNote => {
   const next = { ...note };
@@ -756,22 +778,20 @@ export const beatAt = (measure: TabMeasure, time: number): number => {
 };
 
 /**
- * The nearest earlier note on a string, in this bar or the one before: what a slur
- * or a slide into a note starts from. Neither reaches further back than one bar line.
+ * The note on a string in the beat right before, in this bar or across the bar
+ * line: what a slur or a slide into a note starts from. A rest, or a beat with
+ * nothing on that string, in between means there is nothing to connect.
  */
 export const previousNoteOnString = (
   measures: TabMeasure[],
   at: BeatPosition,
   stringIndex: number,
 ): { at: BeatPosition; note: FrettedNote } | null => {
-  for (let m = at.measureIndex; m >= Math.max(0, at.measureIndex - 1); m--) {
-    const beats = measures[m]?.beats ?? [];
-    for (let b = (m === at.measureIndex ? at.beatIndex : beats.length) - 1; b >= 0; b--) {
-      const note = beats[b].notes.find((nn): nn is FrettedNote => isFrettedNote(nn) && nn.stringIndex === stringIndex);
-      if (note) return { at: { measureIndex: m, beatIndex: b }, note };
-    }
-  }
-  return null;
+  const m = at.beatIndex > 0 ? at.measureIndex : at.measureIndex - 1;
+  const prev = { measureIndex: m, beatIndex: at.beatIndex > 0 ? at.beatIndex - 1 : (measures[m]?.beats.length ?? 0) - 1 };
+  const note = measures[m]?.beats[prev.beatIndex]?.notes
+    .find((nn): nn is FrettedNote => isFrettedNote(nn) && nn.stringIndex === stringIndex);
+  return note ? { at: prev, note } : null;
 };
 
 const coversWholeBars = (measures: TabMeasure[], from: BeatPosition, to: BeatPosition): boolean =>

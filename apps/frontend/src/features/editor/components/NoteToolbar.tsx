@@ -1,7 +1,7 @@
 import type { MouseEvent } from 'react';
 
 import { DurationPicker } from './DurationPicker';
-import { BEND_LABELS } from './songUtils';
+import { BEND_LABELS, techniqueBlocked } from './songUtils';
 import type { Duration, NoteTechniques, TabNote, Tuplet } from './types';
 import { TECHNIQUE_LABELS, TECHNIQUE_SHORTCUTS } from '../shortcuts';
 import type { TechniqueId } from '../shortcuts';
@@ -35,6 +35,8 @@ interface NoteToolbarProps {
   isRest: boolean;
   toggleActiveBeatRest: () => void;
   activeNote: TabNote | undefined;
+  /** Every note in the cursor beat, which palm mute and let ring check. */
+  beatNotes: TabNote[];
   toggleNoteTechnique: (technique: keyof NoteTechniques) => void;
   clearBeat: () => void;
   midiInput: boolean;
@@ -45,7 +47,7 @@ interface NoteToolbarProps {
 
 /** Everything that writes the beat under the cursor, always in view above the score. */
 export const NoteToolbar = ({
-  duration, dotted, tuplet, onDuration, onToggleDot, onCycleTuplet, isRest, toggleActiveBeatRest, activeNote,
+  duration, dotted, tuplet, onDuration, onToggleDot, onCycleTuplet, isRest, toggleActiveBeatRest, activeNote, beatNotes,
   toggleNoteTechnique, clearBeat, midiInput, midiAvailable, toggleMidiInput, midiStatus,
 }: NoteToolbarProps) => (
   <div className="note-toolbar card" role="toolbar" aria-label="Note">
@@ -79,7 +81,7 @@ export const NoteToolbar = ({
           aria-pressed={!!activeNote?.[technique] || !!kind}
           aria-label={label}
           title={label}
-          disabled={!activeNote}
+          disabled={!activeNote || techniqueBlocked(beatNotes, activeNote, technique)}
           onMouseDown={keepFocus}
           onClick={() => toggleNoteTechnique(technique)}
         >

@@ -44,6 +44,7 @@ import {
   withNextSlideIn,
   withNextSlideOut,
   previousNoteOnString,
+  techniqueBlocked,
 } from '../../../../src/features/editor/components/songUtils';
 
 const beat = (duration: TabBeat['duration'], notes: TabBeat['notes'] = [{ stringIndex: 0, fret: 3 }]): TabBeat => ({
@@ -721,15 +722,35 @@ describe('slides', () => {
 });
 
 describe('previousNoteOnString', () => {
-  it('finds the nearest earlier note on the string across one bar line, but not two', () => {
+  it('finds the note on the string in the beat right before, across one bar line', () => {
     const on0 = { stringIndex: 0, fret: 5 };
     const on1 = { stringIndex: 1, fret: 7 };
     const bars = [measure([beat('4', [on0])]), measure([beat('4', [on1])]), measure([beat('4', [on1]), beat('4', [on0])])];
-    // In the same bar, then over the bar line.
     expect(previousNoteOnString(bars, { measureIndex: 2, beatIndex: 1 }, 1)).toEqual({ at: { measureIndex: 2, beatIndex: 0 }, note: on1 });
     expect(previousNoteOnString(bars, { measureIndex: 2, beatIndex: 0 }, 1)).toEqual({ at: { measureIndex: 1, beatIndex: 0 }, note: on1 });
-    // String 0's earlier note is in bar 0, two bar lines back.
-    expect(previousNoteOnString(bars, { measureIndex: 2, beatIndex: 1 }, 0)).toBeNull();
+    expect(previousNoteOnString(bars, { measureIndex: 0, beatIndex: 0 }, 0)).toBeNull();
+  });
+
+  it('connects nothing past a beat on other strings or a rest', () => {
+    const on0 = { stringIndex: 0, fret: 5 };
+    const bars = [measure([beat('4', [on0]), beat('4', [{ stringIndex: 2, fret: 3 }]), beat('4', [on0]), { ...beat('4', []), isRest: true }, beat('4', [on0])])];
+    expect(previousNoteOnString(bars, { measureIndex: 0, beatIndex: 2 }, 0)).toBeNull();
+    expect(previousNoteOnString(bars, { measureIndex: 0, beatIndex: 4 }, 0)).toBeNull();
+  });
+});
+
+describe('techniqueBlocked', () => {
+  it('keeps conflicting techniques off a note, and palm mute and let ring off one beat', () => {
+    const ghost = { stringIndex: 0, fret: 5, ghostNote: true };
+    expect(techniqueBlocked([ghost], ghost, 'harmonic')).toBe(true);
+    expect(techniqueBlocked([ghost], ghost, 'palmMute')).toBe(false);
+    // A set technique can always be turned off.
+    const both = { stringIndex: 0, fret: 5, ghostNote: true, harmonic: true };
+    expect(techniqueBlocked([both], both, 'harmonic')).toBe(false);
+    const slid = { stringIndex: 0, fret: 5, slideIn: 'below' as const };
+    expect(techniqueBlocked([slid], slid, 'slur')).toBe(true);
+    const plain = { stringIndex: 1, fret: 2 };
+    expect(techniqueBlocked([plain, { stringIndex: 0, fret: 5, palmMute: true }], plain, 'letRing')).toBe(true);
   });
 });
 

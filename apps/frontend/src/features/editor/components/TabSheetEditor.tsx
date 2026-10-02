@@ -59,6 +59,7 @@ import {
   withNextSlideIn,
   withNextSlideOut,
   previousNoteOnString,
+  techniqueBlocked,
 } from './songUtils';
 import type { CursorIds, CursorIndices } from './songUtils';
 import { getClip, setClip, subscribeClip } from '../clipboard';
@@ -179,9 +180,6 @@ const RUN_MARKS = [
   { technique: 'palmMute', label: 'P.M.', dashFrom: 7 },
   { technique: 'letRing', label: 'let ring', dashFrom: 17 },
 ] as const;
-
-/** Palm mute and let ring share that line, so turning one on clears the other from the whole beat. */
-const EXCLUDES: Partial<Record<keyof NoteTechniques, keyof NoteTechniques>> = { palmMute: 'letRing', letRing: 'palmMute' };
 
 /** Techniques with more than on and off: their key steps the cursor note through every kind. */
 const CYCLES: Partial<Record<keyof NoteTechniques, (note: TabNote) => TabNote>> = {
@@ -764,22 +762,13 @@ export const TabSheetEditor: React.FC<TabSheetEditorProps> = ({ meta, channel })
     playback.playTone(targetMidi);
   };
 
-  /** Turns a technique on or off on the cursor note; bends and slides step through their kinds instead. */
+  /** Turns a technique on or off on the cursor note; bends and slides step through their kinds instead. One that conflicts with a set technique stays off. */
   const toggleNoteTechnique = (technique: keyof NoteTechniques) => {
     updateActiveBeatNotes(currentNotes => {
       const idx = cursorNoteIndex(currentNotes);
-      if (idx === -1) return currentNotes;
+      if (idx === -1 || techniqueBlocked(currentNotes, currentNotes[idx], technique)) return currentNotes;
       const cycle = CYCLES[technique];
-      if (cycle) return currentNotes.map((n, i) => (i === idx ? cycle(n) : n));
-      const on = !currentNotes[idx][technique];
-      const other = on ? EXCLUDES[technique] : undefined;
-      return currentNotes.map((n, i) => {
-        const next = i === idx ? { ...n, [technique]: on } : n;
-        if (!other || !next[other]) return next;
-        const cleared = { ...next };
-        delete cleared[other];
-        return cleared;
-      });
+      return currentNotes.map((n, i) => (i !== idx ? n : cycle ? cycle(n) : { ...n, [technique]: !n[technique] }));
     });
   };
 
@@ -1894,6 +1883,7 @@ export const TabSheetEditor: React.FC<TabSheetEditorProps> = ({ meta, channel })
           isRest={!!activeBeat?.isRest}
           toggleActiveBeatRest={toggleActiveBeatRest}
           activeNote={activeNote}
+          beatNotes={selectedNotes}
           toggleNoteTechnique={toggleNoteTechnique}
           clearBeat={() => updateActiveBeatNotes(() => [])}
           midiInput={midiInput}
