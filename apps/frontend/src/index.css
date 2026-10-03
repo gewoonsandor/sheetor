@@ -321,6 +321,13 @@ body {
   outline-offset: 2px;
 }
 
+/* A scroll container or foreignObject clips anything outside it, so there the
+   ring goes inside the control instead of being cut off at the edge. */
+:where(.popover, .note-toolbar, .track-list) :focus-visible,
+.tempo-input:focus-visible {
+  outline-offset: -2px;
+}
+
 ::selection {
   background: var(--accent-glow);
   color: var(--text);

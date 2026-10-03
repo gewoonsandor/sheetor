@@ -1406,79 +1406,6 @@ export const TabSheetEditor: React.FC<TabSheetEditorProps> = ({ meta, channel })
     tops.forEach((top, r) => { rowExtra[r] = (rowExtra[r] || 0) + Math.max(0, Math.ceil(top - TAB_MARK_ROOM)); });
   }
 
-  // Per-row extra top padding for very high notes (stems/beams above the staff)
-  const rowHighExtra: number[] = [];
-  measures.forEach((_, mIdx) => {
-    const r = measureLayouts[mIdx]?.row ?? 0;
-    let minNoteY = 0;
-    if (!showNotation) return;
-    // Only the top staff can climb into the row above.
-    const top = staves[0];
-    for (const beat of barOf(top, mIdx).beats) {
-      if (beat.isRest || beat.notes.length === 0) continue;
-      for (const note of beat.notes) {
-        const y = Y_of_step(staffStep(noteMidi(note, top), top, mIdx));
-        if (y < minNoteY) minNoteY = y;
-      }
-    }
-    if (minNoteY < 0) {
-      const stemTop = minNoteY - 32;
-      const need = -stemTop;
-      const extra = Math.max(0, need - STEM_TOP_PAD);
-      if (extra > 0) rowHighExtra[r] = Math.max(rowHighExtra[r] || 0, extra);
-    }
-  });
-
-  // Row Y cumulative offset (base row height + extra spacing)
-  const rowYOffsets: number[] = [];
-  let cumY = STEM_TOP_PAD;
-  for (let r = 0; r < Math.max(rowExtra.length, rowHighExtra.length); r++) {
-    cumY += rowHighExtra[r] || 0;
-    rowYOffsets[r] = cumY;
-    cumY += ROW_HEIGHT + (rowExtra[r] || 0);
-  }
-
-  const getRowY = (index: number): number => {
-    const r = measureLayouts[index]?.row ?? 0;
-    return rowYOffsets[r] ?? STEM_TOP_PAD;
-  };
-
-  /* The last row needs no headroom for a row that never follows it. */
-  const totalSVGHeight = cumY + 10 - STEM_TOP_PAD;
-  // A single bar wider than the row scales the score down rather than being cut off.
-  const contentWidth = Math.max(rowWidth, ...measureLayouts.map(l => l.x + l.width));
-
-  const getMeasureWidth = (index: number): number => measureLayouts[index]?.width ?? 0;
-  const getMeasurePadding = (index: number): number => measureLayouts[index]?.padding ?? 18;
-  const getMeasureX = (index: number): number => measureLayouts[index]?.x ?? 0;
-  const getRowShift = (index: number): number => {
-    const r = measureLayouts[index]?.row ?? 0;
-    return rowExtra[r] || 0;
-  };
-
-  // Bottom boundary (offset from rowY) used for bar lines, selection highlight,
-  // and the playback cursor. With the TAB staff hidden this is just below the
-  // lowest standard staff instead of the bottom TAB line; name a staff for just its own.
-  const getStaffBottom = (ts: number, staff: Staff = lowestStaff): number =>
-    showTab ? tabTop + ts + stringCount * TAB_STAFF_HEIGHT_PX - 10 : staff.top + 50;
-
-  /** Top boundary of the drawn staff block, or of one staff of a grand staff. */
-  const getStaffTop = (ts: number, staff: Staff = staves[0]): number => (showNotation ? staff.top + 10 : tabTop + ts);
-
-  /** Where a beat of a staff's bar sits: on the onsets every staff of the row shares. */
-  const getBeatCoordinates = (mIdx: number, bIdx: number, staff: Staff = activeStaff): number => {
-    const padding = getMeasurePadding(mIdx);
-    const usableWidth = getMeasureWidth(mIdx) - padding - 20;
-    const at = aligned[mIdx]?.positions[staves.indexOf(staff)]?.[bIdx] ?? 0;
-    return getMeasureX(mIdx) + padding + at * usableWidth;
-  };
-
-  /** Where a vibrato starting at a beat ends: just before the bar's next beat, or at the bar line. */
-  const vibratoEnd = (mIdx: number, bIdx: number, staff: Staff): number =>
-    (bIdx + 1 < barOf(staff, mIdx).beats.length
-      ? getBeatCoordinates(mIdx, bIdx + 1, staff)
-      : getMeasureX(mIdx) + getMeasureWidth(mIdx)) - 4;
-
   // Determine the unified stem direction for a beam group in a staff's bar `mIdx`.
   const getBeamStemUp = (mIdx: number, beamGroup: BeamGroup, staff: Staff): boolean => {
     const measure = barOf(staff, mIdx);
@@ -1523,6 +1450,90 @@ export const TabSheetEditor: React.FC<TabSheetEditorProps> = ({ meta, channel })
     if (stemUp) return (minY === Infinity ? 0 : minY) - 30;
     return (maxY === -Infinity ? 0 : maxY) + 30;
   };
+
+  // Bar number, tempo and repeat count share one baseline per row, just above the
+  // highest ink of its top staff: noteheads with their accidentals and ledger lines,
+  // up stems and beams, and the vibrato, bend or tuplet number over them. The row's
+  // headroom grows to fit that line, so nothing reaches into the row above.
+  const rowLabelY: number[] = [];
+  const rowHighExtra: number[] = [];
+  measures.forEach((_, mIdx) => {
+    const r = measureLayouts[mIdx]?.row ?? 0;
+    let inkTop = 0;
+    if (showNotation) {
+      // Only the top staff can climb into the row above.
+      const top = staves[0];
+      const bar = barOf(top, mIdx);
+      const beamGroups = computeBeamGroups(bar.beats, getEffectiveTimeSignature(song, mIdx));
+      bar.beats.forEach((beat, bIdx) => {
+        if (beat.isRest || beat.notes.length === 0) return;
+        const steps = beat.notes.map(n => staffStep(noteMidi(n, top), top, mIdx));
+        const headTop = Y_of_step(Math.max(...steps));
+        const group = beamGroups.find(g => g.startIdx <= bIdx && bIdx <= g.endIdx);
+        const stemUp = group ? getBeamStemUp(mIdx, group, top) : steps.reduce((a, s) => a + s, 0) / steps.length < 6;
+        const stemTop = !stemUp || beat.duration === '1' ? headTop : group ? getBeamY(mIdx, group, true, top, 0) - 2 : headTop - 30;
+        const marked = beat.tuplet !== undefined || beat.notes.some(n => n.vibrato || n.bend);
+        inkTop = Math.min(inkTop, headTop - 9, stemTop - (marked ? 12 : 0));
+      });
+    }
+    const labelY = Math.min(rowLabelY[r] ?? -6, inkTop - 4);
+    rowLabelY[r] = labelY;
+    // The label's cap height is about 10 units above its baseline.
+    rowHighExtra[r] = Math.max(0, 10 - labelY - STEM_TOP_PAD);
+  });
+
+  // Row Y cumulative offset (base row height + extra spacing)
+  const rowYOffsets: number[] = [];
+  let cumY = STEM_TOP_PAD;
+  for (let r = 0; r < Math.max(rowExtra.length, rowHighExtra.length); r++) {
+    cumY += rowHighExtra[r] || 0;
+    rowYOffsets[r] = cumY;
+    cumY += ROW_HEIGHT + (rowExtra[r] || 0);
+  }
+
+  const getRowY = (index: number): number => {
+    const r = measureLayouts[index]?.row ?? 0;
+    return rowYOffsets[r] ?? STEM_TOP_PAD;
+  };
+
+  const getLabelY = (index: number): number =>
+    getRowY(index) + (rowLabelY[measureLayouts[index]?.row ?? 0] ?? -6);
+
+  /* The last row needs no headroom for a row that never follows it. */
+  const totalSVGHeight = cumY + 10 - STEM_TOP_PAD;
+  // A single bar wider than the row scales the score down rather than being cut off.
+  const contentWidth = Math.max(rowWidth, ...measureLayouts.map(l => l.x + l.width));
+
+  const getMeasureWidth = (index: number): number => measureLayouts[index]?.width ?? 0;
+  const getMeasurePadding = (index: number): number => measureLayouts[index]?.padding ?? 18;
+  const getMeasureX = (index: number): number => measureLayouts[index]?.x ?? 0;
+  const getRowShift = (index: number): number => {
+    const r = measureLayouts[index]?.row ?? 0;
+    return rowExtra[r] || 0;
+  };
+
+  // Bottom boundary (offset from rowY) used for bar lines, selection highlight,
+  // and the playback cursor. With the TAB staff hidden this is just below the
+  // lowest standard staff instead of the bottom TAB line; name a staff for just its own.
+  const getStaffBottom = (ts: number, staff: Staff = lowestStaff): number =>
+    showTab ? tabTop + ts + stringCount * TAB_STAFF_HEIGHT_PX - 10 : staff.top + 50;
+
+  /** Top boundary of the drawn staff block, or of one staff of a grand staff. */
+  const getStaffTop = (ts: number, staff: Staff = staves[0]): number => (showNotation ? staff.top + 10 : tabTop + ts);
+
+  /** Where a beat of a staff's bar sits: on the onsets every staff of the row shares. */
+  const getBeatCoordinates = (mIdx: number, bIdx: number, staff: Staff = activeStaff): number => {
+    const padding = getMeasurePadding(mIdx);
+    const usableWidth = getMeasureWidth(mIdx) - padding - 20;
+    const at = aligned[mIdx]?.positions[staves.indexOf(staff)]?.[bIdx] ?? 0;
+    return getMeasureX(mIdx) + padding + at * usableWidth;
+  };
+
+  /** Where a vibrato starting at a beat ends: just before the bar's next beat, or at the bar line. */
+  const vibratoEnd = (mIdx: number, bIdx: number, staff: Staff): number =>
+    (bIdx + 1 < barOf(staff, mIdx).beats.length
+      ? getBeatCoordinates(mIdx, bIdx + 1, staff)
+      : getMeasureX(mIdx) + getMeasureWidth(mIdx)) - 4;
 
   /** A staff's key signature in its clef at bar `mIdx`, the first accidental at `x` from the row's origin. */
   const keySignatureGlyphs = (staff: Staff, mIdx: number, x: number): React.ReactNode[] =>
@@ -1962,6 +1973,7 @@ export const TabSheetEditor: React.FC<TabSheetEditorProps> = ({ meta, channel })
             const measureEnd = measureX + measureW;
             const isLast = mIdx === measures.length - 1;
             const rowY = getRowY(mIdx);
+            const labelY = getLabelY(mIdx);
             const ts = getRowShift(mIdx);
             const effectiveTimeSignature = getEffectiveTimeSignature(song, mIdx);
             const effectiveBpm = getEffectiveBpm(song, mIdx);
@@ -2047,8 +2059,8 @@ export const TabSheetEditor: React.FC<TabSheetEditorProps> = ({ meta, channel })
                 {/* A plain repeat plays twice; engravers only write the count beyond that. */}
                 {(marks?.repeatEnd ?? 0) > 2 && (
                   <text
-                    x={measureEnd - 2}
-                    y={rowY - 6}
+                    x={measureEnd - 8}
+                    y={labelY}
                     textAnchor="end"
                     className="music-text"
                     fontSize="9"
@@ -2062,7 +2074,7 @@ export const TabSheetEditor: React.FC<TabSheetEditorProps> = ({ meta, channel })
                   // An HTML input inside the SVG: foreignObject coordinates are
                   // user units, so the box tracks the tempo mark at any zoom
                   // without mapping screen pixels back into the viewBox.
-                  <foreignObject x={measureX + 14} y={rowY - 18} width="62" height="18">
+                  <foreignObject x={measureX + 14} y={labelY - 12} width="62" height="18">
                     <input
                       className="tempo-input"
                       type="text"
@@ -2082,7 +2094,7 @@ export const TabSheetEditor: React.FC<TabSheetEditorProps> = ({ meta, channel })
                 ) : (
                   <text
                     x={measureX + 18}
-                    y={rowY - 6}
+                    y={labelY}
                     className="music-text tempo-mark"
                     fontSize="10"
                     onClick={(e) => {
@@ -2099,7 +2111,7 @@ export const TabSheetEditor: React.FC<TabSheetEditorProps> = ({ meta, channel })
                 {/* Measure number */}
                 <text
                   x={measureX + 4}
-                  y={rowY - 6}
+                  y={labelY}
                   className="measure-number"
                   fontSize="8"
                   style={{ pointerEvents: 'none' }}

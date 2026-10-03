@@ -157,13 +157,6 @@
   box-shadow: var(--shadow-2), inset 0 1px 0 var(--edge-hi);
 }
 
-/* The score card lights up while keys go to the score; an outline, unlike a
-   box-shadow, survives forced-colors mode. */
-.sheetor-container:focus-visible .sheetor-canvas-container {
-  outline: 2px solid var(--focus-ring);
-  outline-offset: 2px;
-}
-
 .music-svg {
   display: block;
   width: 100%;

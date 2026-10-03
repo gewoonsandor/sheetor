@@ -94,6 +94,12 @@ still change the song format or the API; from `1.0.0` on, only a major release w
   confirmation or the fretboard and keyboard panel, or after a − or + reaches its limit.
 - Screen readers name every track, mute, solo, tuning and technique control, and announce cursor
   moves and import status.
+- Bar numbers, tempo marks and repeat counts sit above the highest note, stem, beam and ledger
+  line in their row instead of running into them, and a repeat count keeps clear of the next bar's
+  number.
+- Focus rings inside menus, the note toolbar, the track strip and the in-score tempo box are drawn
+  inside the control, so the edge of the menu no longer cuts them off. The score itself no longer
+  shows a ring.
 
 ## [1.0.0] - 2026-10-01
 
