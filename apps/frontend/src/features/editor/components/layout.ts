@@ -75,7 +75,9 @@ export const alignBars = (bars: TabMeasure[]): { positions: number[][]; minWidth
 
 export const FRETBOARD_STRING_TOP = 20;
 export const FRETBOARD_STRING_BOTTOM = 20;
-export const FRETBOARD_STRING_GAP = 24;
+/** Rows are a full touch target under a coarse pointer. */
+export const FRETBOARD_STRING_GAP =
+  typeof matchMedia === 'function' && matchMedia('(pointer: coarse)').matches ? 44 : 24;
 
 export const STEM_TOP_PAD = 25;
 

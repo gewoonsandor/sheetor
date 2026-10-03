@@ -39,7 +39,7 @@ export const TrackStrip: React.FC<TrackStripProps> = ({
 
   return (
     <div className="sheetor-tracks card">
-      <div className="track-list" role="tablist" aria-label="Tracks">
+      <div className="track-list" role="group" aria-label="Tracks">
         {tracks.map((track, index) => {
           const grand = grandStaffOf(tracks, index);
           if (grand?.bass === index) return null;
@@ -53,8 +53,7 @@ export const TrackStrip: React.FC<TrackStripProps> = ({
             >
               <button
                 type="button"
-                role="tab"
-                aria-selected={isActive}
+                aria-current={isActive ? 'true' : undefined}
                 className="track-chip-main"
                 onClick={() => onSelect(index)}
                 onDoubleClick={() => { onSelect(index); onOpenSettings(); }}
@@ -71,6 +70,7 @@ export const TrackStrip: React.FC<TrackStripProps> = ({
                   onClick={() => onToggleMute(index)}
                   title={track.muted ? `Unmute ${track.name}` : `Mute ${track.name}`}
                   aria-pressed={!!track.muted}
+                  aria-label={`Mute ${track.name}`}
                 >M</button>
                 <button
                   type="button"
@@ -78,14 +78,15 @@ export const TrackStrip: React.FC<TrackStripProps> = ({
                   onClick={() => onToggleSolo(index)}
                   title={track.soloed ? `Unsolo ${track.name}` : `Solo ${track.name}`}
                   aria-pressed={!!track.soloed}
+                  aria-label={`Solo ${track.name}`}
                 >S</button>
               </div>
             </div>
           );
         })}
 
-        <button type="button" className="btn btn-ghost track-add" onClick={onAddTrack} title="Add a track">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <button type="button" className="btn btn-ghost track-add" onClick={onAddTrack} title="Add a track" aria-label="Add track">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
             <line x1="12" y1="5" x2="12" y2="19" />
             <line x1="5" y1="12" x2="19" y2="12" />
           </svg>

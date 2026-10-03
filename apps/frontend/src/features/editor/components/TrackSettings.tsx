@@ -137,6 +137,7 @@ export const TrackSettings = ({
               <span>{i + 1}</span>
               <select
                 className="control-select"
+                aria-label={`String ${i + 1}`}
                 value={midiToNoteOctave(pitch)}
                 onChange={(e) => setTuning(tuning.map((p, j) => (j === i ? noteOctaveToMidi(e.target.value) : p)))}
               >

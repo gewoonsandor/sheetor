@@ -19,8 +19,8 @@ export const Stepper = ({
     <button
       type="button"
       className="btn btn-sm btn-icon"
-      onClick={onDecrement}
-      disabled={!canDecrement}
+      onClick={() => { if (canDecrement) onDecrement(); }}
+      aria-disabled={!canDecrement}
       aria-label={decrementLabel}
     >
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" aria-hidden="true">
@@ -31,8 +31,8 @@ export const Stepper = ({
     <button
       type="button"
       className="btn btn-sm btn-icon"
-      onClick={onIncrement}
-      disabled={!canIncrement}
+      onClick={() => { if (canIncrement) onIncrement(); }}
+      aria-disabled={!canIncrement}
       aria-label={incrementLabel}
     >
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" aria-hidden="true">

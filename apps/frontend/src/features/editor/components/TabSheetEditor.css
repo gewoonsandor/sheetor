@@ -157,13 +157,17 @@
   box-shadow: var(--shadow-2), inset 0 1px 0 var(--edge-hi);
 }
 
-/* The score card lights up while keys go to the score. */
+/* The score card lights up while keys go to the score; an outline, unlike a
+   box-shadow, survives forced-colors mode. */
 .sheetor-container:focus-visible .sheetor-canvas-container {
-  box-shadow: 0 0 0 2px var(--focus-ring), var(--shadow-2);
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 2px;
 }
 
 .music-svg {
   display: block;
+  width: 100%;
+  height: auto;
   user-select: none;
   background: var(--paper);
   border-radius: var(--r-lg);
@@ -242,7 +246,6 @@
   fill: var(--warn);
   font-family: var(--font-mono);
   font-weight: 700;
-  opacity: 0.85;
 }
 
 /* Glyph paint. SVG presentation attributes cannot resolve var(), so every
@@ -341,7 +344,7 @@
 }
 
 .tab-fret-container.active-note .tab-fret-text {
-  fill: var(--accent);
+  fill: var(--accent-text);
 }
 
 .tab-fret-container.active-note .tab-fret-bg {
@@ -394,6 +397,7 @@
   font-size: var(--fs-xs);
   font-weight: 500;
   color: var(--text-faint);
+  min-width: 0;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -484,8 +488,14 @@
   transition: background-color var(--t-fast) var(--ease);
 }
 
+.fretboard-fret-cell:focus-visible,
 .fretboard-fret-cell:hover {
   background-color: var(--instr-fret-wash);
+}
+
+/* The neck clips, so the ring goes inside the cell. */
+.fretboard-fret-cell:focus-visible {
+  outline-offset: -2px;
 }
 
 .fretboard-note-bubble {
@@ -502,6 +512,7 @@
   transition: opacity var(--t-fast) var(--ease), background var(--t-fast) var(--ease), color var(--t-fast) var(--ease);
 }
 
+.fretboard-fret-cell:focus-visible .fretboard-note-bubble,
 .fretboard-fret-cell:hover .fretboard-note-bubble {
   opacity: 1;
   background: var(--surface-4);
@@ -571,11 +582,6 @@
   border-color: var(--border-focus);
 }
 
-/* Muted, or shadowed by another track's solo. */
-.track-chip.is-silent {
-  opacity: 0.45;
-}
-
 /* One row: the name, then what it is, on a shared baseline. */
 .track-chip-main {
   display: flex;
@@ -602,6 +608,12 @@
 
 .track-chip.is-active .track-chip-name {
   color: var(--accent-text);
+}
+
+/* Muted, or shadowed by another track's solo; M and S stay full contrast. */
+.track-chip.is-silent .track-chip-name,
+.track-chip.is-silent .track-chip-meta {
+  color: var(--text-dim);
 }
 
 .track-chip-meta {
@@ -701,6 +713,13 @@
   background: var(--surface-2);
 }
 
+/* Full-size keys on touch; the panel scrolls sideways. */
+@media (pointer: coarse) {
+  .piano-keyboard {
+    min-width: calc(var(--white-keys) * 40px);
+  }
+}
+
 .piano-white-row {
   display: flex;
   width: 100%;
@@ -712,7 +731,12 @@
   border: none;
   cursor: pointer;
   font-family: inherit;
-  transition: background 0.12s var(--ease), box-shadow 0.12s var(--ease);
+  transition: background var(--t-fast) var(--ease), box-shadow var(--t-fast) var(--ease);
+}
+
+/* The keyboard clips, so the ring goes inside the key. */
+.piano-key:focus-visible {
+  outline-offset: -3px;
 }
 
 .piano-key.white {
@@ -959,6 +983,10 @@
   color: var(--accent-text);
 }
 
+.sheetor-modal-status:empty {
+  display: none;
+}
+
 /* ------------------------------------------------------------- Narrow screens */
 
 /* Below a desktop width the menus show their icons only; the label stays each
@@ -989,9 +1017,18 @@
     row-gap: var(--sp-2);
   }
 
-  .cmd-status,
   .transport-hint {
     display: none;
+  }
+
+  /* Each popover spans the fixed bar, its containing block, instead of running off-screen. */
+  .bottom-command-bar .menu {
+    position: static;
+  }
+
+  .bottom-command-bar .popover {
+    left: 0;
+    right: 0;
   }
 
   .bottom-command-bar > .bottom-cluster:last-child {
@@ -1020,6 +1057,7 @@
 
   /* The track menu keeps its gear, and Play its triangle; the labels stay their accessible names. */
   .sheetor-tracks .menu-label,
+  .bottom-command-bar .cmd-status,
   .bottom-command-bar .cmd-label {
     position: absolute;
     width: 1px;

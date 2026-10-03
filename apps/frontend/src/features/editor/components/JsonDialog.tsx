@@ -47,7 +47,7 @@ export const JsonDialog = ({
       placeholder='{ "title": "My Song", ... }'
     />
 
-    {modalStatus && <p className="sheetor-modal-status" role="status">{modalStatus}</p>}
+    <p className="sheetor-modal-status" role="status">{modalStatus}</p>
 
     <div className="dialog-footer">
       {modalOpen === 'export' ? (

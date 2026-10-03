@@ -85,7 +85,7 @@ export const DurationPicker = ({ duration, dotted, tuplet, onDuration, onToggleD
       type="button"
       className="btn btn-sm btn-icon btn-ghost duration-tuplet"
       aria-pressed={tuplet !== undefined}
-      aria-label={TUPLET_LABEL}
+      aria-label={tuplet ? `${TUPLET_LABEL}: ${tuplet}` : TUPLET_LABEL}
       title={TUPLET_LABEL}
       onMouseDown={e => e.preventDefault()}
       onClick={onCycleTuplet}

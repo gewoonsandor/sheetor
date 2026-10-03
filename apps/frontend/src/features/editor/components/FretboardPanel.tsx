@@ -4,6 +4,7 @@ import { HidePanelButton } from './KeyboardPanel';
 import {
   computeFretboardNeckHeight,
   FRET_COUNT,
+  FRETBOARD_STRING_GAP,
   getFretboardStringY,
   getFretCellLeft,
   getFretCellWidth,
@@ -13,6 +14,11 @@ import { isFrettedNote, midiToNoteName } from './songUtils';
 import type { TabBeat } from './types';
 
 const MARKED_FRETS = [3, 5, 7, 9, 12, 15];
+
+/** Arrow key → [string delta, fret delta]; string 0 is the highest, drawn on top. */
+const ARROW_STEPS: Record<string, [number, number]> = {
+  ArrowUp: [-1, 0], ArrowDown: [1, 0], ArrowLeft: [0, -1], ArrowRight: [0, 1],
+};
 
 /** Where a fret-relative percentage lands on the neck, past the 30px open-string column. */
 const neckX = (pct: number): string => `calc(30px + (100% - 30px) * ${pct / 100})`;
@@ -38,6 +44,10 @@ export const FretboardPanel = ({
 }: FretboardPanelProps) => {
   const stringCount = tuning.length;
   const stringY = (stringIdx: number): number => getFretboardStringY(stringIdx, stringCount);
+  // The panel is one Tab stop: the selected beat's note, else string 1 fret 0.
+  const stop = activeBeat?.notes.find(n => isFrettedNote(n) && n.stringIndex < stringCount && n.fret <= FRET_COUNT);
+  const stopString = stop && isFrettedNote(stop) ? stop.stringIndex : 0;
+  const stopFret = stop && isFrettedNote(stop) ? stop.fret : 0;
 
   return (
     <div className="sheetor-fretboard card">
@@ -55,7 +65,22 @@ export const FretboardPanel = ({
         <HidePanelButton name="fretboard" onHide={onHide} />
       </div>
 
-      <div className="fretboard-neck-container" style={{ height: `${computeFretboardNeckHeight(stringCount)}px` }}>
+      <div
+        className="fretboard-neck-container"
+        role="group"
+        aria-label="Fretboard"
+        style={{ height: `${computeFretboardNeckHeight(stringCount)}px` }}
+        onKeyDown={(e) => {
+          const step = ARROW_STEPS[e.key];
+          const cell = (e.target as HTMLElement).closest<HTMLElement>('[data-string]');
+          if (!step || !cell) return;
+          e.preventDefault();
+          e.stopPropagation(); // the score's handleKeyDown must not move its cursor too
+          const s = Number(cell.dataset.string) + step[0];
+          const f = Number(cell.dataset.fret) + step[1];
+          e.currentTarget.querySelector<HTMLElement>(`[data-string="${s}"][data-fret="${f}"]`)?.focus();
+        }}
+      >
         <div className="fretboard-nut" />
 
         {MARKED_FRETS.map((fret) => {
@@ -102,13 +127,16 @@ export const FretboardPanel = ({
                 key={`cell-${stringIdx}-${fretNum}`}
                 type="button"
                 className="fretboard-fret-cell"
-                aria-label={`String ${stringIdx + 1}, fret ${fretNum} (${noteName})`}
+                aria-label={`String ${stringIdx + 1} (${midiToNoteName(open)}), fret ${fretNum}: ${noteName}`}
                 aria-pressed={isSelectedNote}
+                data-string={stringIdx}
+                data-fret={fretNum}
+                tabIndex={stringIdx === stopString && fretNum === stopFret ? 0 : -1}
                 style={{
-                  top: `${stringY(stringIdx) - 12}px`,
+                  top: `${stringY(stringIdx) - FRETBOARD_STRING_GAP / 2}px`,
                   left: fretNum === 0 ? '0px' : neckX(getFretCellLeft(fretNum)),
                   width: cellWidth(fretNum),
-                  height: '25px',
+                  height: `${FRETBOARD_STRING_GAP}px`,
                 }}
                 onClick={() => {
                   if (isSelectedNote) removeActiveNoteOnString(stringIdx);

@@ -44,9 +44,9 @@
   --ink: rgb(var(--ink-rgb));
   --ink-dim: rgb(var(--ink-rgb) / 0.62);
   --ink-faint: rgb(var(--ink-rgb) / 0.42);
-  --staff-line: rgb(var(--ink-rgb) / 0.28);
+  --staff-line: rgb(var(--ink-rgb) / 0.4);
   --staff-line-strong: rgb(var(--ink-rgb) / 0.44);
-  --bar-line: rgb(var(--ink-rgb) / 0.36);
+  --bar-line: rgb(var(--ink-rgb) / 0.42);
   --bar-line-end: rgb(var(--ink-rgb) / 0.62);
 
   /* Hairlines */
@@ -205,9 +205,10 @@
      over white reads lighter than a light film over near-black. */
   --paper: hsl(var(--tint-h) 50% 99.5%);
   --ink-rgb: 34 28 23;
-  --staff-line: rgb(var(--ink-rgb) / 0.32);
-  --staff-line-strong: rgb(var(--ink-rgb) / 0.5);
-  --bar-line: rgb(var(--ink-rgb) / 0.42);
+  --ink-faint: rgb(var(--ink-rgb) / 0.55);
+  --staff-line: rgb(var(--ink-rgb) / 0.5);
+  --staff-line-strong: rgb(var(--ink-rgb) / 0.6);
+  --bar-line: rgb(var(--ink-rgb) / 0.55);
   --bar-line-end: rgb(var(--ink-rgb) / 0.72);
 
   --border: hsl(var(--tint-h) 20% 20% / 0.12);
@@ -220,15 +221,16 @@
 
   --danger-rgb: 176 62 54;
   --warn-rgb: 158 108 16;
-  --ok-rgb: 20 122 88;
+  --ok-rgb: 16 110 78;
+  --ok-ink: hsl(160 60% 98%);
   --danger-hover-text: rgb(var(--danger-rgb));
 
   --peer-0: hsl(199 89% 32%);
-  --peer-1: hsl(142 60% 32%);
+  --peer-1: hsl(142 60% 28%);
   --peer-2: hsl(271 76% 32%);
   --peer-3: hsl(24 94% 32%);
   --peer-4: hsl(330 81% 32%);
-  --peer-5: hsl(48 96% 32%);
+  --peer-5: hsl(48 96% 26%);
 
   --edge-hi: rgb(255 255 255 / 0.85);
   --sheen: linear-gradient(180deg, rgb(255 255 255 / 0.6), rgb(255 255 255 / 0) 60%);
@@ -247,7 +249,6 @@
 [data-theme='light']:not(:root) {
   --ink: rgb(var(--ink-rgb));
   --ink-dim: rgb(var(--ink-rgb) / 0.62);
-  --ink-faint: rgb(var(--ink-rgb) / 0.42);
   --accent: rgb(var(--accent-rgb));
   --accent-hover: rgb(var(--accent-hover-rgb));
   --accent-soft: rgb(var(--accent-rgb) / 0.14);
@@ -275,7 +276,7 @@
    darkens its triplet and inverts its ink. The third form is a light scope
    inside a dark page, which takes its palette from <html>. */
 [data-theme='light'][data-accent='emerald'], [data-theme='light'] [data-accent='emerald'], [data-accent='emerald'] [data-theme='light'] { --accent-rgb: 4 130 92; --accent-hover-rgb: 3 110 78; --accent-ink: hsl(160 60% 98%); --logo: url('/assets/emerald/logo/sheetor-logo.svg'); }
-[data-theme='light'][data-accent='amber'], [data-theme='light'] [data-accent='amber'], [data-accent='amber'] [data-theme='light'] { --accent-rgb: 176 100 24; --accent-hover-rgb: 156 86 18; --accent-ink: hsl(26 60% 98%); --logo: url('/assets/amber/logo/sheetor-logo.svg'); }
+[data-theme='light'][data-accent='amber'], [data-theme='light'] [data-accent='amber'], [data-accent='amber'] [data-theme='light'] { --accent-rgb: 166 92 20; --accent-hover-rgb: 146 78 14; --accent-ink: hsl(26 60% 98%); --logo: url('/assets/amber/logo/sheetor-logo.svg'); }
 [data-theme='light'][data-accent='teal'], [data-theme='light'] [data-accent='teal'], [data-accent='teal'] [data-theme='light'] { --accent-rgb: 13 133 133; --accent-hover-rgb: 10 112 112; --accent-ink: hsl(190 60% 98%); --logo: url('/assets/teal/logo/sheetor-logo.svg'); }
 [data-theme='light'][data-accent='indigo'], [data-theme='light'] [data-accent='indigo'], [data-accent='indigo'] [data-theme='light'] { --accent-rgb: 66 86 214; --accent-hover-rgb: 52 71 190; --accent-ink: hsl(232 60% 98%); --logo: url('/assets/indigo/logo/sheetor-logo.svg'); }
 [data-theme='light'][data-accent='violet'], [data-theme='light'] [data-accent='violet'], [data-accent='violet'] [data-theme='light'] { --accent-rgb: 120 74 202; --accent-hover-rgb: 103 60 180; --accent-ink: hsl(275 60% 98%); --logo: url('/assets/violet/logo/sheetor-logo.svg'); }
@@ -285,7 +286,7 @@
 @media (pointer: coarse) {
   :root {
     --ctl-h: 44px;
-    --ctl-h-sm: 40px;
+    --ctl-h-sm: 44px;
   }
 }
 
@@ -377,10 +378,14 @@ body {
     font-weight: 500;
   }
 
-  option:hover,
+  option:hover {
+    background: var(--surface-3);
+  }
+
   option:focus-visible {
     background: var(--surface-3);
-    outline: none;
+    outline: 2px solid var(--focus-ring);
+    outline-offset: -2px;
   }
 
   option:checked {

@@ -1549,10 +1549,11 @@ export const TabSheetEditor: React.FC<TabSheetEditorProps> = ({ meta, channel })
     const top = (toolbar?.getBoundingClientRect().bottom
       ?? parseFloat(getComputedStyle(root).getPropertyValue('--header-h'))) + 40;
     const bottom = cover.getBoundingClientRect().top - 16;
+    const behavior: ScrollBehavior = matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth';
     if (box.top < top || (playback.isPlaying && box.bottom > bottom)) {
-      window.scrollBy({ top: box.top - top, behavior: 'smooth' });
+      window.scrollBy({ top: box.top - top, behavior });
     } else if (box.bottom > bottom) {
-      window.scrollBy({ top: box.bottom - bottom, behavior: 'smooth' });
+      window.scrollBy({ top: box.bottom - bottom, behavior });
     }
   }, [activeMeasureIndex, activeBeatIndex, activeTrackIndex, playback.playbackBeat, playback.isPlaying, showFretboard, showTab, showNotation, grandStaff]);
 
@@ -1814,6 +1815,9 @@ export const TabSheetEditor: React.FC<TabSheetEditorProps> = ({ meta, channel })
       className="sheetor-container"
       ref={containerRef}
       tabIndex={0}
+      role="application"
+      aria-label={`Score editor: ${song.title || 'Untitled'}`}
+      aria-describedby="sheetor-status"
       onKeyDown={handleKeyDown}
     >
       <div className="song-bar">
@@ -1939,7 +1943,7 @@ export const TabSheetEditor: React.FC<TabSheetEditorProps> = ({ meta, channel })
         <svg
           viewBox={`-${SCORE_GUTTER} 0 ${contentWidth + SCORE_GUTTER} ${totalSVGHeight}`}
           className="music-svg"
-          style={{ width: '100%', height: 'auto', display: 'block' }}
+          aria-hidden={bpmEditIndex === null ? true : undefined}
         >
           {/* Background Interactivity Catcher */}
           <rect
@@ -3106,7 +3110,7 @@ export const TabSheetEditor: React.FC<TabSheetEditorProps> = ({ meta, channel })
           activeMidis={activeMidis}
           keyClass={keyClass}
           toggleNoteAtMidi={toggleNoteAtMidi}
-          onHide={() => setShowFretboard(false)}
+          onHide={() => { setShowFretboard(false); containerRef.current?.focus({ preventScroll: true }); }}
         />
       )}
 
@@ -3117,7 +3121,7 @@ export const TabSheetEditor: React.FC<TabSheetEditorProps> = ({ meta, channel })
           playbackBeat={playbackBeatObj}
           removeActiveNoteOnString={removeActiveNoteOnString}
           setFretForActiveNote={setFretForActiveNote}
-          onHide={() => setShowFretboard(false)}
+          onHide={() => { setShowFretboard(false); containerRef.current?.focus({ preventScroll: true }); }}
         />
       )}
 

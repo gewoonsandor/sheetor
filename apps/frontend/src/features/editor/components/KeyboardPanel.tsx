@@ -1,3 +1,5 @@
+import type { CSSProperties } from 'react';
+
 import { midiToNoteOctave } from './songUtils';
 
 /** Which hand of a grand staff: the treble staff's track is the right. */
@@ -36,71 +38,94 @@ interface KeyboardPanelProps {
 export const KeyboardPanel = ({
   grandStaff, activeHand, switchHand, whiteKeyMidis, blackKeys, blackKeyWidthPct, activeMidis,
   keyClass, toggleNoteAtMidi, onHide,
-}: KeyboardPanelProps) => (
-  <div className="sheetor-fretboard card">
-    <div className="fretboard-header">
-      <div className="fretboard-title eyebrow">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" width="15" height="15" aria-hidden="true">
-          <rect x="3" y="4" width="18" height="16" rx="2" />
-          <path d="M9 4v9M15 4v9" />
-        </svg>
-        Keyboard
+}: KeyboardPanelProps) => {
+  // The keyboard is one Tab stop: the lowest sounding key, else the lowest key.
+  const tabMidi = [...whiteKeyMidis, ...blackKeys.map(k => k.midi)]
+    .filter(m => activeMidis.has(m)).sort((a, b) => a - b)[0] ?? whiteKeyMidis[0];
+
+  return (
+    <div className="sheetor-fretboard card">
+      <div className="fretboard-header">
+        <div className="fretboard-title eyebrow">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" width="15" height="15" aria-hidden="true">
+            <rect x="3" y="4" width="18" height="16" rx="2" />
+            <path d="M9 4v9M15 4v9" />
+          </svg>
+          Keyboard
+        </div>
+        {grandStaff && (
+          // Which hand the keys, the keyboard and MIDI write to: its keys are the solid ones.
+          <div className="control-group" role="group" aria-label="Hand">
+            {(['left', 'right'] as const).map(hand => (
+              <button
+                key={hand}
+                type="button"
+                className="btn"
+                aria-pressed={activeHand === hand}
+                onClick={() => switchHand(hand)}
+              >
+                {HAND_LABELS[hand]}
+              </button>
+            ))}
+          </div>
+        )}
+        <HidePanelButton name="keyboard" onHide={onHide} />
       </div>
-      {grandStaff && (
-        // Which hand the keys, the keyboard and MIDI write to: its keys are the solid ones.
-        <div className="control-group" role="group" aria-label="Hand">
-          {(['left', 'right'] as const).map(hand => (
+  
+      <div
+        className="piano-keyboard"
+        role="group"
+        aria-label="Piano keys"
+        style={{ '--white-keys': whiteKeyMidis.length } as CSSProperties}
+        onKeyDown={(e) => {
+          const step = e.key === 'ArrowLeft' ? -1 : e.key === 'ArrowRight' ? 1 : 0;
+          const key = (e.target as HTMLElement).closest<HTMLElement>('[data-midi]');
+          if (!step || !key) return;
+          e.preventDefault();
+          e.stopPropagation(); // the score's handleKeyDown must not move its cursor too
+          e.currentTarget.querySelector<HTMLElement>(`[data-midi="${Number(key.dataset.midi) + step}"]`)?.focus();
+        }}
+      >
+        <div className="piano-white-row">
+          {whiteKeyMidis.map((midi) => (
             <button
-              key={hand}
+              key={`wk-${midi}`}
               type="button"
-              className="btn"
-              aria-pressed={activeHand === hand}
-              onClick={() => switchHand(hand)}
+              className={`piano-key white${keyClass(midi)}`}
+              aria-label={midiToNoteOctave(midi)}
+              aria-pressed={activeMidis.has(midi)}
+              data-midi={midi}
+              tabIndex={midi === tabMidi ? 0 : -1}
+              onClick={() => toggleNoteAtMidi(midi)}
             >
-              {HAND_LABELS[hand]}
+              <span className="piano-key-label" aria-hidden="true">{midiToNoteOctave(midi)}</span>
             </button>
           ))}
         </div>
-      )}
-      <HidePanelButton name="keyboard" onHide={onHide} />
-    </div>
-
-    <div className="piano-keyboard">
-      <div className="piano-white-row">
-        {whiteKeyMidis.map((midi) => (
+        {blackKeys.map(({ midi, leftPct }) => (
           <button
-            key={`wk-${midi}`}
+            key={`bk-${midi}`}
             type="button"
-            className={`piano-key white${keyClass(midi)}`}
+            className={`piano-key black${keyClass(midi)}`}
+            style={{
+              left: `${leftPct}%`,
+              width: `${blackKeyWidthPct}%`,
+              marginLeft: `-${blackKeyWidthPct / 2}%`,
+            }}
             aria-label={midiToNoteOctave(midi)}
             aria-pressed={activeMidis.has(midi)}
+            data-midi={midi}
+            tabIndex={midi === tabMidi ? 0 : -1}
             onClick={() => toggleNoteAtMidi(midi)}
-          >
-            <span className="piano-key-label" aria-hidden="true">{midiToNoteOctave(midi)}</span>
-          </button>
+          />
         ))}
       </div>
-      {blackKeys.map(({ midi, leftPct }) => (
-        <button
-          key={`bk-${midi}`}
-          type="button"
-          className={`piano-key black${keyClass(midi)}`}
-          style={{
-            left: `${leftPct}%`,
-            width: `${blackKeyWidthPct}%`,
-            marginLeft: `-${blackKeyWidthPct / 2}%`,
-          }}
-          aria-label={midiToNoteOctave(midi)}
-          aria-pressed={activeMidis.has(midi)}
-          onClick={() => toggleNoteAtMidi(midi)}
-        />
-      ))}
+  
+      <span className="fretboard-hint">
+        {grandStaff
+          ? `Click a key to add or remove that pitch on the ${HAND_LABELS[activeHand].toLowerCase()}'s selected beat`
+          : 'Click a key to add or remove that pitch on the selected beat'}
+      </span>
     </div>
-
-    <span className="fretboard-hint">
-      {grandStaff
-        ? `Click a key to add or remove that pitch on the ${HAND_LABELS[activeHand].toLowerCase()}'s selected beat`
-        : 'Click a key to add or remove that pitch on the selected beat'}
-    </span>
-  </div>
-);
+  );
+};

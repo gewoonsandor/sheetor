@@ -20,8 +20,8 @@ interface MenuButtonProps {
 const FOCUSABLE = 'button:not(:disabled), [href], input, select, textarea';
 
 /// A trigger and the popover it opens. Opening moves focus into the popover;
-/// Escape closes it and hands focus back to the trigger, and a press anywhere
-/// outside closes it.
+/// closing hands focus back to the trigger when it would otherwise fall to
+/// `<body>`. Escape closes it, as do a press anywhere outside and Tab out.
 export const MenuButton = ({
   label, icon, iconOnly, open, onToggle, placement, align = 'end', triggerClassName, children,
 }: MenuButtonProps) => {
@@ -30,19 +30,28 @@ export const MenuButton = ({
   const popoverRef = useRef<HTMLDivElement>(null);
   const rootRef = useRef<HTMLDivElement>(null);
 
+  const wasOpen = useRef(false);
   useEffect(() => {
     if (open) popoverRef.current?.querySelector<HTMLElement>(FOCUSABLE)?.focus();
+    else if (wasOpen.current && document.activeElement === document.body) triggerRef.current?.focus();
+    wasOpen.current = open;
   }, [open]);
 
   // A document listener, not a fixed scrim: a `backdrop-filter` ancestor (the
   // command bar) becomes a fixed element's containing block and shrinks it.
+  // `focusin`, not the root's `blur`: it fires once focus has moved, so closing
+  // cannot unmount the focused control mid-move and drop focus on <body>.
   useEffect(() => {
     if (!open) return;
-    const close = (e: PointerEvent) => {
+    const close = (e: Event) => {
       if (!rootRef.current?.contains(e.target as Node)) onToggle();
     };
     document.addEventListener('pointerdown', close);
-    return () => document.removeEventListener('pointerdown', close);
+    document.addEventListener('focusin', close);
+    return () => {
+      document.removeEventListener('pointerdown', close);
+      document.removeEventListener('focusin', close);
+    };
   }, [open, onToggle]);
 
   return (

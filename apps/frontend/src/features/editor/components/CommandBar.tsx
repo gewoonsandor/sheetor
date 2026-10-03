@@ -131,7 +131,7 @@ const PlaybackMenu = ({
   open, onToggle, playbackSpeed, setPlaybackSpeed, volume, setVolume, loopPlayback, setLoopPlayback,
 }: PlaybackMenuProps & MenuState) => (
   <MenuButton
-    label="Playback"
+    label={`Playback ${playbackSpeed}x${loopPlayback ? ', loop' : ''}`}
     iconOnly
     icon={(
       <>
@@ -186,7 +186,7 @@ const ClearSong = ({ clearSong }: { clearSong: () => void }) => {
   const [confirming, setConfirming] = useState(false);
   if (!confirming) {
     return (
-      <button type="button" className="btn btn-danger" onClick={() => setConfirming(true)}>
+      <button type="button" className="btn btn-danger" autoFocus onClick={() => setConfirming(true)}>
         Clear song
       </button>
     );
@@ -273,7 +273,12 @@ const MeasureMenu = ({
     </div>
     {/* Each staff's clef from this bar on: a grand staff's hands are set apart. */}
     {showNotation && staves.map((staff, i) => (
-      <div className="control-group" key={`clef-${staff.top}`}>
+      <div
+        className="control-group"
+        key={`clef-${staff.top}`}
+        role="group"
+        aria-label={grandStaff ? `${i === 0 ? 'Right hand' : 'Left hand'} clef` : 'Clef'}
+      >
         <span className="eyebrow">{grandStaff ? `${i === 0 ? 'R.H.' : 'L.H.'} clef` : 'Clef'}</span>
         {(['treble', 'bass'] as const).map(clef => (
           <button
@@ -310,7 +315,7 @@ const MeasureMenu = ({
       </button>
     </div>
     {activeRepeat !== undefined && (
-      <div className="control-group">
+      <div className="control-group" role="group" aria-label="Plays">
         <span className="eyebrow">Plays</span>
         <Stepper
           decrementLabel="Play the section one time fewer"
@@ -470,7 +475,7 @@ export const CommandBar = ({
         <PlaybackMenu {...playback} {...menu('playback')} />
       </div>
 
-      <p className="cmd-status" aria-live="polite">{status}</p>
+      <p id="sheetor-status" className="cmd-status" aria-live="polite">{status}</p>
 
       <div className="bottom-cluster">
         {!readOnly && <HistoryButtons {...history} />}

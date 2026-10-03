@@ -63,6 +63,13 @@ still change the song format or the API; from `1.0.0` on, only a major release w
   choice only for guitar and bass.
 - A notes staff has a cursor like the TAB's: ↑ and ↓ move a circle line by line, Enter writes a
   note there, and the note on the circle is the one techniques, Delete and Shift+↑/↓ act on.
+- The fretboard and the piano keys are one Tab stop each; the arrow keys move between frets and
+  strings, or keys, inside. Tab out of an open menu closes it.
+- Staff and bar lines, the selected TAB fret, a muted track and the amber style's buttons have more
+  contrast, and on a touch screen small buttons, sliders, fret rows and piano keys are full
+  finger size.
+- On a phone, the command bar's menus fit the screen.
+- With reduced motion turned on, the score jumps to the cursor instead of scrolling smoothly.
 
 ### Fixed
 
@@ -83,6 +90,10 @@ still change the song format or the API; from `1.0.0` on, only a major release w
   instead.
 - Bends, vibrato and palm mute or let ring over the TAB no longer run into each other. A vibrato
   or a P.M. line moves up only where a bend or another mark under it would otherwise cross it.
+- Focus no longer falls to the page after closing a menu, the keyboard shortcuts, the Clear song
+  confirmation or the fretboard and keyboard panel, or after a − or + reaches its limit.
+- Screen readers name every track, mute, solo, tuning and technique control, and announce cursor
+  moves and import status.
 
 ## [1.0.0] - 2026-10-01
 
