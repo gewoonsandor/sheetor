@@ -22,6 +22,7 @@ import {
   nextBeatPosition,
   nextPlayPosition,
   repeatSectionAt,
+  beatVelocities,
   copyBeats,
   pasteClip,
   removeBeats,
@@ -360,6 +361,26 @@ describe('repeats', () => {
       { start: 5, end: null }, { start: 5, end: null },
       { start: 7, end: 8 }, { start: 7, end: 8 },
     ]);
+  });
+});
+
+describe('dynamics', () => {
+  const b = (extra: Partial<TabBeat> = {}): TabBeat => ({ ...beat('4'), ...extra });
+
+  it('plays mf until marked, holds a mark, and lets fp fall to p and an accent fall back', () => {
+    const bars = [
+      measure([b(), b({ dynamic: 'f' }), b(), b({ dynamic: 'sfz' })]),
+      measure([b(), b({ dynamic: 'fp' }), b()]),
+    ];
+    expect(beatVelocities(bars)).toEqual([[80, 96, 96, 112], [96, 96, 49]]);
+  });
+
+  it('runs a hairpin into the mark after it, across a bar line, or a step past where it started', () => {
+    const bars = [
+      measure([b({ dynamic: 'p', hairpin: 'cresc' }), b({ hairpin: 'cresc' })]),
+      measure([b({ hairpin: 'cresc' }), b({ dynamic: 'f' }), b({ hairpin: 'dim' }), b()]),
+    ];
+    expect(beatVelocities(bars)).toEqual([[49, 65], [80, 96, 96, 80]]);
   });
 });
 

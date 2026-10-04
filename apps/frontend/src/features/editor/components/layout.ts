@@ -217,6 +217,16 @@ export const vibratoPath = (x0: number, x1: number, y: number): string =>
 // Marks over the TAB, as heights up from its top string. Each rises only over what it would
 // cross: a vibrato over its own beat's bend, a P.M./let ring line over the marks under it.
 
+/*
+ * Dynamics sit under a notation staff, their baseline this far below its bottom line, clear of
+ * down stems; a row with any takes this much more room under its lowest staff. With no notation
+ * staff they go this far under the TAB's top string plus its strings, below the rhythm stems and
+ * any tuplet number there.
+ */
+export const DYNAMICS_BELOW = 18;
+export const DYNAMICS_ROOM = 16;
+export const DYNAMICS_UNDER_TAB = 36;
+
 /* What every TAB row leaves above its top string for marks: up to the top of a bend's label. */
 export const TAB_MARK_ROOM = 22;
 /* How far a vibrato rises over a bend on its beat: clear of the bend's arrow and label. */

@@ -36,6 +36,9 @@ still change the song format or the API; from `1.0.0` on, only a major release w
 - A repeat with no end is marked "no end" in the score, and the Measure menu warns about it.
 - The Measure menu shows the play count of the repeated section the cursor is in, from any bar of
   it, not only from the bar that ends it.
+- Dynamics: ppp to fff, fp, sfz and fz, written under the staff, and crescendo and diminuendo
+  hairpins over the selected beats, set from the note toolbar. Playback follows them, mf where
+  nothing is marked.
 
 ### Changed
 

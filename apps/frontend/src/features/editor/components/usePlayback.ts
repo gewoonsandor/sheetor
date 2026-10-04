@@ -3,7 +3,7 @@ import { useEffect, useRef, useState } from 'react';
 import type { BeatPosition, TabBeat, TabSong, TabTrack } from './types';
 import { getVoice } from './audioEngine';
 import {
-  firstBeatPosition, beatSeconds, getEffectiveBpm, isAudible,
+  firstBeatPosition, beatSeconds, beatVelocities, DEFAULT_VELOCITY, getEffectiveBpm, isAudible,
   nextPlayPosition, resolveNoteMidi,
 } from './songUtils';
 
@@ -85,14 +85,15 @@ export const usePlayback = (
 
   const midiToFrequency = (midi: number): number => 440 * Math.pow(2, (midi - 69) / 12);
 
-  const playBeat = (beat: TabBeat, track: TabTrack, time: number, bpm: number): void => {
+  /** `velocity` is the beat's dynamic as MIDI velocity; mf (80) plays at the track's own volume. */
+  const playBeat = (beat: TabBeat, track: TabTrack, time: number, bpm: number, velocity: number): void => {
     if (beat.isRest || beat.notes.length === 0) return;
     const ctx = audioCtxRef.current;
     if (!ctx) return;
 
     const { volume, speed } = settingsRef.current;
     const trackGain = ctx.createGain();
-    trackGain.gain.setValueAtTime(volume * track.volume, time);
+    trackGain.gain.setValueAtTime(volume * track.volume * velocity / DEFAULT_VELOCITY, time);
     trackGain.connect(ctx.destination);
 
     const build = getVoice(track.instrument);
@@ -179,7 +180,9 @@ export const usePlayback = (
           const bpm = getEffectiveBpm(current.song, cursor.position.measureIndex);
           const schedTime = cursor.nextTime;
           if (isAudible(track, current.song.tracks)) {
-            playBeat(beat, track, schedTime, bpm);
+            // ponytail: every beat walks the whole track for its velocity; cache per measures array if songs grow long.
+            const velocity = beatVelocities(track.measures)[cursor.position.measureIndex]?.[cursor.position.beatIndex] ?? DEFAULT_VELOCITY;
+            playBeat(beat, track, schedTime, bpm, velocity);
           }
 
           // Only the active track moves the on-screen cursor; the other hand of a

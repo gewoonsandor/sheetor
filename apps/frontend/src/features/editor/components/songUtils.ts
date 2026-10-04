@@ -3,7 +3,9 @@ import type {
   BendAmount,
   Clef,
   Duration,
+  Dynamic,
   FrettedNote,
+  Hairpin,
   InstrumentId,
   TabBeat,
   TabMeasure,
@@ -774,6 +776,57 @@ export const nextPlayPosition = (
     passes.delete(bar);
   }
   return nextBeatPosition(measures, from, loop);
+};
+
+/** Every dynamic mark, in the order the toolbar lists them: ppp to fff, then the attacks. */
+export const DYNAMICS: Dynamic[] = ['ppp', 'pp', 'p', 'mp', 'mf', 'f', 'ff', 'fff', 'fp', 'sfz', 'fz'];
+
+export const HAIRPINS: Hairpin[] = ['cresc', 'dim'];
+
+/** MIDI velocity per mark, MuseScore 3's defaults; fp, sfz and fz are the attack of their beat. */
+export const DYNAMIC_VELOCITY: Record<Dynamic, number> = {
+  ppp: 16, pp: 33, p: 49, mp: 64, mf: 80, f: 96, ff: 112, fff: 126, fp: 96, sfz: 112, fz: 112,
+};
+
+/** Where nothing is marked a part plays mf, which is how it sounded before dynamics existed. */
+export const DEFAULT_VELOCITY = DYNAMIC_VELOCITY.mf;
+
+/** The level a mark leaves behind it: fp drops to p at once, sfz and fz leave it as it was. */
+const heldVelocity = (dynamic: Dynamic, level: number): number =>
+  dynamic === 'fp' ? DYNAMIC_VELOCITY.p : dynamic === 'sfz' || dynamic === 'fz' ? level : DYNAMIC_VELOCITY[dynamic];
+
+/** How far a hairpin with no mark after it moves the level: one step, as from mf to f. */
+const HAIRPIN_STEP = 16;
+
+/**
+ * Every beat's velocity, in score order. A mark holds until the next; a hairpin runs from the
+ * level at its first beat to the mark right after its last, or a step past where it started,
+ * which then holds. Repeats replay the same bars, so they need no walk of their own.
+ */
+export const beatVelocities = (measures: TabMeasure[]): number[][] => {
+  const beats = measures.flatMap(m => m.beats);
+  const out: number[] = [];
+  let level = DEFAULT_VELOCITY;
+  for (let i = 0; i < beats.length; i++) {
+    const { dynamic, hairpin } = beats[i];
+    out[i] = dynamic ? DYNAMIC_VELOCITY[dynamic] : level;
+    if (dynamic) level = heldVelocity(dynamic, level);
+    if (!hairpin) continue;
+    let end = i;
+    while (beats[end + 1]?.hairpin === hairpin) end++;
+    const next = beats[end + 1]?.dynamic;
+    const from = level;
+    const step = hairpin === 'cresc' ? HAIRPIN_STEP : -HAIRPIN_STEP;
+    const target = next ? DYNAMIC_VELOCITY[next] : Math.max(1, Math.min(127, from + step));
+    for (let k = i + 1; k <= end; k++) {
+      const mark = beats[k].dynamic;
+      out[k] = mark ? DYNAMIC_VELOCITY[mark] : Math.round(from + (target - from) * (k - i) / (end + 1 - i));
+    }
+    level = target;
+    i = end;
+  }
+  let at = 0;
+  return measures.map(m => m.beats.map(() => out[at++]));
 };
 
 // --- SELECTION & CLIPBOARD ---

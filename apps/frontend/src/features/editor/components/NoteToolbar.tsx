@@ -1,8 +1,8 @@
 import type { MouseEvent } from 'react';
 
 import { DurationPicker } from './DurationPicker';
-import { BEND_LABELS, STRING_TECHNIQUES, techniqueBlocked } from './songUtils';
-import type { Duration, NoteTechniques, TabNote, Tuplet } from './types';
+import { BEND_LABELS, DYNAMICS, HAIRPINS, STRING_TECHNIQUES, techniqueBlocked } from './songUtils';
+import type { Duration, Dynamic, Hairpin, NoteTechniques, TabNote, Tuplet } from './types';
 import { TECHNIQUE_LABELS, TECHNIQUE_SHORTCUTS } from '../shortcuts';
 import type { TechniqueId } from '../shortcuts';
 
@@ -14,6 +14,12 @@ const TECHNIQUES: [TechniqueId, string][] = [
 
 const RELEASE_LABEL = 'Release the bend (Shift+B)';
 const SLIDE_OUT_LABEL = 'Slide out: down, up, off (Shift+S)';
+
+/** Each hairpin's button: its wedge and what it does. */
+const HAIRPIN_BUTTONS: Record<Hairpin, [string, string]> = {
+  cresc: ['<', 'Crescendo: louder into the next mark, over the selected beats'],
+  dim: ['>', 'Diminuendo: softer into the next mark, over the selected beats'],
+};
 
 /** What a button adds to its glyph for a technique with more kinds than on and off. */
 const kindOf = (technique: TechniqueId, note: TabNote | undefined): string | undefined => {
@@ -41,6 +47,10 @@ interface NoteToolbarProps {
   beatNotes: TabNote[];
   toggleNoteTechnique: (technique: keyof NoteTechniques) => void;
   clearBeat: () => void;
+  dynamic: Dynamic | undefined;
+  setDynamic: (dynamic: Dynamic | null) => void;
+  hairpin: Hairpin | undefined;
+  toggleHairpin: (hairpin: Hairpin) => void;
   midiInput: boolean;
   midiAvailable: boolean;
   toggleMidiInput: () => void;
@@ -50,7 +60,7 @@ interface NoteToolbarProps {
 /** Everything that writes the beat under the cursor, always in view above the score. */
 export const NoteToolbar = ({
   fretted, duration, dotted, tuplet, onDuration, onToggleDot, onCycleTuplet, isRest, toggleActiveBeatRest, activeNote, beatNotes,
-  toggleNoteTechnique, clearBeat, midiInput, midiAvailable, toggleMidiInput, midiStatus,
+  toggleNoteTechnique, clearBeat, dynamic, setDynamic, hairpin, toggleHairpin, midiInput, midiAvailable, toggleMidiInput, midiStatus,
 }: NoteToolbarProps) => (
   <div className="note-toolbar card" role="toolbar" aria-label="Note">
     <DurationPicker
@@ -121,6 +131,32 @@ export const NoteToolbar = ({
         ),
       ];
     })}
+    <div className="toolbar-divider" />
+    {/* A select's list opens in the top layer, so the toolbar's scrolling does not clip it. */}
+    <select
+      className="control-select note-toolbar-select dynamic-select"
+      aria-label="Dynamic"
+      title="Dynamic: holds until the next one"
+      value={dynamic ?? ''}
+      onChange={(e) => setDynamic(DYNAMICS.find(d => d === e.target.value) ?? null)}
+    >
+      <option value="">dyn</option>
+      {DYNAMICS.map(d => <option key={d} value={d}>{d}</option>)}
+    </select>
+    {HAIRPINS.map(kind => (
+      <button
+        key={kind}
+        type="button"
+        className="btn btn-sm"
+        aria-pressed={hairpin === kind}
+        aria-label={HAIRPIN_BUTTONS[kind][1]}
+        title={HAIRPIN_BUTTONS[kind][1]}
+        onMouseDown={keepFocus}
+        onClick={() => toggleHairpin(kind)}
+      >
+        {HAIRPIN_BUTTONS[kind][0]}
+      </button>
+    ))}
     <div className="toolbar-divider" />
     <button
       type="button"

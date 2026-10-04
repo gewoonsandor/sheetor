@@ -5,7 +5,7 @@ import './TabSheetEditor.css';
 
 import type {
   BeatPosition, Clef, Duration, FrettedNote, InstrumentId, NoteTechniques,
-  Staff, TabNote, TabBeat, TabMeasure, TabSong, TabTrack, BeamGroup, MLayout,
+  Staff, TabNote, TabBeat, TabMeasure, TabSong, TabTrack, BeamGroup, MLayout, Dynamic, Hairpin,
 } from './types';
 import {
   barTicks,
@@ -47,6 +47,7 @@ import {
   repeatSectionAt,
   removeBeats,
   STAFF_DISPLAYS,
+  HAIRPINS,
   STRING_TECHNIQUES,
   addBassStaff,
   grandStaffOf,
@@ -110,6 +111,9 @@ import {
   marksTop,
   runHeight,
   TAB_MARK_ROOM,
+  DYNAMICS_BELOW,
+  DYNAMICS_ROOM,
+  DYNAMICS_UNDER_TAB,
 } from './layout';
 
 // Treble clef outline traced from the public-domain "Treble clef with empty staff.svg"
@@ -860,6 +864,36 @@ export const TabSheetEditor: React.FC<TabSheetEditorProps> = ({ meta, channel })
     });
   };
 
+  /** The cursor beat's dynamic mark; null takes it off. The score keeps the keyboard after the pick. */
+  const setActiveBeatDynamic = (dynamic: Dynamic | null) => {
+    updateActiveBeat(b => {
+      const next = { ...b };
+      if (dynamic) next.dynamic = dynamic;
+      else delete next.dynamic;
+      return next;
+    });
+    containerRef.current?.focus({ preventScroll: true });
+  };
+
+  /** A hairpin over the selected beats, or the cursor's; when the cursor beat already has it, it comes off them all. */
+  const toggleHairpin = (hairpin: Hairpin) => {
+    const on = measures[activeMeasureIndex]?.beats[activeBeatIndex]?.hairpin !== hairpin;
+    setMeasures(prev => prev.map((m, mIdx) => {
+      if (mIdx < selectionFrom.measureIndex || mIdx > selectionTo.measureIndex) return m;
+      const [first, last] = beatSpan(mIdx, m.beats.length, selectionFrom, selectionTo);
+      return {
+        ...m,
+        beats: m.beats.map((b, bIdx) => {
+          if (bIdx < first || bIdx > last) return b;
+          const next = { ...b };
+          if (on) next.hairpin = hairpin;
+          else delete next.hairpin;
+          return next;
+        }),
+      };
+    }));
+  };
+
   // Grid/beat manipulation. Beats belong to one track; bars belong to all of
   // them, so bar operations go through setAllTrackMeasures to keep the score
   // aligned.
@@ -1365,7 +1399,10 @@ export const TabSheetEditor: React.FC<TabSheetEditorProps> = ({ meta, channel })
 
   // --- SVG MEASUREMENT & LAYOUT CALCULATION ---
 
-  const ROW_HEIGHT = computeRowHeight(stringCount, showTab, showNotation, grandStaff);
+  const marksDynamics = (beat: TabBeat): boolean => !!(beat.dynamic || beat.hairpin);
+  // Without a notation staff, dynamics go under the TAB's rhythm stems, in room every row adds.
+  const ROW_HEIGHT = computeRowHeight(stringCount, showTab, showNotation, grandStaff)
+    + (!showNotation && measures.some(m => m.beats.some(marksDynamics)) ? DYNAMICS_ROOM : 0);
   const tabTop = getTabStaffTop(showNotation);
 
   // Tempo and metre are song-wide, so they are read off the conductor; a tempo or metre that
@@ -1405,27 +1442,40 @@ export const TabSheetEditor: React.FC<TabSheetEditorProps> = ({ meta, channel })
     return overlap > 0 ? Math.ceil(overlap / 10) * 10 : 0;
   });
 
-  // Per-row max offset for TAB shift
+  // Per-row max offset for TAB shift. Low notes set it; a row whose lowest staff has dynamics then
+  // adds their band under that staff, which moves the TAB, or a let ring line, down past them.
   const rowExtra: number[] = [];
   measureLayouts.forEach((l, i) => {
     const r = l.row;
     rowExtra[r] = Math.max(rowExtra[r] || 0, measureTabOffsets[i]);
   });
+  const lowNoteShift = [...rowExtra];
+  if (showNotation) {
+    const rowsWithDynamics = new Set(measureLayouts
+      .filter((_, i) => barOf(lowestStaff, i).beats.some(marksDynamics))
+      .map(l => l.row));
+    rowsWithDynamics.forEach(r => { rowExtra[r] = (rowExtra[r] || 0) + DYNAMICS_ROOM; });
+  }
 
   // Palm mute and let ring runs, split per row, each line just clear of the highest mark under
   // it. The beat before in the same bar counts too: its vibrato and bend label reach under the
   // run's label. Nothing reaches across a bar line, whose padding keeps them apart. With the TAB
   // hidden they sit under the lowest notation staff instead, and `height` goes unused.
   const rowOf = (at: BeatPosition): number | undefined => measureLayouts[at.measureIndex]?.row;
+  /** A run of beats cut where the score wraps: each piece stays on one row. */
+  const byRow = (run: BeatPosition[]): BeatPosition[][] => {
+    const pieces: BeatPosition[][] = [];
+    for (const at of run) {
+      const piece = pieces[pieces.length - 1];
+      if (piece && rowOf(piece[0]) === rowOf(at)) piece.push(at);
+      else pieces.push([at]);
+    }
+    return pieces;
+  };
   const notesAt = (at: BeatPosition): TabNote[] => measures[at.measureIndex]?.beats[at.beatIndex]?.notes ?? [];
   const runPieces = RUN_MARKS.flatMap(({ technique, label, dashFrom }) =>
     beatRuns(measures, b => !b.isRest && b.notes.some(n => n[technique])).flatMap(run => {
-      const pieces: BeatPosition[][] = [];
-      for (const at of run) {
-        const piece = pieces[pieces.length - 1];
-        if (piece && rowOf(piece[0]) === rowOf(at)) piece.push(at);
-        else pieces.push([at]);
-      }
+      const pieces = byRow(run);
       return pieces.map((piece, i) => {
         const { measureIndex, beatIndex } = piece[0];
         const under = beatIndex > 0 ? [{ measureIndex, beatIndex: beatIndex - 1 }, ...piece] : piece;
@@ -1983,6 +2033,10 @@ export const TabSheetEditor: React.FC<TabSheetEditorProps> = ({ meta, channel })
           beatNotes={selectedNotes}
           toggleNoteTechnique={toggleNoteTechnique}
           clearBeat={() => updateActiveBeatNotes(() => [])}
+          dynamic={activeBeat?.dynamic}
+          setDynamic={setActiveBeatDynamic}
+          hairpin={activeBeat?.hairpin}
+          toggleHairpin={toggleHairpin}
           midiInput={midiInput}
           midiAvailable={midiSupported()}
           toggleMidiInput={() => setMidiInput(prev => !prev)}
@@ -3145,6 +3199,56 @@ export const TabSheetEditor: React.FC<TabSheetEditorProps> = ({ meta, channel })
                     {closes && <line x1={endX} y1={y - 7} x2={endX} y2={y + 1} />}
                   </g>
                 )}
+              </g>
+            );
+          })}
+
+          {/* Dynamics: each staff's own marks under it, and its hairpins as wedges from their first beat
+              into the mark after the last, split per row like the run marks. With no notation staff they
+              go under the TAB. The lowest staff's sit below its low notes; a grand staff's upper hand
+              writes between the staves. */}
+          {(showNotation ? staves : [activeStaff]).map(staff => {
+            const bars = song.tracks[staff.track].measures;
+            const baseline = (mIdx: number): number => getRowY(mIdx) + (showNotation
+              ? staff.top + 50 + DYNAMICS_BELOW + (staff === lowestStaff ? lowNoteShift[measureLayouts[mIdx]?.row ?? 0] ?? 0 : 0)
+              : tabTop + getRowShift(mIdx) + stringCount * TAB_STAFF_HEIGHT_PX + DYNAMICS_UNDER_TAB);
+            const beatX = (at: BeatPosition): number => getBeatCoordinates(at.measureIndex, at.beatIndex, staff);
+            const marked = (at: BeatPosition): boolean => !!bars[at.measureIndex]?.beats[at.beatIndex]?.dynamic;
+            return (
+              <g key={`dynamics-${staff.top}`} pointerEvents="none">
+                {bars.flatMap((bar, mIdx) => bar.beats.map((b, bIdx) => b.dynamic && (
+                  <text key={b.id} x={beatX({ measureIndex: mIdx, beatIndex: bIdx })} y={baseline(mIdx)} textAnchor="middle" fontSize="12" className="dynamic-mark">
+                    {b.dynamic}
+                  </text>
+                )))}
+                {HAIRPINS.flatMap(kind => beatRuns(bars, b => b.hairpin === kind).flatMap(run => {
+                  const pieces = byRow(run);
+                  return pieces.map((piece, i) => {
+                    const first = piece[0];
+                    const last = piece[piece.length - 1];
+                    const barEnd = getMeasureX(last.measureIndex) + getMeasureWidth(last.measureIndex) - 4;
+                    const next = nextBeatPosition(bars, last, false);
+                    // The last piece closes just before the next beat, or before its mark, or before a mark on its own
+                    // last beat; one that wraps runs to the row's end.
+                    const end = i === pieces.length - 1 && piece.length > 1 && marked(last)
+                      ? beatX(last) - 12
+                      : i < pieces.length - 1 || !next || rowOf(next) !== rowOf(last)
+                        ? barEnd
+                        : beatX(next) - (marked(next) ? 12 : 4);
+                    const start = beatX(first) + (marked(first) ? 12 : -4);
+                    const x0 = Math.min(start, end - 12);
+                    const y = baseline(first.measureIndex) - 4;
+                    const [narrow, wide] = kind === 'cresc' ? [x0, end] : [end, x0];
+                    return (
+                      <path
+                        key={`${kind}-${first.measureIndex}-${first.beatIndex}`}
+                        d={`M ${wide} ${y - 4} L ${narrow} ${y} L ${wide} ${y + 4}`}
+                        className="hairpin"
+                        strokeWidth="1"
+                      />
+                    );
+                  });
+                }))}
               </g>
             );
           })}

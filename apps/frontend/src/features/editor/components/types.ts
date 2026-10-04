@@ -89,6 +89,15 @@ export type TabNote = FrettedNote | PitchedNote;
  */
 export type Tuplet = 3 | 6;
 
+/**
+ * A dynamic mark: ppp to fff, then fp (loud, at once soft), and the accents sfz and fz,
+ * which strike one beat hard and leave the level where it was.
+ */
+export type Dynamic = 'ppp' | 'pp' | 'p' | 'mp' | 'mf' | 'f' | 'ff' | 'fff' | 'fp' | 'sfz' | 'fz';
+
+/** A hairpin over a run of beats: louder (crescendo) or softer (diminuendo) into the next mark. */
+export type Hairpin = 'cresc' | 'dim';
+
 export interface TabBeat {
   id: string;
   duration: Duration;
@@ -96,6 +105,10 @@ export interface TabBeat {
   tuplet?: Tuplet;
   notes: TabNote[];
   isRest?: boolean;
+  /** A dynamic mark at this beat, holding until the next one. */
+  dynamic?: Dynamic;
+  /** Under a hairpin: consecutive beats with the same one make one wedge. */
+  hairpin?: Hairpin;
 }
 
 export interface TabMeasure {

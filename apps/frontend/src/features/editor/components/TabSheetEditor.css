@@ -269,6 +269,19 @@
   fill: var(--ink);
 }
 
+/* Dynamics are written the engraver's way: bold italic serif letters, and hairpins in plain ink. */
+.dynamic-mark {
+  fill: var(--ink);
+  font-family: var(--font-display);
+  font-style: italic;
+  font-weight: 700;
+}
+
+.hairpin {
+  fill: none;
+  stroke: var(--ink);
+}
+
 .glyph-ink-stroke {
   stroke: var(--ink);
 }
@@ -929,6 +942,14 @@
 
 .note-toolbar > .btn {
   flex: none;
+}
+
+.note-toolbar > .dynamic-select {
+  flex: none;
+  height: var(--ctl-h-sm);
+  font-family: var(--font-display);
+  font-style: italic;
+  font-weight: 700;
 }
 
 .note-toolbar-spacer {
