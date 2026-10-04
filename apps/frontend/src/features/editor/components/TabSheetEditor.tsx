@@ -2070,28 +2070,7 @@ export const TabSheetEditor: React.FC<TabSheetEditorProps> = ({ meta, channel })
                   </text>
                 )}
 
-                {showTempo && (bpmEditIndex === mIdx ? (
-                  // An HTML input inside the SVG: foreignObject coordinates are
-                  // user units, so the box tracks the tempo mark at any zoom
-                  // without mapping screen pixels back into the viewBox.
-                  <foreignObject x={measureX + 14} y={labelY - 12} width="62" height="18">
-                    <input
-                      className="tempo-input"
-                      type="text"
-                      inputMode="numeric"
-                      autoFocus
-                      aria-label={`Tempo for bar ${mIdx + 1}`}
-                      value={bpmDraft ?? String(effectiveBpm)}
-                      onChange={(e) => setBpmDraft(e.target.value)}
-                      onFocus={(e) => e.target.select()}
-                      onBlur={() => { commitBpmDraft(mIdx); setBpmEditIndex(null); }}
-                      onKeyDown={(e) => {
-                        if (e.key === 'Enter') e.currentTarget.blur();
-                        if (e.key === 'Escape') { setBpmDraft(null); setBpmEditIndex(null); }
-                      }}
-                    />
-                  </foreignObject>
-                ) : (
+                {showTempo && bpmEditIndex !== mIdx && (
                   <text
                     x={measureX + 18}
                     y={labelY}
@@ -2106,7 +2085,7 @@ export const TabSheetEditor: React.FC<TabSheetEditorProps> = ({ meta, channel })
                     <title>Click to set the tempo for bar {mIdx + 1}</title>
                     {`♩=${effectiveBpm}`}
                   </text>
-                ))}
+                )}
 
                 {/* Measure number */}
                 <text
@@ -3106,6 +3085,30 @@ export const TabSheetEditor: React.FC<TabSheetEditorProps> = ({ meta, channel })
               </g>
             );
           })}
+
+          {/* The tempo box paints last, so no note, stem or later bar covers it.
+              An HTML input inside the SVG: foreignObject coordinates are user
+              units, so the box tracks the tempo mark at any zoom without
+              mapping screen pixels back into the viewBox. */}
+          {bpmEditIndex !== null && bpmEditIndex < measures.length && (
+            <foreignObject x={getMeasureX(bpmEditIndex) + 14} y={getLabelY(bpmEditIndex) - 12} width="62" height="18">
+              <input
+                className="tempo-input"
+                type="text"
+                inputMode="numeric"
+                autoFocus
+                aria-label={`Tempo for bar ${bpmEditIndex + 1}`}
+                value={bpmDraft ?? String(getEffectiveBpm(song, bpmEditIndex))}
+                onChange={(e) => setBpmDraft(e.target.value)}
+                onFocus={(e) => e.target.select()}
+                onBlur={() => { commitBpmDraft(bpmEditIndex); setBpmEditIndex(null); }}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') e.currentTarget.blur();
+                  if (e.key === 'Escape') { setBpmDraft(null); setBpmEditIndex(null); }
+                }}
+              />
+            </foreignObject>
+          )}
         </svg>
       </div>
 

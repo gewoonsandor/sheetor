@@ -321,10 +321,12 @@ body {
   outline-offset: 2px;
 }
 
-/* A scroll container or foreignObject clips anything outside it, so there the
-   ring goes inside the control instead of being cut off at the edge. */
+/* A scroll container or foreignObject clips anything outside it, and a
+   stepper's buttons sit on its field's edges, so there the ring goes inside
+   the control instead of being cut off or covered. */
 :where(.popover, .note-toolbar, .track-list) :focus-visible,
-.tempo-input:focus-visible {
+.tempo-input:focus-visible,
+.stepper-input:focus-visible {
   outline-offset: -2px;
 }
 
