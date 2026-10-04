@@ -308,15 +308,17 @@ describe('parseSong', () => {
     expect(result.song.tracks[0].measures[0].beats.map(b => b.tuplet)).toEqual([3, 6, undefined]);
   });
 
-  it('keeps a known dynamic and hairpin and drops any other', () => {
+  it('keeps a known dynamic, hairpin and accent and drops any other', () => {
     const song = valid();
     song.measures[0].beats = [
-      { duration: '4', dynamic: 'mf', hairpin: 'cresc', notes: [] },
-      { duration: '4', dynamic: 'loud', hairpin: 'swell', notes: [] },
+      { duration: '4', dynamic: 'mf', hairpin: 'cresc', accent: 'marcato', notes: [] },
+      { duration: '4', dynamic: 'loud', hairpin: 'swell', accent: 'hard', notes: [] },
     ] as never;
     const result = parseSong(song);
     expect(result.ok).toBe(true);
     if (!result.ok) return;
-    expect(result.song.tracks[0].measures[0].beats.map(b => [b.dynamic, b.hairpin])).toEqual([['mf', 'cresc'], [undefined, undefined]]);
+    expect(result.song.tracks[0].measures[0].beats.map(b => [b.dynamic, b.hairpin, b.accent])).toEqual([
+      ['mf', 'cresc', 'marcato'], [undefined, undefined, undefined],
+    ]);
   });
 });

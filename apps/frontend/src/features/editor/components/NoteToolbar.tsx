@@ -2,7 +2,7 @@ import type { MouseEvent } from 'react';
 
 import { DurationPicker } from './DurationPicker';
 import { BEND_LABELS, DYNAMICS, HAIRPINS, STRING_TECHNIQUES, techniqueBlocked } from './songUtils';
-import type { Duration, Dynamic, Hairpin, NoteTechniques, TabNote, Tuplet } from './types';
+import type { Accent, Duration, Dynamic, Hairpin, NoteTechniques, TabNote, Tuplet } from './types';
 import { TECHNIQUE_LABELS, TECHNIQUE_SHORTCUTS } from '../shortcuts';
 import type { TechniqueId } from '../shortcuts';
 
@@ -15,11 +15,14 @@ const TECHNIQUES: [TechniqueId, string][] = [
 const RELEASE_LABEL = 'Release the bend (Shift+B)';
 const SLIDE_OUT_LABEL = 'Slide out: down, up, off (Shift+S)';
 
-/** Each hairpin's button: its wedge and what it does. */
+/** Each hairpin's button: its word, as hairpins are also written, and what it does. */
 const HAIRPIN_BUTTONS: Record<Hairpin, [string, string]> = {
-  cresc: ['<', 'Crescendo: louder into the next mark, over the selected beats'],
-  dim: ['>', 'Diminuendo: softer into the next mark, over the selected beats'],
+  cresc: ['cresc.', 'Crescendo: louder into the next mark, over the selected beats'],
+  dim: ['dim.', 'Diminuendo: softer into the next mark, over the selected beats'],
 };
+
+const ACCENT_LABEL = 'Accent: accent, marcato, off (A)';
+const ACCENT_GLYPHS: Record<Accent, string> = { accent: '>', marcato: '^' };
 
 /** What a button adds to its glyph for a technique with more kinds than on and off. */
 const kindOf = (technique: TechniqueId, note: TabNote | undefined): string | undefined => {
@@ -51,6 +54,8 @@ interface NoteToolbarProps {
   setDynamic: (dynamic: Dynamic | null) => void;
   hairpin: Hairpin | undefined;
   toggleHairpin: (hairpin: Hairpin) => void;
+  accent: Accent | undefined;
+  onCycleAccent: () => void;
   midiInput: boolean;
   midiAvailable: boolean;
   toggleMidiInput: () => void;
@@ -60,7 +65,8 @@ interface NoteToolbarProps {
 /** Everything that writes the beat under the cursor, always in view above the score. */
 export const NoteToolbar = ({
   fretted, duration, dotted, tuplet, onDuration, onToggleDot, onCycleTuplet, isRest, toggleActiveBeatRest, activeNote, beatNotes,
-  toggleNoteTechnique, clearBeat, dynamic, setDynamic, hairpin, toggleHairpin, midiInput, midiAvailable, toggleMidiInput, midiStatus,
+  toggleNoteTechnique, clearBeat, dynamic, setDynamic, hairpin, toggleHairpin, accent, onCycleAccent,
+  midiInput, midiAvailable, toggleMidiInput, midiStatus,
 }: NoteToolbarProps) => (
   <div className="note-toolbar card" role="toolbar" aria-label="Note">
     <DurationPicker
@@ -157,6 +163,17 @@ export const NoteToolbar = ({
         {HAIRPIN_BUTTONS[kind][0]}
       </button>
     ))}
+    <button
+      type="button"
+      className="btn btn-sm"
+      aria-pressed={accent !== undefined}
+      aria-label={accent ? `${ACCENT_LABEL}: ${accent}` : ACCENT_LABEL}
+      title={ACCENT_LABEL}
+      onMouseDown={keepFocus}
+      onClick={onCycleAccent}
+    >
+      {ACCENT_GLYPHS[accent ?? 'accent']}
+    </button>
     <div className="toolbar-divider" />
     <button
       type="button"

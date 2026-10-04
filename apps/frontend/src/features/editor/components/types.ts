@@ -98,6 +98,9 @@ export type Dynamic = 'ppp' | 'pp' | 'p' | 'mp' | 'mf' | 'f' | 'ff' | 'fff' | 'f
 /** A hairpin over a run of beats: louder (crescendo) or softer (diminuendo) into the next mark. */
 export type Hairpin = 'cresc' | 'dim';
 
+/** An accent on a beat's notes: > (accent) or the stronger ^ (marcato). */
+export type Accent = 'accent' | 'marcato';
+
 export interface TabBeat {
   id: string;
   duration: Duration;
@@ -109,6 +112,7 @@ export interface TabBeat {
   dynamic?: Dynamic;
   /** Under a hairpin: consecutive beats with the same one make one wedge. */
   hairpin?: Hairpin;
+  accent?: Accent;
 }
 
 export interface TabMeasure {

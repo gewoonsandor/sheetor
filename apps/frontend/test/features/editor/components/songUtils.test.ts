@@ -382,6 +382,11 @@ describe('dynamics', () => {
     ];
     expect(beatVelocities(bars)).toEqual([[49, 65], [80, 96, 96, 80]]);
   });
+
+  it('strikes an accented beat harder, a marcato harder still, without moving the level', () => {
+    const bars = [measure([b({ accent: 'accent' }), b(), b({ dynamic: 'fff', accent: 'marcato' }), b()])];
+    expect(beatVelocities(bars)).toEqual([[96, 80, 127, 126]]);
+  });
 });
 
 describe('clipboard', () => {

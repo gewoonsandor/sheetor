@@ -5,12 +5,13 @@ import './TabSheetEditor.css';
 
 import type {
   BeatPosition, Clef, Duration, FrettedNote, InstrumentId, NoteTechniques,
-  Staff, TabNote, TabBeat, TabMeasure, TabSong, TabTrack, BeamGroup, MLayout, Dynamic, Hairpin,
+  Staff, TabNote, TabBeat, TabMeasure, TabSong, TabTrack, BeamGroup, MLayout, Dynamic, Hairpin, Accent,
 } from './types';
 import {
   barTicks,
   beatTicks,
   nextTuplet,
+  nextAccent,
   tupletGroups,
   computeBeamGroups,
   createTrack,
@@ -188,6 +189,23 @@ const RUN_MARKS = [
   { technique: 'palmMute', label: 'P.M.', dashFrom: 7 },
   { technique: 'letRing', label: 'let ring', dashFrom: 17 },
 ] as const;
+
+/**
+ * An accent (>) or a marcato centred on `x, y`; a marcato under the notes opens upward (v), as
+ * engravers write it below a stem-up chord.
+ */
+const accentMark = (accent: Accent, x: number, y: number, below: boolean) => (
+  <path
+    d={accent === 'accent'
+      ? `M ${x - 4} ${y - 2.5} L ${x + 4} ${y} L ${x - 4} ${y + 2.5}`
+      : `M ${x - 3} ${y + (below ? -2.5 : 2.5)} L ${x} ${y + (below ? 3 : -3)} L ${x + 3} ${y + (below ? -2.5 : 2.5)}`}
+    fill="none"
+    className="glyph-ink-stroke"
+    strokeWidth="1.3"
+    strokeLinejoin="round"
+    pointerEvents="none"
+  />
+);
 
 /** A fret number as the TAB prints it: x for a dead note, <n> for a harmonic. */
 const fretLabel = (note: FrettedNote): string => (note.ghostNote ? 'x' : note.harmonic ? `<${note.fret}>` : `${note.fret}`);
@@ -864,6 +882,15 @@ export const TabSheetEditor: React.FC<TabSheetEditorProps> = ({ meta, channel })
     });
   };
 
+  /** A steps the cursor beat through an accent and a marcato to neither. */
+  const cycleAccentForActiveBeat = () => {
+    updateActiveBeat(b => {
+      const { accent, ...rest } = b;
+      const next = nextAccent(accent);
+      return next ? { ...rest, accent: next } : rest;
+    });
+  };
+
   /** The cursor beat's dynamic mark; null takes it off. The score keeps the keyboard after the pick. */
   const setActiveBeatDynamic = (dynamic: Dynamic | null) => {
     updateActiveBeat(b => {
@@ -1332,6 +1359,12 @@ export const TabSheetEditor: React.FC<TabSheetEditorProps> = ({ meta, channel })
         cycleTupletForActiveBeat();
         break;
 
+      case 'a':
+      case 'A':
+        e.preventDefault();
+        cycleAccentForActiveBeat();
+        break;
+
       // Plus / Equals / Minus to change duration (increase/decrease)
       case '=':
       case '+': {
@@ -1427,6 +1460,7 @@ export const TabSheetEditor: React.FC<TabSheetEditorProps> = ({ meta, channel })
 
   // Per-measure shift for notes below the lowest notation staff: pushes the TAB
   // down, or with the TAB hidden grows the row. Irrelevant with no notation staff.
+  // An accent may sit under its notes, some 12 units down: it counts as a note 3 steps lower.
   const lowestStaff = staves[staves.length - 1];
   const measureTabOffsets: number[] = measures.map((_, mIdx) => {
     if (!showNotation) return 0;
@@ -1434,7 +1468,7 @@ export const TabSheetEditor: React.FC<TabSheetEditorProps> = ({ meta, channel })
     for (const beat of barOf(lowestStaff, mIdx).beats) {
       if (beat.isRest) continue;
       for (const note of beat.notes) {
-        const step = staffStep(noteMidi(note, lowestStaff), lowestStaff, mIdx);
+        const step = staffStep(noteMidi(note, lowestStaff), lowestStaff, mIdx) - (beat.accent ? 3 : 0);
         if (step < minStep) minStep = step;
       }
     }
@@ -1567,7 +1601,8 @@ export const TabSheetEditor: React.FC<TabSheetEditorProps> = ({ meta, channel })
         const stemUp = group ? getBeamStemUp(mIdx, group, top) : steps.reduce((a, s) => a + s, 0) / steps.length < 6;
         const stemTop = !stemUp || beat.duration === '1' ? headTop : group ? getBeamY(mIdx, group, true, top, 0) - 2 : headTop - 30;
         const marked = beat.tuplet !== undefined || beat.notes.some(n => n.vibrato || n.bend);
-        inkTop = Math.min(inkTop, headTop - 9, stemTop - (marked ? 12 : 0));
+        // An accent over a stem-down or whole note reaches 12 units above its head.
+        inkTop = Math.min(inkTop, headTop - (beat.accent ? 14 : 9), stemTop - (marked ? 12 : 0));
       });
     }
     const labelY = Math.min(rowLabelY[r] ?? -6, inkTop - 4);
@@ -2037,6 +2072,8 @@ export const TabSheetEditor: React.FC<TabSheetEditorProps> = ({ meta, channel })
           setDynamic={setActiveBeatDynamic}
           hairpin={activeBeat?.hairpin}
           toggleHairpin={toggleHairpin}
+          accent={activeBeat?.accent}
+          onCycleAccent={cycleAccentForActiveBeat}
           midiInput={midiInput}
           midiAvailable={midiSupported()}
           toggleMidiInput={() => setMidiInput(prev => !prev)}
@@ -2772,6 +2809,12 @@ export const TabSheetEditor: React.FC<TabSheetEditorProps> = ({ meta, channel })
                       )}
                     </g>
                   )}
+
+                  {/* Accent and marcato: on the notehead side away from the stem, a whole note's above.
+                      Without notation they go under the TAB's rhythm stems. */}
+                  {b.accent && (showNotation
+                    ? accentMark(b.accent, beatX, hasStem && stemUp ? lowestY + 9 : highestY - 9, hasStem && stemUp)
+                    : accentMark(b.accent, beatX, rowY + tabTop + ts + stringCount * TAB_STAFF_HEIGHT_PX + 14, false))}
 
                   {/* Vibrato over the TAB, raised only over its own beat's bend. */}
                   {showTab && b.notes.some(n => n.vibrato) && (

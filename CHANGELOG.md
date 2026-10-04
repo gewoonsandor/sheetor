@@ -39,6 +39,9 @@ still change the song format or the API; from `1.0.0` on, only a major release w
 - Dynamics: ppp to fff, fp, sfz and fz, written under the staff, and crescendo and diminuendo
   hairpins over the selected beats, set from the note toolbar. Playback follows them, mf where
   nothing is marked.
+- Accents: A, or the toolbar's > button, steps the beat under the cursor through an accent (>), a
+  marcato (^) and none. The score draws it by the notes, away from the stem, and playback strikes
+  that beat harder.
 
 ### Changed
 

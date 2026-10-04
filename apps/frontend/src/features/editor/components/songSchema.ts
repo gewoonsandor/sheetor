@@ -3,7 +3,7 @@ import type {
   TabTrack, TimeSignature,
 } from './types';
 import {
-  DEFAULT_TRANSPOSE, DURATIONS, DYNAMICS, HAIRPINS, MAX_BPM, MAX_FRET, MAX_KEY_ACCIDENTALS, MAX_REPEAT, MAX_STRINGS, MIN_BPM, MIN_REPEAT,
+  ACCENTS, DEFAULT_TRANSPOSE, DURATIONS, DYNAMICS, HAIRPINS, MAX_BPM, MAX_FRET, MAX_KEY_ACCIDENTALS, MAX_REPEAT, MAX_STRINGS, MIN_BPM, MIN_REPEAT,
   STAFF_DISPLAYS,
   TECHNIQUE_KEYS,
   createId, createTrack, defaultTuning, normalizeTrackLengths, pruneNotesToStringCount, requiredStringCount,
@@ -129,6 +129,8 @@ const parseBeat = (value: unknown, where: string): TabBeat | string => {
   if (dynamic) beat.dynamic = dynamic;
   const hairpin = HAIRPINS.find(h => h === value.hairpin);
   if (hairpin) beat.hairpin = hairpin;
+  const accent = ACCENTS.find(a => a === value.accent);
+  if (accent) beat.accent = accent;
   return beat;
 };
 

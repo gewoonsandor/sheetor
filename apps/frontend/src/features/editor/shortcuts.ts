@@ -68,6 +68,7 @@ export const SHORTCUTS: Shortcut[] = [
   { keys: ['.'], action: 'Dot', group: 'Write' },
   { keys: ['+', '−'], action: 'Duration', group: 'Write' },
   { keys: ['T'], action: 'Tuplet: triplet, sextuplet, off', group: 'Write' },
+  { keys: ['A'], action: 'Accent: accent, marcato, off', group: 'Write' },
   { keys: ['Delete'], action: 'Remove', group: 'Write' },
   { keys: ['D'], action: 'Remove, like Delete', group: 'Write' },
   { keys: ['I'], action: 'Insert beat after', group: 'Edit' },

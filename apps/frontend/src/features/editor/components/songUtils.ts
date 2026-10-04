@@ -1,6 +1,7 @@
 import type {
   BeatPosition,
   BendAmount,
+  Accent,
   Clef,
   Duration,
   Dynamic,
@@ -181,6 +182,10 @@ export const beatSeconds = (beat: Pick<TabBeat, 'duration' | 'dot' | 'tuplet'>, 
 /** T steps a beat through a triplet and a sextuplet to neither. */
 export const nextTuplet = (tuplet: Tuplet | undefined): Tuplet | undefined =>
   tuplet === undefined ? 3 : tuplet === 3 ? 6 : undefined;
+
+/** A steps a beat through an accent and a marcato to neither. */
+export const nextAccent = (accent: Accent | undefined): Accent | undefined =>
+  accent === undefined ? 'accent' : accent === 'accent' ? 'marcato' : undefined;
 
 /**
  * The beats each tuplet number is drawn over: a run of beats with the same count,
@@ -783,6 +788,11 @@ export const DYNAMICS: Dynamic[] = ['ppp', 'pp', 'p', 'mp', 'mf', 'f', 'ff', 'ff
 
 export const HAIRPINS: Hairpin[] = ['cresc', 'dim'];
 
+export const ACCENTS: Accent[] = ['accent', 'marcato'];
+
+/** How much harder an accented beat strikes than the level around it; the level itself stays. */
+const ACCENT_BOOST: Record<Accent, number> = { accent: 16, marcato: 24 };
+
 /** MIDI velocity per mark, MuseScore 3's defaults; fp, sfz and fz are the attack of their beat. */
 export const DYNAMIC_VELOCITY: Record<Dynamic, number> = {
   ppp: 16, pp: 33, p: 49, mp: 64, mf: 80, f: 96, ff: 112, fff: 126, fp: 96, sfz: 112, fz: 112,
@@ -801,7 +811,8 @@ const HAIRPIN_STEP = 16;
 /**
  * Every beat's velocity, in score order. A mark holds until the next; a hairpin runs from the
  * level at its first beat to the mark right after its last, or a step past where it started,
- * which then holds. Repeats replay the same bars, so they need no walk of their own.
+ * which then holds. An accent adds to its own beat only. Repeats replay the same bars, so they
+ * need no walk of their own.
  */
 export const beatVelocities = (measures: TabMeasure[]): number[][] => {
   const beats = measures.flatMap(m => m.beats);
@@ -826,7 +837,10 @@ export const beatVelocities = (measures: TabMeasure[]): number[][] => {
     i = end;
   }
   let at = 0;
-  return measures.map(m => m.beats.map(() => out[at++]));
+  return measures.map(m => m.beats.map(b => {
+    const velocity = out[at++];
+    return b.accent ? Math.min(127, velocity + ACCENT_BOOST[b.accent]) : velocity;
+  }));
 };
 
 // --- SELECTION & CLIPBOARD ---
