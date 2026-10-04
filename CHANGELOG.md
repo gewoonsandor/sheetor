@@ -30,7 +30,7 @@ still change the song format or the API; from `1.0.0` on, only a major release w
   playback plays them in time.
 - D deletes the same way Delete does: the note under the cursor, a rest beat, or the selection.
 - Clicking a clef or a time signature in the score opens the Measure menu on that bar, where both
-  are set.
+  are set. A clef takes the click anywhere in a box a little larger than it, not just on its ink.
 
 ### Changed
 

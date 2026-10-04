@@ -197,24 +197,24 @@
 }
 
 /* The tempo mark, the clefs and the time signatures are the score's editable
-   marks, so they are the ones that react to a pointer. A clef is thin strokes:
-   its whole box takes the click, not just the ink. */
+   marks, so they are the ones that react to a pointer. A clef is thin strokes,
+   so an invisible box a little larger than it takes the click. */
 .tempo-mark,
 .bar-mark {
   cursor: pointer;
 }
 
 .tempo-mark,
-.bar-mark > * {
+.bar-mark :is(text, .glyph-ink) {
   transition: fill var(--t-fast) var(--ease);
 }
 
-.bar-mark > * {
-  pointer-events: bounding-box;
+.mark-hit {
+  fill: transparent;
 }
 
 .tempo-mark:hover,
-.bar-mark:hover > * {
+.bar-mark:hover :is(text, .glyph-ink) {
   fill: var(--accent);
 }
 

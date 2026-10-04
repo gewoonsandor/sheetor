@@ -139,11 +139,13 @@ interface ClefShape {
   keyOffset: number;
   /** The line the clef names (G or F), which a smaller clef change stays centred on. */
   line: number;
+  /** The glyph's box with 3 units to spare on every side: a click anywhere in it edits the clef. */
+  hit: { x: number; y: number; width: number; height: number };
 }
 
 const CLEFS: Record<Clef, ClefShape> = {
-  treble: { path: TREBLE_CLEF_PATH, fillRule: 'evenodd', shift: 0, keyOffset: 0, line: 40 },
-  bass: { path: BASS_CLEF_PATH, fillRule: 'nonzero', shift: 12, keyOffset: -2, line: 20 },
+  treble: { path: TREBLE_CLEF_PATH, fillRule: 'evenodd', shift: 0, keyOffset: 0, line: 40, hit: { x: 11, y: -5.5, width: 30, height: 74 } },
+  bass: { path: BASS_CLEF_PATH, fillRule: 'nonzero', shift: 12, keyOffset: -2, line: 20, hit: { x: 9, y: 7, width: 34, height: 44 } },
 };
 
 /** A key signature's first accidental, after the clef, and the room each one takes. */
@@ -2133,13 +2135,10 @@ export const TabSheetEditor: React.FC<TabSheetEditorProps> = ({ meta, channel })
                     {showNotation && <g {...barMarkProps(mIdx)}>{staves.map(staff => {
                       const clef = clefAt(staff, mIdx);
                       return (
-                        <path
-                          key={`clef-${staff.top}`}
-                          d={clef.path}
-                          fillRule={clef.fillRule}
-                          transform={`translate(0, ${staff.top})`}
-                          className="glyph-ink"
-                        />
+                        <g key={`clef-${staff.top}`} transform={`translate(0, ${staff.top})`}>
+                          <rect {...clef.hit} className="mark-hit" />
+                          <path d={clef.path} fillRule={clef.fillRule} className="glyph-ink" />
+                        </g>
                       );
                     })}</g>}
                     {grandStaff && <path d={GRAND_BRACE_PATH} className="glyph-ink" />}
@@ -2206,13 +2205,10 @@ export const TabSheetEditor: React.FC<TabSheetEditorProps> = ({ meta, channel })
                     <g {...barMarkProps(mIdx)} pointerEvents="visiblePainted">{staves.map(staff => {
                       const clef = clefAt(staff, mIdx);
                       return (
-                        <path
-                          key={`clef-change-${staff.top}`}
-                          d={clef.path}
-                          fillRule={clef.fillRule}
-                          transform={`translate(3, ${staff.top + clef.line}) scale(0.7) translate(-12, ${-clef.line})`}
-                          className="glyph-ink"
-                        />
+                        <g key={`clef-change-${staff.top}`} transform={`translate(3, ${staff.top + clef.line}) scale(0.7) translate(-12, ${-clef.line})`}>
+                          <rect {...clef.hit} className="mark-hit" />
+                          <path d={clef.path} fillRule={clef.fillRule} className="glyph-ink" />
+                        </g>
                       );
                     })}</g>
                     {staves.flatMap(staff => keySignatureGlyphs(staff, mIdx, CLEF_CHANGE_ROOM + 6))}
