@@ -100,6 +100,8 @@ still change the song format or the API; from `1.0.0` on, only a major release w
 - Focus rings inside menus, the note toolbar, the track strip and the in-score tempo box are drawn
   inside the control, so the edge of the menu no longer cuts them off. The score itself no longer
   shows a ring.
+- The Grand staff toggle in Track settings looks like a button, in a Staff row lined up with the
+  fields around it, instead of a line of menu text.
 
 ## [1.0.0] - 2026-10-01
 

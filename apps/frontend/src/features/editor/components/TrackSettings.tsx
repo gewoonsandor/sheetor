@@ -64,15 +64,18 @@ export const TrackSettings = ({
       </select>
     </label>
     {!isFrettedTrack && (
-      <button
-        type="button"
-        className="btn"
-        aria-pressed={grandStaff}
-        onClick={toggleGrandStaff}
-        title="Treble and bass clef, one track per hand: the notes below middle C move to a new left-hand track with its own rhythm"
-      >
-        Grand staff
-      </button>
+      <div className="compact-field wide-field">
+        <span>Staff</span>
+        <button
+          type="button"
+          className="btn"
+          aria-pressed={grandStaff}
+          onClick={toggleGrandStaff}
+          title="Treble and bass clef, one track per hand: the notes below middle C move to a new left-hand track with its own rhythm"
+        >
+          Grand staff
+        </button>
+      </div>
     )}
     {leftHandWarning}
     <label className="compact-field wide-field">

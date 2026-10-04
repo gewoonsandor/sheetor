@@ -648,7 +648,7 @@
 }
 
 /* One column of equal controls, lined up with the volume slider. */
-.sheetor-tracks .popover .wide-field > :is(.control-select, .control-input) {
+.sheetor-tracks .popover .wide-field > :is(.control-select, .control-input, .btn) {
   width: 140px;
 }
 
