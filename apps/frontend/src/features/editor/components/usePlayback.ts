@@ -202,8 +202,7 @@ export const usePlayback = (
 
           cursor.nextTime += beatSeconds(beat, bpm) / current.speed;
 
-          const conductor = current.song.tracks[0]?.measures ?? [];
-          const next = nextPlayPosition(track.measures, conductor, cursor.position, current.loop, cursor.passes);
+          const next = nextPlayPosition(track.measures, cursor.position, current.loop, cursor.passes);
           if (!next) {
             cursor.done = true;
             break;

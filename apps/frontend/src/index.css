@@ -220,7 +220,7 @@
   --accent-text: var(--accent-hover);
 
   --danger-rgb: 176 62 54;
-  --warn-rgb: 158 108 16;
+  --warn-rgb: 142 96 14;
   --ok-rgb: 16 110 78;
   --ok-ink: hsl(160 60% 98%);
   --danger-hover-text: rgb(var(--danger-rgb));
@@ -325,7 +325,7 @@ body {
    stepper's buttons sit on its field's edges, so there the ring goes inside
    the control instead of being cut off or covered. */
 :where(.popover, .note-toolbar, .track-list) :focus-visible,
-.tempo-input:focus-visible,
+.score-input:focus-visible,
 .stepper-input:focus-visible {
   outline-offset: -2px;
 }

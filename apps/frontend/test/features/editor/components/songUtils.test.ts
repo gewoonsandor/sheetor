@@ -21,6 +21,7 @@ import {
   midiToNoteOctave,
   nextBeatPosition,
   nextPlayPosition,
+  repeatSectionAt,
   copyBeats,
   pasteClip,
   removeBeats,
@@ -316,7 +317,7 @@ describe('repeats', () => {
     let at: BeatPosition | null = { measureIndex: 0, beatIndex: 0 };
     while (at && played.length < 50) {
       played.push(at.measureIndex);
-      at = nextPlayPosition(bars, bars, at, false, passes);
+      at = nextPlayPosition(bars, at, false, passes);
     }
     return played;
   };
@@ -338,6 +339,27 @@ describe('repeats', () => {
       measure([beat('4')], { repeatEnd: 2 }),
     ];
     expect(walk(bars)).toEqual([0, 0, 1, 2, 1, 2]);
+  });
+
+  it('finds the section every bar plays in, and a start nothing closes', () => {
+    const bars = [
+      measure([beat('4')]),
+      measure([beat('4')], { repeatStart: true }),
+      measure([beat('4')]),
+      measure([beat('4')], { repeatEnd: 2 }),
+      measure([beat('4')]),
+      measure([beat('4')], { repeatStart: true }),
+      measure([beat('4')]),
+      measure([beat('4')], { repeatStart: true }),
+      measure([beat('4')], { repeatEnd: 3 }),
+    ];
+    expect(bars.map((_, i) => repeatSectionAt(bars, i))).toEqual([
+      null,
+      { start: 1, end: 3 }, { start: 1, end: 3 }, { start: 1, end: 3 },
+      null,
+      { start: 5, end: null }, { start: 5, end: null },
+      { start: 7, end: 8 }, { start: 7, end: 8 },
+    ]);
   });
 });
 

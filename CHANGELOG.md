@@ -31,9 +31,16 @@ still change the song format or the API; from `1.0.0` on, only a major release w
 - D deletes the same way Delete does: the note under the cursor, a rest beat, or the selection.
 - Clicking a clef or a time signature in the score opens the Measure menu on that bar, where both
   are set. A clef takes the click anywhere in a box a little larger than it, not just on its ink.
+- The score shows every repeat's play count, ×2 included, and clicking it edits it right there,
+  like a tempo mark. Clicking a repeat sign opens the Measure menu on its bar.
+- A repeat with no end is marked "no end" in the score, and the Measure menu warns about it.
+- The Measure menu shows the play count of the repeated section the cursor is in, from any bar of
+  it, not only from the bar that ends it.
 
 ### Changed
 
+- Repeats belong to each part instead of the whole song, so one instrument can repeat while
+  another plays on. Songs saved before keep their repeats on the first track only.
 - Vibrato is a wavy line over the note, in the notation and above the TAB, and a bend is an arrow
   rising from the fret number instead of a `~` or `b` after the fret.
 - Secondary text has more contrast in both themes, and every control shows a ring when it has

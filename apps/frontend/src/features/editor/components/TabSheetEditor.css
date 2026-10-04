@@ -196,15 +196,16 @@
   font-weight: 700;
 }
 
-/* The tempo mark, the clefs and the time signatures are the score's editable
-   marks, so they are the ones that react to a pointer. A clef is thin strokes,
-   so an invisible box a little larger than it takes the click. */
-.tempo-mark,
+/* The tempo mark, the play count, the clefs, the time signatures and the
+   repeat signs are the score's editable marks, so they are the ones that react
+   to a pointer. A clef or repeat sign is thin strokes, so an invisible box a
+   little larger than it takes the click. */
+.score-mark,
 .bar-mark {
   cursor: pointer;
 }
 
-.tempo-mark,
+.score-mark,
 .bar-mark :is(text, .glyph-ink) {
   transition: fill var(--t-fast) var(--ease);
 }
@@ -213,15 +214,19 @@
   fill: transparent;
 }
 
-.tempo-mark:hover,
+.score-mark:hover,
 .bar-mark:hover :is(text, .glyph-ink) {
   fill: var(--accent);
 }
 
-/* The in-score tempo box, inside a foreignObject. It borrows the control
-   chrome but keeps the staff's own type so it reads as part of the score.
-   `.music-svg` sets user-select: none, which would make the text unselectable. */
-.tempo-input {
+.bar-mark:hover :is(.bar-line, .bar-line-end) {
+  stroke: var(--accent);
+}
+
+/* The in-score tempo and play-count boxes, inside a foreignObject. They borrow
+   the control chrome but keep the staff's own type so they read as part of the
+   score. `.music-svg` sets user-select: none, which would make the text unselectable. */
+.score-input {
   /* A block, not inline: an inline box sits on a line and its descender room
      pushes it down, past the foreignObject's bottom edge, which clips it. The
      margin keeps the border off that edge too. */

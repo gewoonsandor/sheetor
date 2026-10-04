@@ -50,10 +50,16 @@ export interface MeasureMenuProps {
   staves: Staff[];
   grandStaff: boolean;
   setClef: (staff: Staff, clef: Clef) => void;
+  /** Whether the cursor's bar holds a ‖: and a :‖. */
   repeatStart: boolean;
+  repeatEnd: boolean;
   toggleRepeatStart: () => void;
-  activeRepeat: number | undefined;
-  setRepeatEnd: (times: number | null) => void;
+  toggleRepeatEnd: () => void;
+  /** The repeated section the cursor's bar is in, if any: `end` null is a ‖: nothing closes. */
+  repeatSection: { start: number; end: number | null } | null;
+  /** How many times that section plays, when a :‖ closes it. */
+  repeatPlays: number | undefined;
+  setRepeatPlays: (times: number) => void;
   addMeasure: () => void;
   insertMeasureAfterActive: () => void;
   duplicateActiveMeasure: () => void;
@@ -231,7 +237,8 @@ const SongMenu = ({
 
 const MeasureMenu = ({
   open, onToggle, activeMeasureIndex, activeMeasureTimeSignature, setActiveMeasureTimeSignature,
-  showNotation, staves, grandStaff, setClef, repeatStart, toggleRepeatStart, activeRepeat, setRepeatEnd,
+  showNotation, staves, grandStaff, setClef, repeatStart, repeatEnd, toggleRepeatStart, toggleRepeatEnd,
+  repeatSection, repeatPlays, setRepeatPlays,
   addMeasure, insertMeasureAfterActive, duplicateActiveMeasure, deleteActiveMeasure,
   activeBeatIndex, insertBeatAfterActive, deleteActiveBeat,
 }: MeasureMenuProps & MenuState) => (
@@ -307,27 +314,33 @@ const MeasureMenu = ({
       <button
         type="button"
         className="btn"
-        aria-pressed={activeRepeat !== undefined}
-        onClick={() => setRepeatEnd(activeRepeat !== undefined ? null : MIN_REPEAT)}
+        aria-pressed={repeatEnd}
+        onClick={toggleRepeatEnd}
         title="End a repeated section at this bar"
       >
         End
       </button>
     </div>
-    {activeRepeat !== undefined && (
-      <div className="control-group" role="group" aria-label="Plays">
-        <span className="eyebrow">Plays</span>
+    {/* Any bar of a section shows that section's play count, wherever the :‖ is. */}
+    {repeatSection?.end != null && repeatPlays !== undefined && (
+      <div className="control-group" role="group" aria-label={`Plays, bars ${repeatSection.start + 1} to ${repeatSection.end + 1}`}>
+        <span className="eyebrow">Plays, bars {repeatSection.start + 1}–{repeatSection.end + 1}</span>
         <Stepper
           decrementLabel="Play the section one time fewer"
           incrementLabel="Play the section one time more"
-          onDecrement={() => setRepeatEnd(activeRepeat - 1)}
-          onIncrement={() => setRepeatEnd(activeRepeat + 1)}
-          canDecrement={activeRepeat > MIN_REPEAT}
-          canIncrement={activeRepeat < MAX_REPEAT}
+          onDecrement={() => setRepeatPlays(repeatPlays - 1)}
+          onIncrement={() => setRepeatPlays(repeatPlays + 1)}
+          canDecrement={repeatPlays > MIN_REPEAT}
+          canIncrement={repeatPlays < MAX_REPEAT}
         >
-          <output className="stepper-value">×{activeRepeat}</output>
+          <output className="stepper-value">×{repeatPlays}</output>
         </Stepper>
       </div>
+    )}
+    {repeatSection && repeatSection.end === null && (
+      <p className="popover-hint is-warning" role="status">
+        The repeat from bar {repeatSection.start + 1} has no end: press End on its last bar.
+      </p>
     )}
     <div className="popover-divider" />
     <button type="button" className="btn" onClick={addMeasure}>Add measure at end</button>

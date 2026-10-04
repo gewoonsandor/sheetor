@@ -387,6 +387,10 @@ kbd {
   line-height: var(--lh);
 }
 
+.popover > .popover-hint.is-warning {
+  color: var(--warn);
+}
+
 .popover-divider {
   height: 1px;
   background: var(--border);

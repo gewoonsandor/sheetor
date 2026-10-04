@@ -44,6 +44,7 @@ import {
   nextBeatPosition,
   orderRange,
   pasteClip,
+  repeatSectionAt,
   removeBeats,
   STAFF_DISPLAYS,
   addBassStaff,
@@ -232,6 +233,9 @@ export const TabSheetEditor: React.FC<TabSheetEditorProps> = ({ meta, channel })
   const [bpmEditIndex, setBpmEditIndex] = useState<number | null>(null);
   // While a tempo box is being typed in, the draft wins; null shows the song.
   const [bpmDraft, setBpmDraft] = useState<string | null>(null);
+  // The bar whose :‖ play count is open for editing in the score, and its text draft.
+  const [repeatEditIndex, setRepeatEditIndex] = useState<number | null>(null);
+  const [repeatDraft, setRepeatDraft] = useState<string>('');
   // The far end of a Shift-selection, by id so a collaborator's edit cannot move it.
   const [anchor, setAnchor] = useState<{ measureId: string; beatId: string } | null>(null);
   const user = useSyncExternalStore(subscribeUser, getUserSnapshot);
@@ -615,20 +619,38 @@ export const TabSheetEditor: React.FC<TabSheetEditorProps> = ({ meta, channel })
     });
   };
 
-  const toggleRepeatStart = () => setConductorMeasure(activeMeasureIndex, measure => {
+  /** Repeats are the part's own, so one instrument can repeat while another plays on; a grand staff's hands share them. */
+  const setPartMeasure = (index: number, patch: (measure: TabMeasure) => TabMeasure) => {
+    const members = handsOf(activeTrackIndex);
+    editSong(prev => ({
+      ...prev,
+      tracks: prev.tracks.map((t, i) => (members.includes(i)
+        ? { ...t, measures: t.measures.map((m, idx) => (idx === index ? patch(m) : m)) }
+        : t)),
+    }));
+  };
+
+  const toggleRepeatStart = () => setPartMeasure(activeMeasureIndex, measure => {
     const next = { ...measure };
     if (next.repeatStart) delete next.repeatStart;
     else next.repeatStart = true;
     return next;
   });
 
-  /** How many times the section ending at the cursor's bar plays; null removes the :‖. */
-  const setRepeatEnd = (times: number | null) => setConductorMeasure(activeMeasureIndex, measure => {
+  /** How many times the section ending at bar `index` plays; null removes the :‖. */
+  const setRepeatEnd = (index: number, times: number | null) => setPartMeasure(index, measure => {
     const next = { ...measure };
     delete next.repeatEnd;
-    if (times !== null) next.repeatEnd = Math.max(MIN_REPEAT, Math.min(MAX_REPEAT, times));
+    if (times !== null) next.repeatEnd = Math.max(MIN_REPEAT, Math.min(MAX_REPEAT, Math.round(times)));
     return next;
   });
+
+  /** The score's play-count box: a number commits, clamped like the menu's; blank or junk reverts. */
+  const commitRepeatDraft = (index: number) => {
+    const parsed = Number(repeatDraft.trim() || NaN);
+    if (Number.isFinite(parsed)) setRepeatEnd(index, parsed);
+    setRepeatEditIndex(null);
+  };
 
   /**
    * A staff's clef from the cursor's bar on. Bar 1 sets the track's own clef; a later bar
@@ -1341,9 +1363,13 @@ export const TabSheetEditor: React.FC<TabSheetEditorProps> = ({ meta, channel })
   const ROW_HEIGHT = computeRowHeight(stringCount, showTab, showNotation, grandStaff);
   const tabTop = getTabStaffTop(showNotation);
 
-  // Tempo, metre and repeat marks are song-wide, so they are read off the conductor; a tempo
-  // or metre that restates the one before is no change and is not marked.
-  const conductorMeasures = conductorChanges(song);
+  // Tempo and metre are song-wide, so they are read off the conductor; a tempo or metre that
+  // restates the one before is no change and is not marked. Repeats are the part's own.
+  const barMarks: TabMeasure[] = conductorChanges(song).map((marks, i) => ({
+    ...marks,
+    repeatStart: part.measures[i]?.repeatStart,
+    repeatEnd: part.measures[i]?.repeatEnd,
+  }));
   // Bars drawn one above another share their spacing, so a grand staff's hands line up in time.
   const aligned = measures.map((_, mIdx) => alignBars(staves.map(staff => barOf(staff, mIdx))));
   // Every row opens with the key signature after the clef; the widest staff's sets the room.
@@ -1354,7 +1380,7 @@ export const TabSheetEditor: React.FC<TabSheetEditorProps> = ({ meta, channel })
     showNotation && mIdx > 0 && staves.some(staff => staff.clefs[mIdx] !== staff.clefs[mIdx - 1]));
   const rowWidth = scoreRowWidth(canvasWidth);
   const measureLayouts: MLayout[] = computeMeasureLayouts(
-    aligned.map(a => a.minWidth), conductorMeasures, keyRoom, clefChanges, rowWidth,
+    aligned.map(a => a.minWidth), barMarks, keyRoom, clefChanges, rowWidth,
   );
 
   // Per-measure shift for notes below the lowest notation staff: pushes the TAB
@@ -1707,7 +1733,7 @@ export const TabSheetEditor: React.FC<TabSheetEditorProps> = ({ meta, channel })
     ? bpmDraft
     : String(activeMeasureBpm);
   const activeMeasureTimeSignature = getEffectiveTimeSignature(song, activeMeasureIndex);
-  const activeRepeat = conductorMeasures[activeMeasureIndex]?.repeatEnd;
+  const repeatSection = repeatSectionAt(part.measures, activeMeasureIndex);
 
   // Piano keyboard geometry & highlighting. A fretted track's keyboard spans
   // what its tuning can reach; a pitched track gets a fixed practical range.
@@ -1782,9 +1808,13 @@ export const TabSheetEditor: React.FC<TabSheetEditorProps> = ({ meta, channel })
     return ys;
   };
 
-  /** ‖: when `side` is 1, :‖ when it is -1 — thick line outside, dots facing the music. */
-  const repeatSign = (x: number, side: 1 | -1, rowY: number, ts: number) => (
-    <g pointerEvents="none">
+  /**
+   * ‖: when `side` is 1, :‖ when it is -1 — thick line outside, dots facing the music. A click
+   * anywhere on it, lines and dots alike, opens the Measure menu on its bar.
+   */
+  const repeatSign = (x: number, side: 1 | -1, rowY: number, ts: number, measureIndex: number) => (
+    <g {...barMarkProps(measureIndex)} pointerEvents={readOnly ? 'none' : undefined}>
+      <rect x={Math.min(x, x + side * 12)} y={rowY + getStaffTop(ts)} width="12" height={getStaffBottom(ts) - getStaffTop(ts)} className="mark-hit" />
       <line x1={x + side * 1.25} y1={rowY + getStaffTop(ts)} x2={x + side * 1.25} y2={rowY + getStaffBottom(ts)} className="bar-line-end" />
       <line x1={x + side * 5} y1={rowY + getStaffTop(ts)} x2={x + side * 5} y2={rowY + getStaffBottom(ts)} className="bar-line" />
       {repeatDotYs(ts).map(y => (
@@ -1967,7 +1997,7 @@ export const TabSheetEditor: React.FC<TabSheetEditorProps> = ({ meta, channel })
         <svg
           viewBox={`-${SCORE_GUTTER} 0 ${contentWidth + SCORE_GUTTER} ${totalSVGHeight}`}
           className="music-svg"
-          aria-hidden={bpmEditIndex === null ? true : undefined}
+          aria-hidden={bpmEditIndex === null && repeatEditIndex === null ? true : undefined}
         >
           {/* Background Interactivity Catcher */}
           <rect
@@ -1990,7 +2020,7 @@ export const TabSheetEditor: React.FC<TabSheetEditorProps> = ({ meta, channel })
             const ts = getRowShift(mIdx);
             const effectiveTimeSignature = getEffectiveTimeSignature(song, mIdx);
             const effectiveBpm = getEffectiveBpm(song, mIdx);
-            const marks = conductorMeasures[mIdx];
+            const marks = barMarks[mIdx];
             // Each mark shows where it changes something: a new tempo does not restate the metre.
             const showTempo = mIdx === 0 || marks?.bpm !== undefined;
             const showMetre = mIdx === 0 || marks?.timeSignature !== undefined;
@@ -2067,19 +2097,36 @@ export const TabSheetEditor: React.FC<TabSheetEditorProps> = ({ meta, channel })
                   className={isLast ? "bar-line-end" : "bar-line"}
                 />
 
-                {marks?.repeatStart && repeatSign(repeatStartX, 1, rowY, ts)}
-                {marks?.repeatEnd !== undefined && repeatSign(measureEnd, -1, rowY, ts)}
-                {/* A plain repeat plays twice; engravers only write the count beyond that. */}
-                {(marks?.repeatEnd ?? 0) > 2 && (
+                {marks?.repeatStart && repeatSign(repeatStartX, 1, rowY, ts, mIdx)}
+                {marks?.repeatEnd !== undefined && repeatSign(measureEnd, -1, rowY, ts, mIdx)}
+                {marks?.repeatEnd !== undefined && repeatEditIndex !== mIdx && (
                   <text
                     x={measureEnd - 8}
                     y={labelY}
                     textAnchor="end"
-                    className="music-text"
+                    className={readOnly ? 'music-text' : 'music-text score-mark'}
                     fontSize="9"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      if (readOnly) return;
+                      setRepeatDraft(String(marks.repeatEnd));
+                      setRepeatEditIndex(mIdx);
+                    }}
+                  >
+                    <title>Click to set how many times this section plays</title>
+                    ×{marks.repeatEnd}
+                  </text>
+                )}
+                {marks?.repeatStart && repeatSectionAt(part.measures, mIdx)?.end === null && (
+                  <text
+                    className="measure-warning-text"
+                    x={repeatStartX + 12}
+                    y={rowY + 9}
+                    fontSize="7.5"
                     style={{ pointerEvents: 'none' }}
                   >
-                    ×{marks?.repeatEnd}
+                    no end
+                    <title>This repeat has no end: mark its last bar with a :‖, from the Measure menu.</title>
                   </text>
                 )}
 
@@ -2087,7 +2134,7 @@ export const TabSheetEditor: React.FC<TabSheetEditorProps> = ({ meta, channel })
                   <text
                     x={measureX + 18}
                     y={labelY}
-                    className="music-text tempo-mark"
+                    className={readOnly ? 'music-text' : 'music-text score-mark'}
                     fontSize="10"
                     onClick={(e) => {
                       e.stopPropagation();
@@ -3093,14 +3140,14 @@ export const TabSheetEditor: React.FC<TabSheetEditorProps> = ({ meta, channel })
             );
           })}
 
-          {/* The tempo box paints last, so no note, stem or later bar covers it.
+          {/* The tempo and play-count boxes paint last, so no note, stem or later bar covers them.
               An HTML input inside the SVG: foreignObject coordinates are user
-              units, so the box tracks the tempo mark at any zoom without
+              units, so the box tracks its mark at any zoom without
               mapping screen pixels back into the viewBox. */}
           {bpmEditIndex !== null && bpmEditIndex < measures.length && (
             <foreignObject x={getMeasureX(bpmEditIndex) + 13} y={getLabelY(bpmEditIndex) - 14} width="64" height="20">
               <input
-                className="tempo-input"
+                className="score-input"
                 type="text"
                 inputMode="numeric"
                 autoFocus
@@ -3112,6 +3159,25 @@ export const TabSheetEditor: React.FC<TabSheetEditorProps> = ({ meta, channel })
                 onKeyDown={(e) => {
                   if (e.key === 'Enter') e.currentTarget.blur();
                   if (e.key === 'Escape') { setBpmDraft(null); setBpmEditIndex(null); }
+                }}
+              />
+            </foreignObject>
+          )}
+          {repeatEditIndex !== null && repeatEditIndex < measures.length && (
+            <foreignObject x={getMeasureX(repeatEditIndex) + getMeasureWidth(repeatEditIndex) - 42} y={getLabelY(repeatEditIndex) - 14} width="36" height="20">
+              <input
+                className="score-input"
+                type="text"
+                inputMode="numeric"
+                autoFocus
+                aria-label={`Times the section ending at bar ${repeatEditIndex + 1} plays`}
+                value={repeatDraft}
+                onChange={(e) => setRepeatDraft(e.target.value)}
+                onFocus={(e) => e.target.select()}
+                onBlur={() => commitRepeatDraft(repeatEditIndex)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') e.currentTarget.blur();
+                  if (e.key === 'Escape') { setRepeatDraft(''); setRepeatEditIndex(null); }
                 }}
               />
             </foreignObject>
@@ -3173,10 +3239,13 @@ export const TabSheetEditor: React.FC<TabSheetEditorProps> = ({ meta, channel })
           staves,
           grandStaff,
           setClef,
-          repeatStart: !!conductorMeasures[activeMeasureIndex]?.repeatStart,
+          repeatStart: !!part.measures[activeMeasureIndex]?.repeatStart,
+          repeatEnd: part.measures[activeMeasureIndex]?.repeatEnd !== undefined,
           toggleRepeatStart,
-          activeRepeat,
-          setRepeatEnd,
+          toggleRepeatEnd: () => setRepeatEnd(activeMeasureIndex, part.measures[activeMeasureIndex]?.repeatEnd !== undefined ? null : MIN_REPEAT),
+          repeatSection,
+          repeatPlays: repeatSection?.end != null ? part.measures[repeatSection.end]?.repeatEnd : undefined,
+          setRepeatPlays: (times: number) => { if (repeatSection?.end != null) setRepeatEnd(repeatSection.end, times); },
           addMeasure,
           insertMeasureAfterActive,
           duplicateActiveMeasure,

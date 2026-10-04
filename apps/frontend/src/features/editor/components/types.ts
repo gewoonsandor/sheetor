@@ -103,9 +103,9 @@ export interface TabMeasure {
   beats: TabBeat[];
   bpm?: number;
   timeSignature?: TimeSignature;
-  /** Conductor only, like bpm: a ‖: opens a repeated section at this bar. */
+  /** This track's own, so one part can repeat while another plays on: a ‖: opens a repeated section here. */
   repeatStart?: boolean;
-  /** Conductor only: a :‖ closes one here, and how many times the section plays in all. */
+  /** This track's own: a :‖ closes one here, and how many times the section plays in all. */
   repeatEnd?: number;
   /** This track's own: its staff switches to this clef here, until the next change. */
   clef?: Clef;

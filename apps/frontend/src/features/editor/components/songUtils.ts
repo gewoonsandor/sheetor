@@ -718,35 +718,52 @@ export const beatRuns = (measures: TabMeasure[], marked: (beat: TabBeat) => bool
 
 /**
  * The bar a :‖ at `endIndex` sends playback back to: its ‖:, or without one
- * the bar after the previous :‖, or else the start of the song.
+ * the bar after the previous :‖, or else the start of the song. Repeats are
+ * each track's own, so `measures` is the track that holds them.
  */
-export const repeatStartFor = (conductor: TabMeasure[], endIndex: number): number => {
+export const repeatStartFor = (measures: TabMeasure[], endIndex: number): number => {
   for (let m = endIndex; m > 0; m--) {
-    if (conductor[m]?.repeatStart || conductor[m - 1]?.repeatEnd) return m;
+    if (measures[m]?.repeatStart || measures[m - 1]?.repeatEnd) return m;
   }
   return 0;
 };
 
 /**
- * The next beat to play, honouring the conductor's repeat marks. `passes`
+ * The repeated section bar `index` plays in: from the bar playback returns to
+ * up to the :‖ that closes it, or with `end` null a ‖: that no :‖ closes before
+ * the next ‖:, which plays once. Null when the bar is in no section.
+ */
+export const repeatSectionAt = (measures: TabMeasure[], index: number): { start: number; end: number | null } | null => {
+  for (let e = index; e < measures.length; e++) {
+    if (e > index && measures[e]?.repeatStart) break;
+    if (measures[e]?.repeatEnd) return { start: repeatStartFor(measures, e), end: e };
+  }
+  for (let m = index; m >= 0; m--) {
+    if (m < index && measures[m]?.repeatEnd) return null;
+    if (measures[m]?.repeatStart) return { start: m, end: null };
+  }
+  return null;
+};
+
+/**
+ * The next beat to play, honouring the track's own repeat marks. `passes`
  * counts how often each :‖ has been reached and is updated in place; a
  * finished repeat forgets its count, so a looped song plays it in full again.
  */
 export const nextPlayPosition = (
   measures: TabMeasure[],
-  conductor: TabMeasure[],
   from: BeatPosition,
   loop: boolean,
   passes: Map<number, number>,
 ): BeatPosition | null => {
   const bar = from.measureIndex;
   const leavingBar = from.beatIndex + 1 >= (measures[bar]?.beats.length ?? 0);
-  const times = conductor[bar]?.repeatEnd ?? 1;
+  const times = measures[bar]?.repeatEnd ?? 1;
   if (leavingBar && times > 1) {
     const played = passes.get(bar) ?? 1;
     if (played < times) {
       passes.set(bar, played + 1);
-      return { measureIndex: repeatStartFor(conductor, bar), beatIndex: 0 };
+      return { measureIndex: repeatStartFor(measures, bar), beatIndex: 0 };
     }
     passes.delete(bar);
   }
