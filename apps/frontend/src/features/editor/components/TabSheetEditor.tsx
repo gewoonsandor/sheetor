@@ -3092,7 +3092,7 @@ export const TabSheetEditor: React.FC<TabSheetEditorProps> = ({ meta, channel })
               units, so the box tracks the tempo mark at any zoom without
               mapping screen pixels back into the viewBox. */}
           {bpmEditIndex !== null && bpmEditIndex < measures.length && (
-            <foreignObject x={getMeasureX(bpmEditIndex) + 14} y={getLabelY(bpmEditIndex) - 13} width="62" height="18">
+            <foreignObject x={getMeasureX(bpmEditIndex) + 13} y={getLabelY(bpmEditIndex) - 14} width="64" height="20">
               <input
                 className="tempo-input"
                 type="text"

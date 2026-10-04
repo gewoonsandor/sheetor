@@ -211,8 +211,13 @@
    chrome but keeps the staff's own type so it reads as part of the score.
    `.music-svg` sets user-select: none, which would make the text unselectable. */
 .tempo-input {
-  width: 100%;
-  height: 100%;
+  /* A block, not inline: an inline box sits on a line and its descender room
+     pushes it down, past the foreignObject's bottom edge, which clips it. The
+     margin keeps the border off that edge too. */
+  display: block;
+  width: calc(100% - 2px);
+  height: calc(100% - 2px);
+  margin: 1px;
   padding: 0 var(--sp-hair);
   background: var(--surface-2);
   border: 1px solid var(--accent);
