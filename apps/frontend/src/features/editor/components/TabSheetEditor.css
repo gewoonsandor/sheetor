@@ -196,14 +196,25 @@
   font-weight: 700;
 }
 
-/* The tempo mark is the only score text you can edit, so it is the only one
-   that reacts to a pointer. */
-.tempo-mark {
+/* The tempo mark, the clefs and the time signatures are the score's editable
+   marks, so they are the ones that react to a pointer. A clef is thin strokes:
+   its whole box takes the click, not just the ink. */
+.tempo-mark,
+.bar-mark {
   cursor: pointer;
+}
+
+.tempo-mark,
+.bar-mark > * {
   transition: fill var(--t-fast) var(--ease);
 }
 
-.tempo-mark:hover {
+.bar-mark > * {
+  pointer-events: bounding-box;
+}
+
+.tempo-mark:hover,
+.bar-mark:hover > * {
   fill: var(--accent);
 }
 

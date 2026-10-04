@@ -968,6 +968,16 @@ export const TabSheetEditor: React.FC<TabSheetEditorProps> = ({ meta, channel })
     setActiveBeatIndex(beatIndex);
   };
 
+  /** A clef or metre in the score opens the Measure menu on its bar, where both are set. */
+  const barMarkProps = (measureIndex: number) => (readOnly ? {} : {
+    className: 'bar-mark',
+    onClick: (e: React.MouseEvent) => {
+      e.stopPropagation();
+      moveCursorTo(measureIndex, 0, false);
+      setOpenMenu('measure');
+    },
+  });
+
   /** Copies the selection, or just the cursor's beat when nothing is selected. */
   const copySelection = () => {
     setClip(copyBeats(activeTrack, selectionFrom, selectionTo));
@@ -2120,7 +2130,7 @@ export const TabSheetEditor: React.FC<TabSheetEditorProps> = ({ meta, channel })
                 {/* Clef, TAB, tuning labels (rendered on the first measure of every row) */}
                 {(measureLayouts[mIdx]?.x === 0) && (
                   <g transform={`translate(${measureX}, ${rowY})`}>
-                    {showNotation && staves.map(staff => {
+                    {showNotation && <g {...barMarkProps(mIdx)}>{staves.map(staff => {
                       const clef = clefAt(staff, mIdx);
                       return (
                         <path
@@ -2131,7 +2141,7 @@ export const TabSheetEditor: React.FC<TabSheetEditorProps> = ({ meta, channel })
                           className="glyph-ink"
                         />
                       );
-                    })}
+                    })}</g>}
                     {grandStaff && <path d={GRAND_BRACE_PATH} className="glyph-ink" />}
 
                     {/* Key signature, on every staff of the row */}
@@ -2170,7 +2180,7 @@ export const TabSheetEditor: React.FC<TabSheetEditorProps> = ({ meta, channel })
 
                     {/* Time Signature (first-of-row measures) */}
                     {showMetre && (
-                      <g>
+                      <g {...barMarkProps(mIdx)}>
                         {showNotation && staves.map(staff => (
                           <React.Fragment key={staff.top}>
                             <text x={50 + keyRoom} y={staff.top + 25} className="music-text" fontSize="16" textAnchor="middle">{effectiveTimeSignature.numerator}</text>
@@ -2193,7 +2203,7 @@ export const TabSheetEditor: React.FC<TabSheetEditorProps> = ({ meta, channel })
                     hand's too, and the key after it: smaller clefs, kept on the line each names. */}
                 {clefChange && (
                   <g transform={`translate(${measureX}, ${rowY})`} pointerEvents="none">
-                    {staves.map(staff => {
+                    <g {...barMarkProps(mIdx)} pointerEvents="visiblePainted">{staves.map(staff => {
                       const clef = clefAt(staff, mIdx);
                       return (
                         <path
@@ -2204,14 +2214,14 @@ export const TabSheetEditor: React.FC<TabSheetEditorProps> = ({ meta, channel })
                           className="glyph-ink"
                         />
                       );
-                    })}
+                    })}</g>
                     {staves.flatMap(staff => keySignatureGlyphs(staff, mIdx, CLEF_CHANGE_ROOM + 6))}
                   </g>
                 )}
 
                 {/* Big Time Signature for metre changes (non-first-of-row measures) */}
                 {showMetre && mIdx > 0 && measureLayouts[mIdx]?.x !== 0 && (
-                  <g>
+                  <g {...barMarkProps(mIdx)}>
                     {showNotation && staves.map(staff => (
                       <React.Fragment key={staff.top}>
                         <text x={timeSignatureX} y={rowY + staff.top + 25} className="music-text" fontSize="16" textAnchor="middle">{effectiveTimeSignature.numerator}</text>
