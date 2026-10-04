@@ -104,7 +104,8 @@ still change the song format or the API; from `1.0.0` on, only a major release w
   fields around it, instead of a line of menu text.
 - Both tempo fields show their whole focus ring: the transport's no longer runs under its − and +
   buttons, and the box that opens on a tempo mark in the score is drawn over the notes and bars
-  around it.
+  around it, keeps clear of the top of the score, and sits on the mark's line instead of dropping
+  below it.
 
 ## [1.0.0] - 2026-10-01
 

@@ -1478,8 +1478,9 @@ export const TabSheetEditor: React.FC<TabSheetEditorProps> = ({ meta, channel })
     }
     const labelY = Math.min(rowLabelY[r] ?? -6, inkTop - 4);
     rowLabelY[r] = labelY;
-    // The label's cap height is about 10 units above its baseline.
-    rowHighExtra[r] = Math.max(0, 10 - labelY - STEM_TOP_PAD);
+    // The tempo box that replaces a mark reaches 13 units above the baseline,
+    // past the label's cap height; one more keeps its border inside the score.
+    rowHighExtra[r] = Math.max(0, 14 - labelY - STEM_TOP_PAD);
   });
 
   // Row Y cumulative offset (base row height + extra spacing)
@@ -3091,7 +3092,7 @@ export const TabSheetEditor: React.FC<TabSheetEditorProps> = ({ meta, channel })
               units, so the box tracks the tempo mark at any zoom without
               mapping screen pixels back into the viewBox. */}
           {bpmEditIndex !== null && bpmEditIndex < measures.length && (
-            <foreignObject x={getMeasureX(bpmEditIndex) + 14} y={getLabelY(bpmEditIndex) - 12} width="62" height="18">
+            <foreignObject x={getMeasureX(bpmEditIndex) + 14} y={getLabelY(bpmEditIndex) - 13} width="62" height="18">
               <input
                 className="tempo-input"
                 type="text"
