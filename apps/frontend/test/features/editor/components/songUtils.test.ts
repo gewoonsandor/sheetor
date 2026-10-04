@@ -518,11 +518,15 @@ describe('switching a track instrument', () => {
     expect(notesOf(retuneTrack(guitar, 'piano'))).toEqual([{ midi: 67 }]);
   });
 
-  it('carries technique flags and bends across the boundary and leaves no stale shape', () => {
-    const guitar = withNotes(createTrack('guitar'), [{ stringIndex: 0, fret: 3, vibrato: true, bend: 1, bendRelease: true }]);
+  it('carries the techniques a pitched part can play across the boundary, and drops the string-only ones', () => {
+    const guitar = withNotes(createTrack('guitar'), [
+      { stringIndex: 0, fret: 3, vibrato: true, letRing: true, palmMute: true, bend: 1, bendRelease: true, slideOut: 'down' },
+    ]);
     const [note] = notesOf(retuneTrack(guitar, 'piano'));
-    expect(note).toEqual({ midi: 67, vibrato: true, bend: 1, bendRelease: true });
+    expect(note).toEqual({ midi: 67, vibrato: true, letRing: true });
     expect(isFrettedNote(note)).toBe(false);
+    const [back] = notesOf(retuneTrack(withNotes(createTrack('piano'), [note]), 'guitar'));
+    expect(back).toMatchObject({ vibrato: true, letRing: true });
   });
 
   it('clamps a pitch no string can reach instead of losing the note', () => {

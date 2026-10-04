@@ -1,7 +1,7 @@
 import type { MouseEvent } from 'react';
 
 import { DurationPicker } from './DurationPicker';
-import { BEND_LABELS, techniqueBlocked } from './songUtils';
+import { BEND_LABELS, STRING_TECHNIQUES, techniqueBlocked } from './songUtils';
 import type { Duration, NoteTechniques, TabNote, Tuplet } from './types';
 import { TECHNIQUE_LABELS, TECHNIQUE_SHORTCUTS } from '../shortcuts';
 import type { TechniqueId } from '../shortcuts';
@@ -26,6 +26,8 @@ const kindOf = (technique: TechniqueId, note: TabNote | undefined): string | und
 const keepFocus = (e: MouseEvent) => e.preventDefault();
 
 interface NoteToolbarProps {
+  /** A fretted track; any other leaves out what only a string can do. */
+  fretted: boolean;
   duration: Duration;
   dotted: boolean;
   tuplet: Tuplet | undefined;
@@ -47,7 +49,7 @@ interface NoteToolbarProps {
 
 /** Everything that writes the beat under the cursor, always in view above the score. */
 export const NoteToolbar = ({
-  duration, dotted, tuplet, onDuration, onToggleDot, onCycleTuplet, isRest, toggleActiveBeatRest, activeNote, beatNotes,
+  fretted, duration, dotted, tuplet, onDuration, onToggleDot, onCycleTuplet, isRest, toggleActiveBeatRest, activeNote, beatNotes,
   toggleNoteTechnique, clearBeat, midiInput, midiAvailable, toggleMidiInput, midiStatus,
 }: NoteToolbarProps) => (
   <div className="note-toolbar card" role="toolbar" aria-label="Note">
@@ -70,7 +72,7 @@ export const NoteToolbar = ({
       Rest
     </button>
     <div className="toolbar-divider" />
-    {TECHNIQUES.map(([technique, glyph]) => {
+    {TECHNIQUES.filter(([technique]) => fretted || !STRING_TECHNIQUES[technique]).map(([technique, glyph]) => {
       const label = `${TECHNIQUE_LABELS[technique]} (${TECHNIQUE_SHORTCUTS[technique]})`;
       const kind = kindOf(technique, activeNote);
       return [

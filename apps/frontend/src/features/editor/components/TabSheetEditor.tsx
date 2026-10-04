@@ -47,6 +47,7 @@ import {
   repeatSectionAt,
   removeBeats,
   STAFF_DISPLAYS,
+  STRING_TECHNIQUES,
   addBassStaff,
   grandStaffOf,
   beatAt,
@@ -798,8 +799,12 @@ export const TabSheetEditor: React.FC<TabSheetEditorProps> = ({ meta, channel })
     playback.playTone(targetMidi);
   };
 
-  /** Turns a technique on or off on the cursor note; bends and slides step through their kinds instead. One that conflicts with a set technique stays off. */
+  /**
+   * Turns a technique on or off on the cursor note; bends and slides step through their kinds instead. One that
+   * conflicts with a set technique stays off, and so does a string-only one on a pitched track, keys included.
+   */
   const toggleNoteTechnique = (technique: keyof NoteTechniques) => {
+    if (!isFrettedTrack && STRING_TECHNIQUES[technique]) return;
     updateActiveBeatNotes(currentNotes => {
       const idx = cursorNoteIndex(currentNotes);
       if (idx === -1 || techniqueBlocked(currentNotes, currentNotes[idx], technique)) return currentNotes;
@@ -1409,10 +1414,11 @@ export const TabSheetEditor: React.FC<TabSheetEditorProps> = ({ meta, channel })
 
   // Palm mute and let ring runs, split per row, each line just clear of the highest mark under
   // it. The beat before in the same bar counts too: its vibrato and bend label reach under the
-  // run's label. Nothing reaches across a bar line, whose padding keeps them apart.
+  // run's label. Nothing reaches across a bar line, whose padding keeps them apart. With the TAB
+  // hidden they sit under the lowest notation staff instead, and `height` goes unused.
   const rowOf = (at: BeatPosition): number | undefined => measureLayouts[at.measureIndex]?.row;
   const notesAt = (at: BeatPosition): TabNote[] => measures[at.measureIndex]?.beats[at.beatIndex]?.notes ?? [];
-  const runPieces = !showTab ? [] : RUN_MARKS.flatMap(({ technique, label, dashFrom }) =>
+  const runPieces = RUN_MARKS.flatMap(({ technique, label, dashFrom }) =>
     beatRuns(measures, b => !b.isRest && b.notes.some(n => n[technique])).flatMap(run => {
       const pieces: BeatPosition[][] = [];
       for (const at of run) {
@@ -1961,6 +1967,7 @@ export const TabSheetEditor: React.FC<TabSheetEditorProps> = ({ meta, channel })
 
       {!readOnly && (
         <NoteToolbar
+          fretted={isFrettedTrack}
           duration={activeBeat?.duration ?? durationSelect}
           dotted={activeBeat ? !!activeBeat.dot : dotSelect}
           tuplet={activeBeat?.tuplet}
@@ -3114,11 +3121,13 @@ export const TabSheetEditor: React.FC<TabSheetEditorProps> = ({ meta, channel })
           }))}
 
           {/* Palm mute and let ring: the label over a lone note; a run of them opens with the label, then a
-              dashed line to a bar halfway between its last note and the next. A run that wraps restates it on each row. */}
+              dashed line to a bar halfway between its last note and the next. A run that wraps restates it on each row.
+              Without a TAB they go under the lowest staff, below its down stems and, through the row shift, its low notes. */}
           {runPieces.map(({ technique, label, dashFrom, piece, line, closes, height }) => {
             const first = piece[0];
             const last = piece[piece.length - 1];
-            const y = getRowY(first.measureIndex) + tabTop + getRowShift(first.measureIndex) - height;
+            const y = getRowY(first.measureIndex) + getRowShift(first.measureIndex)
+              + (showTab ? tabTop - height : lowestStaff.top + 70);
             const x = getBeatCoordinates(first.measureIndex, first.beatIndex);
             const lastX = getBeatCoordinates(last.measureIndex, last.beatIndex);
             const barEnd = getMeasureX(last.measureIndex) + getMeasureWidth(last.measureIndex);

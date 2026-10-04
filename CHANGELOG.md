@@ -41,6 +41,9 @@ still change the song format or the API; from `1.0.0` on, only a major release w
 
 - Repeats belong to each part instead of the whole song, so one instrument can repeat while
   another plays on. Songs saved before keep their repeats on the first track only.
+- A track that is not a guitar or bass leaves out what only a string can do: harmonics, palm
+  mute, bends and slides are gone from its note toolbar and their keys do nothing, and a guitar
+  part turned into another instrument drops them.
 - Vibrato is a wavy line over the note, in the notation and above the TAB, and a bend is an arrow
   rising from the fret number instead of a `~` or `b` after the fret.
 - Secondary text has more contrast in both themes, and every control shows a ring when it has
@@ -115,6 +118,7 @@ still change the song format or the API; from `1.0.0` on, only a major release w
   buttons, and the box that opens on a tempo mark in the score is drawn over the notes and bars
   around it, keeps clear of the top of the score, and sits on the mark's line instead of dropping
   below it.
+- Palm mute and let ring show on a staff without a TAB, under the notes, instead of nowhere.
 
 ## [1.0.0] - 2026-10-01
 

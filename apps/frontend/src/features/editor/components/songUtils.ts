@@ -95,6 +95,11 @@ export const BEND_LABELS: Record<BendAmount, string> = { 1: '½', 2: 'full' };
 
 type Technique = keyof NoteTechniques;
 
+/** What only a string under a fret can do: a pitched part neither offers these nor keeps them. */
+export const STRING_TECHNIQUES: Partial<Record<Technique, true>> = {
+  harmonic: true, palmMute: true, bend: true, bendRelease: true, legatoSlide: true, slideIn: true, slideOut: true,
+};
+
 /** Techniques one note cannot carry together: a dead note has no pitch, and a note comes from the one before by one route. */
 const NOTE_CONFLICTS: Partial<Record<Technique, Technique[]>> = {
   ghostNote: ['harmonic', 'bend', 'vibrato'],
@@ -555,11 +560,11 @@ export const retuneTrack = (track: TabTrack, instrument: InstrumentId): Partial<
 const convertNote = (note: TabNote, track: TabTrack, tuning?: number[]): TabNote[] => {
   const midi = resolveNoteMidi(note, track);
   if (midi === undefined) return [];
-  return [{ ...techniquesOf(note), ...(tuning ? placeMidiOnStrings(midi, tuning) : { midi }) }];
+  return [{ ...techniquesOf(note, !!tuning), ...(tuning ? placeMidiOnStrings(midi, tuning) : { midi }) }];
 };
 
-/** The technique flags, the bend and the slides only — the two note shapes share nothing else. */
-const techniquesOf = (note: TabNote): NoteTechniques => {
+/** The technique flags, the bend and the slides only — the two note shapes share nothing else. Off strings, the string-only ones go. */
+const techniquesOf = (note: TabNote, fretted: boolean): NoteTechniques => {
   const flags: NoteTechniques = {};
   for (const key of TECHNIQUE_KEYS) {
     if (note[key]) flags[key] = true;
@@ -568,6 +573,7 @@ const techniquesOf = (note: TabNote): NoteTechniques => {
   if (note.bend && note.bendRelease) flags.bendRelease = true;
   if (note.slideIn) flags.slideIn = note.slideIn;
   if (note.slideOut) flags.slideOut = note.slideOut;
+  if (!fretted) for (const key of Object.keys(STRING_TECHNIQUES) as Technique[]) delete flags[key];
   return flags;
 };
 
@@ -846,8 +852,8 @@ const revoice = (note: TabNote, tuning: number[] | undefined, target: TabTrack):
   if (midi === undefined) return [];
   // ponytail: each note is placed on its own, so two notes of a chord can land on one string.
   return [fretted
-    ? { ...techniquesOf(note), ...placeMidiOnStrings(midi, target.tuning ?? []) }
-    : { ...techniquesOf(note), midi }];
+    ? { ...techniquesOf(note, true), ...placeMidiOnStrings(midi, target.tuning ?? []) }
+    : { ...techniquesOf(note, false), midi }];
 };
 
 /**
