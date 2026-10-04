@@ -11,7 +11,6 @@ import {
   barTicks,
   beatTicks,
   nextTuplet,
-  nextAccent,
   tupletGroups,
   computeBeamGroups,
   createTrack,
@@ -882,12 +881,11 @@ export const TabSheetEditor: React.FC<TabSheetEditorProps> = ({ meta, channel })
     });
   };
 
-  /** A steps the cursor beat through an accent and a marcato to neither. */
-  const cycleAccentForActiveBeat = () => {
+  /** Puts an accent or a marcato on the cursor beat, in place of the other; the one already there comes off. */
+  const toggleAccent = (kind: Accent) => {
     updateActiveBeat(b => {
       const { accent, ...rest } = b;
-      const next = nextAccent(accent);
-      return next ? { ...rest, accent: next } : rest;
+      return accent === kind ? rest : { ...rest, accent: kind };
     });
   };
 
@@ -1359,10 +1357,11 @@ export const TabSheetEditor: React.FC<TabSheetEditorProps> = ({ meta, channel })
         cycleTupletForActiveBeat();
         break;
 
+      // A an accent, Shift+A a marcato.
       case 'a':
       case 'A':
         e.preventDefault();
-        cycleAccentForActiveBeat();
+        toggleAccent(e.shiftKey ? 'marcato' : 'accent');
         break;
 
       // Plus / Equals / Minus to change duration (increase/decrease)
@@ -2073,7 +2072,7 @@ export const TabSheetEditor: React.FC<TabSheetEditorProps> = ({ meta, channel })
           hairpin={activeBeat?.hairpin}
           toggleHairpin={toggleHairpin}
           accent={activeBeat?.accent}
-          onCycleAccent={cycleAccentForActiveBeat}
+          toggleAccent={toggleAccent}
           midiInput={midiInput}
           midiAvailable={midiSupported()}
           toggleMidiInput={() => setMidiInput(prev => !prev)}

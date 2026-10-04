@@ -183,10 +183,6 @@ export const beatSeconds = (beat: Pick<TabBeat, 'duration' | 'dot' | 'tuplet'>, 
 export const nextTuplet = (tuplet: Tuplet | undefined): Tuplet | undefined =>
   tuplet === undefined ? 3 : tuplet === 3 ? 6 : undefined;
 
-/** A steps a beat through an accent and a marcato to neither. */
-export const nextAccent = (accent: Accent | undefined): Accent | undefined =>
-  accent === undefined ? 'accent' : accent === 'accent' ? 'marcato' : undefined;
-
 /**
  * The beats each tuplet number is drawn over: a run of beats with the same count,
  * closed once it holds as many notes as the count, at the first one's length.
