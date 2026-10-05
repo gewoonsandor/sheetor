@@ -7,6 +7,8 @@ still change the song format or the API; from `1.0.0` on, only a major release w
 
 ## [Unreleased]
 
+## [1.1.0] - 2026-10-05
+
 ### Added
 
 - Your theme and colour style are saved to your account and follow you to every browser you sign
