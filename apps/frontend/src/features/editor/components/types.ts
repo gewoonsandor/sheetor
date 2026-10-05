@@ -163,6 +163,8 @@ export interface TabSong {
   timeSignature: TimeSignature;
   /** Track 0 is the conductor: its measure bpm/time-signature overrides win. */
   tracks: TabTrack[];
+  /** `SONG_FORMAT` once read by this version; 1.0.0 songs have none and get converted. */
+  format: number;
 }
 
 export interface BeamGroup {

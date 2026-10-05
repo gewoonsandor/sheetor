@@ -597,12 +597,19 @@ export const normalizeTrackLengths = (tracks: TabTrack[]): TabTrack[] => {
   });
 };
 
+/**
+ * Bumped when stored songs mean something new. 2: repeats are each part's own,
+ * where 1.0.0 (no marker) kept them on track 0 for every part.
+ */
+export const SONG_FORMAT = 2;
+
 export const createEmptySong = (): TabSong => ({
   title: 'New Sketch',
   artist: 'Unknown Artist',
   bpm: 120,
   timeSignature: { numerator: 4, denominator: 4 },
   tracks: [createTrack('guitar', 1)],
+  format: SONG_FORMAT,
 });
 
 // Measure-level bpm / time signature overrides carry forward until the next

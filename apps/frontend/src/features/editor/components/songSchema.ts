@@ -4,7 +4,7 @@ import type {
 } from './types';
 import {
   ACCENTS, DEFAULT_TRANSPOSE, DURATIONS, DYNAMICS, HAIRPINS, MAX_BPM, MAX_FRET, MAX_KEY_ACCIDENTALS, MAX_REPEAT, MAX_STRINGS, MIN_BPM, MIN_REPEAT,
-  STAFF_DISPLAYS,
+  SONG_FORMAT, STAFF_DISPLAYS,
   TECHNIQUE_KEYS,
   createId, createTrack, defaultTuning, normalizeTrackLengths, pruneNotesToStringCount, requiredStringCount,
   resizeTuning, trackKind,
@@ -274,6 +274,20 @@ export const parseSong = (value: unknown): ParseSongResult => {
     }];
   }
 
+  tracks = normalizeTrackLengths(tracks);
+  // Before format 2 every part played track 0's repeats: give each part its own copy.
+  if (value.format !== SONG_FORMAT) {
+    const conductor = tracks[0].measures;
+    tracks = tracks.map(track => ({
+      ...track,
+      measures: track.measures.map((measure, m) => ({
+        ...measure,
+        repeatStart: conductor[m].repeatStart,
+        repeatEnd: conductor[m].repeatEnd,
+      })),
+    }));
+  }
+
   return {
     ok: true,
     song: {
@@ -281,7 +295,8 @@ export const parseSong = (value: unknown): ParseSongResult => {
       artist: typeof artist === 'string' && artist.trim().length > 0 ? artist : 'Unknown Artist',
       bpm,
       timeSignature,
-      tracks: normalizeTrackLengths(tracks),
+      tracks,
+      format: SONG_FORMAT,
     },
   };
 };

@@ -47,6 +47,7 @@ import {
   withNextSlideOut,
   previousNoteOnString,
   techniqueBlocked,
+  SONG_FORMAT,
 } from '../../../../src/features/editor/components/songUtils';
 
 const beat = (duration: TabBeat['duration'], notes: TabBeat['notes'] = [{ stringIndex: 0, fret: 3 }]): TabBeat => ({
@@ -67,6 +68,7 @@ const song = (measures: TabMeasure[], extra: Partial<TabSong> = {}): TabSong => 
   bpm: 120,
   timeSignature: { numerator: 4, denominator: 4 },
   tracks: [{ ...createTrack('guitar'), measures }],
+  format: SONG_FORMAT,
   ...extra,
 });
 

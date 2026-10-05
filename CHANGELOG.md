@@ -46,7 +46,7 @@ still change the song format or the API; from `1.0.0` on, only a major release w
 ### Changed
 
 - Repeats belong to each part instead of the whole song, so one instrument can repeat while
-  another plays on. Songs saved before keep their repeats on the first track only.
+  another plays on. A song saved before still plays its repeats on every part.
 - A track that is not a guitar or bass leaves out what only a string can do: harmonics, palm
   mute, bends and slides are gone from its note toolbar and their keys do nothing, and a guitar
   part turned into another instrument drops them.

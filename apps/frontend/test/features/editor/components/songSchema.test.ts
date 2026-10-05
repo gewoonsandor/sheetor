@@ -83,7 +83,7 @@ describe('parseSong', () => {
     expect(result.ok).toBe(true);
     if (!result.ok) return;
     expect('hacked' in result.song).toBe(false);
-    expect(Object.keys(result.song).sort()).toEqual(['artist', 'bpm', 'timeSignature', 'title', 'tracks']);
+    expect(Object.keys(result.song).sort()).toEqual(['artist', 'bpm', 'format', 'timeSignature', 'title', 'tracks']);
   });
 
   it('repairs a missing artist, ids, and invalid overrides', () => {
@@ -182,6 +182,26 @@ describe('parseSong', () => {
     expect(result.ok).toBe(true);
     if (!result.ok) return;
     expect(result.song.tracks.map(t => t.measures.length)).toEqual([2, 2]);
+  });
+
+  it('gives every part track 1\'s repeats once, in a song saved before they were per part', () => {
+    const beats = [{ duration: '1', isRest: true }];
+    const tracks = [
+      { instrument: 'guitar', measures: [{ repeatStart: true, beats }, { repeatEnd: 3, beats }, { beats }] },
+      { instrument: 'piano', measures: [{ beats }, { beats }, { repeatEnd: 2, beats }] },
+    ];
+    const old = parseSong({ title: 'T', bpm: 100, timeSignature: { numerator: 4, denominator: 4 }, tracks });
+    expect(old.ok).toBe(true);
+    if (!old.ok) return;
+    expect(old.song.tracks[1].measures.map(m => [m.repeatStart, m.repeatEnd]))
+      .toEqual([[true, undefined], [undefined, 3], [undefined, undefined]]);
+
+    // Once marked, a part's own repeats are its own.
+    const current = parseSong({ ...old.song, tracks });
+    expect(current.ok).toBe(true);
+    if (!current.ok) return;
+    expect(current.song.tracks[1].measures[2].repeatEnd).toBe(2);
+    expect(current.song.tracks[1].measures[0].repeatStart).toBeUndefined();
   });
 
   it('rejects a pitched note outside the midi range', () => {
