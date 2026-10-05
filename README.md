@@ -1,8 +1,13 @@
-# Sheetor
+<h1 align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="apps/frontend/public/assets/emerald/logo/sheetor-logo-dark.png">
+    <img src="apps/frontend/public/assets/emerald/logo/sheetor-logo.png" alt="Sheetor" width="360">
+  </picture>
+</h1>
 
 **A guitar TAB and sheet-music editor your band can write in together, live.**
 
-![Sheetor editor with notation, TAB and the fretboard](docs/screenshots/editor.png)
+![Sheetor editor: notation and TAB with dynamics, accents, triplets, a bend and a repeat](docs/screenshots/editor.png)
 
 Sheetor puts standard notation and guitar TAB on one score, plays it back in the browser, and
 keeps every song on your own server. Share a folder with your bandmates and you are all in the
@@ -42,10 +47,15 @@ and you can see where each person is working.
 
 ## Screenshots
 
-**Two people in one song.** Ben's view while Ada works in bar 2: her cursor and her chip in the
+**Two people in one song.** Ben's view while Ada works in bar 1: her cursor and her chip in the
 header update as she moves.
 
 ![Ben's editor showing Ada's cursor and presence chip](docs/screenshots/collaboration.png)
+
+**Piano on a grand staff**, in the paper score view: each hand has its own rhythm, and dynamics
+and hairpins sit under the staff. The keyboard shows the hand you are writing in.
+
+![A piano part on a grand staff with dynamics, in the paper score view](docs/screenshots/piano.png)
 
 **Shared with me.** Folders other people shared with you get their own shelf, labelled with the
 owner and your role.
@@ -269,4 +279,4 @@ a good idea for a project.
 
 ## License
 
-[MIT](LICENSE) © 2Cartesian coordinates of the shader’s026 Sandor van Wieringen
+[MIT](LICENSE) © 2026 Sandor van Wieringen
