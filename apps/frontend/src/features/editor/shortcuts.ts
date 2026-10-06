@@ -44,7 +44,7 @@ export const TECHNIQUE_SHORTCUTS: Record<TechniqueId, string> = {
 
 export const TECHNIQUE_LABELS: Record<TechniqueId, string> = {
   slur: 'Slur',
-  tie: 'Tie to the same note before',
+  tie: 'Tie to the same note after',
   legatoSlide: 'Slide in: from the note before, from below, from above, off',
   vibrato: 'Vibrato',
   bend: 'Bend: ½, full, off',

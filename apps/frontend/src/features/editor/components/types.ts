@@ -63,7 +63,7 @@ export interface NoteTechniques {
   ghostNote?: boolean;
   slur?: boolean;       // hammer-on/pull-off (curved bow to previous note on same string)
   legatoSlide?: boolean; // slide (diagonal line to previous note on same string)
-  /** Held on from the same pitch in the beat right before: drawn tied, and not struck again. */
+  /** Held on into the same pitch in the next beat: drawn tied, and that one is not struck again. */
   tie?: boolean;
   /** A slide into the note from nowhere in particular; never with `legatoSlide`. */
   slideIn?: SlideIn;

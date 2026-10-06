@@ -828,12 +828,38 @@ export const TabSheetEditor: React.FC<TabSheetEditorProps> = ({ meta, channel })
    */
   const toggleNoteTechnique = (technique: keyof NoteTechniques) => {
     if (!isFrettedTrack && STRING_TECHNIQUES[technique]) return;
+    if (technique === 'tie') tieOnward();
     updateActiveBeatNotes(currentNotes => {
       const idx = cursorNoteIndex(currentNotes);
       if (idx === -1 || techniqueBlocked(currentNotes, currentNotes[idx], technique)) return currentNotes;
       const cycle = CYCLES[technique];
       return currentNotes.map((n, i) => (i !== idx ? n : cycle ? cycle(n) : { ...n, [technique]: !n[technique] }));
     });
+  };
+
+  /**
+   * Tying a note on, as in MuseScore: with no same note in the next beat, the cursor steps on and writes one
+   * there, which the tie then holds. Runs before the flag itself is toggled on the beat the cursor left.
+   */
+  const tieOnward = () => {
+    const measure = measures[activeMeasureIndex];
+    const notes = measure?.beats[activeBeatIndex]?.notes ?? [];
+    const note = notes[cursorNoteIndex(notes)];
+    if (!measure || !note || note.tie || techniqueBlocked(notes, note, 'tie')) return;
+    // Where advanceCursor lands: the next beat of this bar, one it appends to an unfilled bar, or the next bar's first.
+    const filled = measure.beats.reduce((sum, b) => sum + beatTicks(b), 0);
+    const next = activeBeatIndex < measure.beats.length - 1 || filled < barTicks(getEffectiveTimeSignature(song, activeMeasureIndex))
+      ? { measureIndex: activeMeasureIndex, beatIndex: activeBeatIndex + 1 }
+      : { measureIndex: activeMeasureIndex + 1, beatIndex: 0 };
+    const midi = resolveNoteMidi(note, activeTrack);
+    const beat = measures[next.measureIndex]?.beats[next.beatIndex];
+    if (beat && !beat.isRest && beat.notes.some(n => resolveNoteMidi(n, activeTrack) === midi)) return;
+    const held: TabNote = isFrettedNote(note) ? { stringIndex: note.stringIndex, fret: note.fret } : { midi: note.midi };
+    advanceCursor();
+    updateActiveBeatNotes(current => [
+      ...current.filter(n => resolveNoteMidi(n, activeTrack) !== midi && !(isFrettedNote(n) && isFrettedNote(held) && n.stringIndex === held.stringIndex)),
+      held,
+    ], next);
   };
 
   /** Removes the note under the cursor, whichever kind of track this is. */

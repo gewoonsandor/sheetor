@@ -116,7 +116,7 @@ export const NoteToolbar = ({
             aria-pressed={!!activeNote?.slideOut}
             aria-label={activeNote?.slideOut ? `${SLIDE_OUT_LABEL}: ${activeNote.slideOut}` : SLIDE_OUT_LABEL}
             title={SLIDE_OUT_LABEL}
-            disabled={!activeNote}
+            disabled={!activeNote || techniqueBlocked(beatNotes, activeNote, 'slideOut')}
             onMouseDown={keepFocus}
             onClick={() => toggleNoteTechnique('slideOut')}
           >

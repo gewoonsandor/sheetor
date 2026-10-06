@@ -110,10 +110,12 @@ const NOTE_CONFLICTS: Partial<Record<Technique, Technique[]>> = {
   harmonic: ['ghostNote'],
   bend: ['ghostNote'],
   vibrato: ['ghostNote'],
-  slur: ['legatoSlide', 'slideIn', 'tie'],
-  legatoSlide: ['slur', 'tie'],
-  slideIn: ['slur', 'tie'],
-  tie: ['slur', 'legatoSlide', 'slideIn'],
+  slur: ['legatoSlide', 'slideIn'],
+  legatoSlide: ['slur'],
+  slideIn: ['slur'],
+  // A tie holds the note into the next one, so it cannot also slide out of it.
+  tie: ['slideOut'],
+  slideOut: ['tie'],
 };
 
 /** Palm mute and let ring share one line over the TAB, so they cannot share a beat. */
@@ -919,16 +921,16 @@ export const previousNoteOnString = (
 type PitchedTrack = Pick<TabTrack, 'measures' | 'tuning'>;
 
 /**
- * The note a tied note holds on from: the one sounding the same pitch in the beat
- * right before, across a bar line too. A tie with no such note ties nothing, and plays.
+ * The note `note` is held on from: one of the same sounding pitch in the beat right
+ * before, across a bar line too, that carries a tie. A tie with no same note after it
+ * ties nothing.
  */
 export const tiedFrom = (track: PitchedTrack, at: BeatPosition, note: TabNote): { at: BeatPosition; note: TabNote } | null => {
-  if (!note.tie) return null;
   const prev = beatBefore(track.measures, at);
   const beat = track.measures[prev.measureIndex]?.beats[prev.beatIndex];
   const midi = resolveNoteMidi(note, track);
   const from = beat && !beat.isRest && midi !== undefined
-    ? beat.notes.find(n => resolveNoteMidi(n, track) === midi)
+    ? beat.notes.find(n => n.tie && resolveNoteMidi(n, track) === midi)
     : undefined;
   return from ? { at: prev, note: from } : null;
 };
