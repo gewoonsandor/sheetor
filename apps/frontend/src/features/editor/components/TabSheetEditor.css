@@ -1121,7 +1121,7 @@
 /* The parts to print scroll inside the dialog, one hairline per part. */
 .pdf-parts {
   max-height: min(50dvh, 420px);
-  margin: 0;
+  margin: var(--sp-3) 0 0;
   padding: 0;
   overflow-y: auto;
   list-style: none;
@@ -1186,5 +1186,17 @@
 
   .print-row {
     break-inside: avoid;
+  }
+
+  /* A merged line: one row of every part, kept together and set off from the next. */
+  .print-system {
+    margin-bottom: var(--sp-5);
+    break-inside: avoid;
+  }
+
+  .print-staff-name {
+    margin: var(--sp-2) 0 0;
+    font-size: var(--fs-sm);
+    font-weight: 600;
   }
 }

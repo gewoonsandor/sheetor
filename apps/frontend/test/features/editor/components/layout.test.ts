@@ -49,7 +49,7 @@ describe('scoreRowWidth', () => {
 
 describe('computeMeasureLayouts', () => {
   const widths = Array.from({ length: 10 }, () => alignBars([eighths]).minWidth);
-  const conductor = widths.map((_, i) => ({ id: `m${i}`, beats: [] }));
+  const conductor = widths.map(() => ({ repeatStart: false }));
 
   it('breaks a narrow row into more rows that each end inside it', () => {
     const wide = computeMeasureLayouts(widths, conductor, 0, [], 980);

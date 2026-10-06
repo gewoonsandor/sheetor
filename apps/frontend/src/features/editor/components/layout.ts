@@ -133,7 +133,7 @@ export const CLEF_CHANGE_ROOM = 24;
  */
 export const computeMeasureLayouts = (
   widths: number[],
-  conductor: TabMeasure[],
+  conductor: Pick<TabMeasure, 'timeSignature' | 'repeatStart'>[],
   keyRoom: number = 0,
   clefChanges: boolean[] = [],
   rowWidth: number = MAX_ROW_WIDTH,

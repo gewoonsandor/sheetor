@@ -81,8 +81,8 @@ import { TrackSettings } from './TrackSettings';
 import { ShortcutsDialog } from './ShortcutsDialog';
 import { JsonDialog } from './JsonDialog';
 import { PdfExportDialog, PrintSheet } from './PdfExport';
-import { scoreRows } from '../printScore';
-import type { PrintedPart, PrintPart } from '../printScore';
+import { mergeLayouts, scoreRows } from '../printScore';
+import type { LayoutArgs, PrintArrangement, PrintedPart, PrintPart } from '../printScore';
 import { TECHNIQUE_SHORTCUTS, typeFretDigit } from '../shortcuts';
 import type { FretEntry, TechniqueId } from '../shortcuts';
 import { parseSong } from './songSchema';
@@ -333,7 +333,7 @@ export const TabSheetEditor: React.FC<TabSheetEditorProps> = ({ meta, channel })
   const [showShortcuts, setShowShortcuts] = useState<boolean>(false);
   const [showPdfExport, setShowPdfExport] = useState<boolean>(false);
   // The parts being printed: rendered under <body> for print only, cleared once the print dialog closes.
-  const [printSheet, setPrintSheet] = useState<PrintedPart[] | null>(null);
+  const [printSheet, setPrintSheet] = useState<{ arrangement: PrintArrangement; parts: PrintedPart[] } | null>(null);
   const [openMenu, setOpenMenu] = useState<MenuId | null>(null);
   const toggleMenu = (id: MenuId) => setOpenMenu(prev => (prev === id ? null : id));
   /** A grand staff waiting on "delete the left hand?": the instrument the part becomes. */
@@ -1495,8 +1495,11 @@ export const TabSheetEditor: React.FC<TabSheetEditorProps> = ({ meta, channel })
   const clefChanges = measures.map((_, mIdx) =>
     showNotation && mIdx > 0 && staves.some(staff => staff.clefs[mIdx] !== staff.clefs[mIdx - 1]));
   const rowWidth = printAs ? MAX_ROW_WIDTH : scoreRowWidth(canvasWidth);
+  const ownLayout: LayoutArgs = { widths: aligned.map(a => a.minWidth), marks: barMarks, keyRoom, clefChanges };
+  // A part printed beside others takes the spacing they share, so all break at the same bars.
+  const layoutArgs = printAs?.layout ?? ownLayout;
   const measureLayouts: MLayout[] = computeMeasureLayouts(
-    aligned.map(a => a.minWidth), barMarks, keyRoom, clefChanges, rowWidth,
+    layoutArgs.widths, layoutArgs.marks, layoutArgs.keyRoom, layoutArgs.clefChanges, rowWidth,
   );
 
   // Per-measure shift for notes below the lowest notation staff: pushes the TAB
@@ -1672,8 +1675,11 @@ export const TabSheetEditor: React.FC<TabSheetEditorProps> = ({ meta, channel })
 
   /* The last row needs no headroom for a row that never follows it. */
   const totalSVGHeight = cumY + 10 - STEM_TOP_PAD;
-  // Where each row's band ends: a PDF cuts the score there, so no page splits a row.
-  const rowEnds = rowYOffsets.map((top, r) => Math.min(top + ROW_HEIGHT + (rowExtra[r] || 0), totalSVGHeight));
+  // Where each row's band ends: a PDF cuts the score there, so no page splits a row. A row's band
+  // ends just above the next row's bar numbers and tempo marks, which sit in the room under it.
+  const rowEnds = rowYOffsets.map((_, r) => (r + 1 < rowYOffsets.length
+    ? rowYOffsets[r + 1] + (rowLabelY[r + 1] ?? -6) - 14
+    : totalSVGHeight));
   // A single bar wider than the row scales the score down rather than being cut off.
   const contentWidth = Math.max(rowWidth, ...measureLayouts.map(l => l.x + l.width));
 
@@ -1791,18 +1797,26 @@ export const TabSheetEditor: React.FC<TabSheetEditorProps> = ({ meta, channel })
 
   /**
    * Draws each picked part in turn, as the score would show it at full width, keeps its rows,
-   * then hands the pages to the browser's print dialog, which saves a PDF.
+   * then hands the pages to the browser's print dialog, which saves a PDF. Merged parts are drawn
+   * twice: once for each one's own spacing, then all in the spacing they share, so row i of every
+   * part holds the same bars.
    */
-  const exportPdf = (picked: PrintPart[]) => {
+  const exportPdf = (picked: PrintPart[], arrangement: PrintArrangement) => {
     setShowPdfExport(false);
-    const parts = picked.map(part => {
+    const draw = (part: PrintPart): SVGSVGElement | null => {
       flushSync(() => setPrintAs(part));
-      const svg = containerRef.current?.querySelector<SVGSVGElement>('svg.music-svg');
+      return containerRef.current?.querySelector<SVGSVGElement>('svg.music-svg') ?? null;
+    };
+    const layout = arrangement === 'merged' && picked.length > 1
+      ? mergeLayouts(picked.map(part => JSON.parse(draw(part)?.dataset.layout ?? 'null') as LayoutArgs))
+      : undefined;
+    const parts = picked.map(part => {
+      const svg = draw({ ...part, layout });
       return { name: song.tracks[part.track].name, rows: svg ? scoreRows(svg) : [] };
     });
     flushSync(() => {
       setPrintAs(null);
-      setPrintSheet(parts);
+      setPrintSheet({ arrangement, parts });
     });
     window.addEventListener('afterprint', () => setPrintSheet(null), { once: true });
     window.print();
@@ -2159,6 +2173,7 @@ export const TabSheetEditor: React.FC<TabSheetEditorProps> = ({ meta, channel })
           viewBox={`-${SCORE_GUTTER} 0 ${contentWidth + SCORE_GUTTER} ${totalSVGHeight}`}
           className="music-svg"
           data-row-ends={printAs ? rowEnds.join(' ') : undefined}
+          data-layout={printAs ? JSON.stringify(ownLayout) : undefined}
           aria-hidden={bpmEditIndex === null && repeatEditIndex === null ? true : undefined}
         >
           {/* Background Interactivity Catcher */}
@@ -2188,7 +2203,9 @@ export const TabSheetEditor: React.FC<TabSheetEditorProps> = ({ meta, channel })
             const showMetre = mIdx === 0 || marks?.timeSignature !== undefined;
             // A clef change partway through a row comes first, then the key, so a metre change moves right of both.
             const clefChange = clefChanges[mIdx] && measureLayouts[mIdx]?.x !== 0;
-            const timeSignatureX = measureX + 12 + (clefChange ? CLEF_CHANGE_ROOM + keyRoom : 0);
+            // Placed by the shared spacing, so a metre lines up across parts printed together.
+            const timeSignatureX = measureX + 12
+              + (layoutArgs.clefChanges[mIdx] && measureLayouts[mIdx]?.x !== 0 ? CLEF_CHANGE_ROOM + layoutArgs.keyRoom : 0);
             // A ‖: stands in for a plain bar line, but follows a clef or metre that opens the bar.
             const repeatStartX = measureLayouts[mIdx]?.x === 0 || showMetre || clefChange
               ? measureX + getMeasurePadding(mIdx) - REPEAT_PADDING - 6
@@ -2391,15 +2408,15 @@ export const TabSheetEditor: React.FC<TabSheetEditorProps> = ({ meta, channel })
                       <g {...barMarkProps(mIdx)}>
                         {showNotation && staves.map(staff => (
                           <React.Fragment key={staff.top}>
-                            <text x={50 + keyRoom} y={staff.top + 25} className="music-text" fontSize="16" textAnchor="middle">{effectiveTimeSignature.numerator}</text>
-                            <text x={50 + keyRoom} y={staff.top + 45} className="music-text" fontSize="16" textAnchor="middle">{effectiveTimeSignature.denominator}</text>
+                            <text x={50 + layoutArgs.keyRoom} y={staff.top + 25} className="music-text" fontSize="16" textAnchor="middle">{effectiveTimeSignature.numerator}</text>
+                            <text x={50 + layoutArgs.keyRoom} y={staff.top + 45} className="music-text" fontSize="16" textAnchor="middle">{effectiveTimeSignature.denominator}</text>
                           </React.Fragment>
                         ))}
 
                         {showTab && (
                           <>
-                            <text x={50 + keyRoom} y={tabTop + ts + stringCount * TAB_STAFF_HEIGHT_PX / 2 - 8} className="music-text" fontSize="16" textAnchor="middle">{effectiveTimeSignature.numerator}</text>
-                            <text x={50 + keyRoom} y={tabTop + ts + stringCount * TAB_STAFF_HEIGHT_PX / 2 + 12} className="music-text" fontSize="16" textAnchor="middle">{effectiveTimeSignature.denominator}</text>
+                            <text x={50 + layoutArgs.keyRoom} y={tabTop + ts + stringCount * TAB_STAFF_HEIGHT_PX / 2 - 8} className="music-text" fontSize="16" textAnchor="middle">{effectiveTimeSignature.numerator}</text>
+                            <text x={50 + layoutArgs.keyRoom} y={tabTop + ts + stringCount * TAB_STAFF_HEIGHT_PX / 2 + 12} className="music-text" fontSize="16" textAnchor="middle">{effectiveTimeSignature.denominator}</text>
                           </>
                         )}
                       </g>
@@ -3600,7 +3617,7 @@ export const TabSheetEditor: React.FC<TabSheetEditorProps> = ({ meta, channel })
           onClose={() => setShowPdfExport(false)}
         />
       )}
-      {printSheet && <PrintSheet title={song.title} artist={song.artist} parts={printSheet} />}
+      {printSheet && <PrintSheet title={song.title} artist={song.artist} {...printSheet} />}
 
       {modalOpen && (
         <JsonDialog
