@@ -766,22 +766,25 @@ describe('beat timing', () => {
     ]);
   });
 
-  it('holds a tied note through every same pitch after it, across a bar line, and ties nothing to another pitch', () => {
+  it('ties to the next same pitch over other notes and bar lines, holding through them, until a rest', () => {
     const c = { midi: 60 };
     const tie = { midi: 60, tie: true };
+    const rest = { ...beat('4', []), isRest: true };
     const track = {
       tuning: [],
       measures: [
-        measure([beat('4', [tie]), beat('4', [tie]), beat('4', [tie])]),
+        measure([beat('4', [tie]), beat('4', [{ midi: 64 }]), beat('4', [{ midi: 67 }])]),
         measure([beat('4', [c]), beat('4', [{ midi: 62 }]), beat('4', [c])]),
+        measure([beat('4', [tie]), rest, beat('4', [c])]),
       ],
     };
     const at = (measureIndex: number, beatIndex: number) => ({ measureIndex, beatIndex });
     expect(tiedThrough(track, at(0, 0), tie)).toEqual([at(0, 1), at(0, 2), at(1, 0)]);
-    expect(tiedFrom(track, at(1, 0), c)?.at).toEqual(at(0, 2));
-    expect(tiedFrom(track, at(0, 0), tie)).toBeNull();
-    expect(tiedThrough(track, at(1, 0), c)).toEqual([]);
+    expect(tiedFrom(track, at(1, 0), c)?.at).toEqual(at(0, 0));
+    expect(tiedFrom(track, at(0, 1), { midi: 64 })).toBeNull();
     expect(tiedFrom(track, at(1, 2), c)).toBeNull();
+    expect(tiedThrough(track, at(2, 0), tie)).toEqual([]);
+    expect(tiedFrom(track, at(2, 2), c)).toBeNull();
   });
 });
 

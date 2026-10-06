@@ -59,6 +59,7 @@ import {
   beatRuns,
   slurSpans,
   tiedFrom,
+  tiedThrough,
   BEND_LABELS,
   withNextBend,
   withNextSlideIn,
@@ -838,8 +839,9 @@ export const TabSheetEditor: React.FC<TabSheetEditorProps> = ({ meta, channel })
   };
 
   /**
-   * Tying a note on, as in MuseScore: with no same note in the next beat, the cursor steps on and writes one
-   * there, which the tie then holds. Runs before the flag itself is toggled on the beat the cursor left.
+   * Tying a note on, as in MuseScore: with no same note further on to tie to (before a rest), the cursor steps
+   * on and writes one in the next beat, which the tie then holds. Runs before the flag itself is toggled on the
+   * beat the cursor left.
    */
   const tieOnward = () => {
     const measure = measures[activeMeasureIndex];
@@ -851,9 +853,8 @@ export const TabSheetEditor: React.FC<TabSheetEditorProps> = ({ meta, channel })
     const next = activeBeatIndex < measure.beats.length - 1 || filled < barTicks(getEffectiveTimeSignature(song, activeMeasureIndex))
       ? { measureIndex: activeMeasureIndex, beatIndex: activeBeatIndex + 1 }
       : { measureIndex: activeMeasureIndex + 1, beatIndex: 0 };
+    if (tiedThrough(activeTrack, cursorPosition, { ...note, tie: true }).length > 0) return;
     const midi = resolveNoteMidi(note, activeTrack);
-    const beat = measures[next.measureIndex]?.beats[next.beatIndex];
-    if (beat && !beat.isRest && beat.notes.some(n => resolveNoteMidi(n, activeTrack) === midi)) return;
     const held: TabNote = isFrettedNote(note) ? { stringIndex: note.stringIndex, fret: note.fret } : { midi: note.midi };
     advanceCursor();
     updateActiveBeatNotes(current => [
@@ -2759,10 +2760,11 @@ export const TabSheetEditor: React.FC<TabSheetEditorProps> = ({ meta, channel })
                             />
                           );
                         })()}
-                        {/* Tie: a flat arc from the same pitch in the beat before, curving away from the
-                            stem, split in two halves across a row break. */}
+                        {/* Tie: an arc from the same pitch earlier on, curving away from the stem, rising clear
+                            of any notes it passes over, split in two halves across a row break. */}
                         {(() => {
-                          const from = tiedFrom(song.tracks[staff.track], { measureIndex: mIdx, beatIndex: bIdx }, n.note);
+                          const track = song.tracks[staff.track];
+                          const from = tiedFrom(track, { measureIndex: mIdx, beatIndex: bIdx }, n.note);
                           if (!from) return null;
                           const pm = from.at.measureIndex;
                           // A chord's outer ties curve outward, the rest away from the stem.
@@ -2770,14 +2772,29 @@ export const TabSheetEditor: React.FC<TabSheetEditorProps> = ({ meta, channel })
                           const sign = outer || (hasStem && stemUp ? 1 : -1);
                           const y = n.y + sign * 4;
                           const prevY = y - rowY + getRowY(pm);
-                          const arc = (x1: number, x2: number, at: number): string =>
-                            `M ${x1} ${at} C ${x1 + 4} ${at + sign * 6}, ${x2 - 4} ${at + sign * 6}, ${x2} ${at}`;
+                          const over = tiedThrough(track, from.at, from.note)
+                            .filter(p => p.measureIndex < mIdx || (p.measureIndex === mIdx && p.beatIndex < bIdx));
+                          // How far one half bends: 6, or past the furthest notehead it passes on its row. A cubic
+                          // with both handles out by d reaches 0.75 d mid-way and less nearer its ends, hence / 0.6.
+                          const bend = (row: number | undefined, at: number): number => {
+                            const reach = over.filter(p => measureLayouts[p.measureIndex]?.row === row).reduce((most, p) =>
+                              track.measures[p.measureIndex].beats[p.beatIndex].notes.reduce((m, nn) => Math.max(m,
+                                sign * (getRowY(p.measureIndex) + staff.top + Y_of_step(staffStep(noteMidi(nn, staff), staff, p.measureIndex)) - at) + 6,
+                              ), most), 0);
+                            return reach > 0 ? Math.max(6, reach / 0.6) : 6;
+                          };
+                          const arc = (x1: number, x2: number, at: number, d: number): string => {
+                            const h = (x2 - x1) * 0.2;
+                            return `M ${x1} ${at} C ${x1 + h} ${at + sign * d}, ${x2 - h} ${at + sign * d}, ${x2} ${at}`;
+                          };
                           const prevX = getBeatCoordinates(pm, from.at.beatIndex, staff) + 6;
+                          const prevRow = measureLayouts[pm]?.row;
+                          const row = measureLayouts[mIdx]?.row;
                           return (
                             <path
-                              d={measureLayouts[pm]?.row !== measureLayouts[mIdx]?.row
-                                ? `${arc(prevX, getMeasureX(pm) + getMeasureWidth(pm), prevY)} ${arc(getBeatCoordinates(mIdx, 0, staff) - 24, beatX - 6, y)}`
-                                : arc(prevX, beatX - 6, y)}
+                              d={prevRow !== row
+                                ? `${arc(prevX, getMeasureX(pm) + getMeasureWidth(pm), prevY, bend(prevRow, prevY))} ${arc(getBeatCoordinates(mIdx, 0, staff) - 24, beatX - 6, y, bend(row, y))}`
+                                : arc(prevX, beatX - 6, y, bend(row, y))}
                               fill="none"
                               className="glyph-ink-stroke"
                               strokeWidth="1.2"

@@ -920,36 +920,57 @@ export const previousNoteOnString = (
 
 type PitchedTrack = Pick<TabTrack, 'measures' | 'tuning'>;
 
-/**
- * The note `note` is held on from: one of the same sounding pitch in the beat right
- * before, across a bar line too, that carries a tie. A tie with no same note after it
- * ties nothing.
- */
-export const tiedFrom = (track: PitchedTrack, at: BeatPosition, note: TabNote): { at: BeatPosition; note: TabNote } | null => {
-  const prev = beatBefore(track.measures, at);
-  const beat = track.measures[prev.measureIndex]?.beats[prev.beatIndex];
-  const midi = resolveNoteMidi(note, track);
-  const from = beat && !beat.isRest && midi !== undefined
-    ? beat.notes.find(n => n.tie && resolveNoteMidi(n, track) === midi)
-    : undefined;
-  return from ? { at: prev, note: from } : null;
+/** The beat after (`dir` 1) or before (-1) `at`, across bar lines and past empty bars; null off either end. */
+const stepBeat = (measures: TabMeasure[], at: BeatPosition, dir: 1 | -1): BeatPosition | null => {
+  let m = at.measureIndex;
+  let b = at.beatIndex + dir;
+  while (m >= 0 && m < measures.length) {
+    if (b >= 0 && b < measures[m].beats.length) return { measureIndex: m, beatIndex: b };
+    m += dir;
+    b = dir > 0 ? 0 : (measures[m]?.beats.length ?? 0) - 1;
+  }
+  return null;
 };
 
-/** The beats a struck note goes on sounding through: each next one holding a note tied to it. */
-export const tiedThrough = (track: PitchedTrack, at: BeatPosition, note: TabNote): BeatPosition[] => {
-  const through: BeatPosition[] = [];
-  for (let from = { at, note }; ;) {
-    const next = { measureIndex: from.at.measureIndex, beatIndex: from.at.beatIndex + 1 };
-    if (!track.measures[next.measureIndex]?.beats[next.beatIndex]) {
-      next.measureIndex += 1;
-      next.beatIndex = 0;
-    }
-    const tied = track.measures[next.measureIndex]?.beats[next.beatIndex]?.notes
-      .find(n => tiedFrom(track, next, n)?.note === from.note);
-    if (!tied) return through;
-    through.push(next);
-    from = { at: next, note: tied };
+const sounds = (beat: TabBeat): boolean => !beat.isRest && beat.notes.length > 0;
+
+/**
+ * The note `note` is held on from: the nearest earlier note of the same sounding
+ * pitch, across bar lines and over other notes, when it carries a tie. A rest in
+ * between ends every tie, and a tie with no same note after it ties nothing.
+ */
+export const tiedFrom = (track: PitchedTrack, at: BeatPosition, note: TabNote): { at: BeatPosition; note: TabNote } | null => {
+  const midi = resolveNoteMidi(note, track);
+  if (midi === undefined) return null;
+  for (let p = stepBeat(track.measures, at, -1); p; p = stepBeat(track.measures, p, -1)) {
+    const beat = track.measures[p.measureIndex].beats[p.beatIndex];
+    if (!sounds(beat)) return null;
+    const from = beat.notes.find(n => resolveNoteMidi(n, track) === midi);
+    if (from) return from.tie ? { at: p, note: from } : null;
   }
+  return null;
+};
+
+/**
+ * The beats a struck note goes on sounding through: every one up to the last same
+ * pitch its chain of ties reaches, the other notes in between included.
+ */
+export const tiedThrough = (track: PitchedTrack, at: BeatPosition, note: TabNote): BeatPosition[] => {
+  const midi = resolveNoteMidi(note, track);
+  const through: BeatPosition[] = [];
+  let held = 0;
+  let tied = !!note.tie;
+  for (let p = stepBeat(track.measures, at, 1); p && tied; p = stepBeat(track.measures, p, 1)) {
+    const beat = track.measures[p.measureIndex].beats[p.beatIndex];
+    if (!sounds(beat)) break;
+    through.push(p);
+    const same = beat.notes.find(n => resolveNoteMidi(n, track) === midi);
+    if (same) {
+      held = through.length;
+      tied = !!same.tie;
+    }
+  }
+  return through.slice(0, held);
 };
 
 const coversWholeBars = (measures: TabMeasure[], from: BeatPosition, to: BeatPosition): boolean =>
