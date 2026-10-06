@@ -733,6 +733,28 @@ export const beatRuns = (measures: TabMeasure[], marked: (beat: TabBeat) => bool
 };
 
 /**
+ * The notation's slurs: each run of consecutive beats with a slurred note, from
+ * the beat before it when that one sounds, drawn as one arc over all of them.
+ * Unlike a hammer-on in the TAB, a slur here spans any number of notes; a rest
+ * ends it, and a slur with nothing sounding before it and after it draws nothing.
+ */
+export const slurSpans = (measures: TabMeasure[]): BeatPosition[][] => {
+  const spans: BeatPosition[][] = [];
+  let span: BeatPosition[] = [];
+  let prev: BeatPosition | null = null;
+  measures.forEach((measure, measureIndex) => measure.beats.forEach((beat, beatIndex) => {
+    const at = { measureIndex, beatIndex };
+    const sounding = !beat.isRest && beat.notes.length > 0;
+    if (sounding && beat.notes.some(n => n.slur)) {
+      if (span.length === 0) spans.push(span = prev ? [prev] : []);
+      span.push(at);
+    } else span = [];
+    prev = sounding ? at : null;
+  }));
+  return spans.filter(s => s.length > 1);
+};
+
+/**
  * The bar a :‖ at `endIndex` sends playback back to: its ‖:, or without one
  * the bar after the previous :‖, or else the start of the song. Repeats are
  * each track's own, so `measures` is the track that holds them.

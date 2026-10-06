@@ -57,6 +57,7 @@ import {
   conductorChanges,
   sameTimeSignature,
   beatRuns,
+  slurSpans,
   BEND_LABELS,
   withNextBend,
   withNextSlideIn,
@@ -3293,6 +3294,44 @@ export const TabSheetEditor: React.FC<TabSheetEditorProps> = ({ meta, channel })
                 }))}
               </g>
             );
+          })}
+
+          {/* Slurs: one arc per slurred run on each notation staff, split per row like the run marks. It sits
+              over the noteheads when the run lies high on the staff (stems down), else under them. */}
+          {showNotation && staves.map(staff => {
+            const bars = song.tracks[staff.track].measures;
+            const steps = (at: BeatPosition): number[] => (bars[at.measureIndex]?.beats[at.beatIndex]?.notes ?? [])
+              .map(n => staffStep(noteMidi(n, staff), staff, at.measureIndex));
+            return slurSpans(bars).flatMap(span => {
+              const all = span.flatMap(steps);
+              // ponytail: side by the run's average step, not each stem; follow the stems if they cross often.
+              const above = all.reduce((a, s) => a + s, 0) / all.length >= 6;
+              const sign = above ? -1 : 1;
+              const headY = (at: BeatPosition): number => getRowY(at.measureIndex) + staff.top
+                + Y_of_step(above ? Math.max(...steps(at)) : Math.min(...steps(at))) + sign * 6;
+              const pieces = byRow(span);
+              return pieces.map((piece, i) => {
+                const first = piece[0];
+                const last = piece[piece.length - 1];
+                const x1 = i > 0 ? getBeatCoordinates(first.measureIndex, 0, staff) - 24 : getBeatCoordinates(first.measureIndex, first.beatIndex, staff) + 2;
+                const x2 = i < pieces.length - 1 ? getMeasureX(last.measureIndex) + getMeasureWidth(last.measureIndex) : getBeatCoordinates(last.measureIndex, last.beatIndex, staff) - 2;
+                const ys = piece.map(headY);
+                const y1 = ys[0];
+                const y2 = ys[ys.length - 1];
+                const peak = (above ? Math.min(...ys) : Math.max(...ys)) + sign * 8;
+                const dx = x2 - x1;
+                return (
+                  <path
+                    key={`slur-${staff.top}-${first.measureIndex}-${first.beatIndex}`}
+                    d={`M ${x1} ${y1} C ${x1 + dx * 0.25} ${peak}, ${x2 - dx * 0.25} ${peak}, ${x2} ${y2}`}
+                    fill="none"
+                    className="slur-line"
+                    strokeWidth="1.2"
+                    style={{ pointerEvents: 'none' }}
+                  />
+                );
+              });
+            });
           })}
 
           {/* The tempo and play-count boxes paint last, so no note, stem or later bar covers them.

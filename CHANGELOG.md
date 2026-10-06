@@ -7,6 +7,12 @@ still change the song format or the API; from `1.0.0` on, only a major release w
 
 ## [Unreleased]
 
+### Fixed
+
+- Slurs now show in standard notation, so a piano part's slurs are visible. Consecutive slurred
+  notes share one arc from the note before them; the TAB's hammer-ons and pull-offs still connect
+  only to the beat right before.
+
 ## [1.1.0] - 2026-10-05
 
 ### Added

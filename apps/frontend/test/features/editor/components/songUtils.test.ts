@@ -42,6 +42,7 @@ import {
   beatAt,
   beatOnset,
   beatRuns,
+  slurSpans,
   withNextBend,
   withNextSlideIn,
   withNextSlideOut,
@@ -747,6 +748,19 @@ describe('beat timing', () => {
     const runs = beatRuns(bars, b => b.notes.some(n => n.palmMute));
     expect(runs.map(run => run.map(at => `${at.measureIndex}:${at.beatIndex}`))).toEqual([
       ['0:0'], ['0:2', '0:3', '1:0'], ['1:2'],
+    ]);
+  });
+
+  it('spans a slur from the note before over every slurred note, and stops at a rest', () => {
+    const slur = { midi: 62, slur: true };
+    const plain = { midi: 60 };
+    const rest = { ...beat('4', []), isRest: true };
+    const bars = [
+      measure([beat('4', [plain]), beat('4', [slur]), beat('4', [slur]), beat('4', [plain])]),
+      measure([rest, beat('4', [slur]), beat('4', [slur]), rest, beat('4', [slur])]),
+    ];
+    expect(slurSpans(bars).map(span => span.map(at => `${at.measureIndex}:${at.beatIndex}`))).toEqual([
+      ['0:0', '0:1', '0:2'], ['1:1', '1:2'],
     ]);
   });
 });
