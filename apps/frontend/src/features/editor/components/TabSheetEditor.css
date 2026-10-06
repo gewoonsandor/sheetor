@@ -1115,3 +1115,76 @@
     grid-template-columns: 1fr;
   }
 }
+
+/* ------------------------------------------------------------ PDF export */
+
+/* The parts to print scroll inside the dialog, one hairline per part. */
+.pdf-parts {
+  max-height: min(50dvh, 420px);
+  margin: 0;
+  padding: 0;
+  overflow-y: auto;
+  list-style: none;
+}
+
+.pdf-part {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--sp-3);
+  padding: var(--sp-2) 0;
+  border-bottom: 1px solid var(--border);
+}
+
+.pdf-part-name {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  min-height: var(--ctl-h);
+  font-weight: 600;
+}
+
+/* The printed pages exist only on paper: print hides the whole app instead. */
+.print-sheet {
+  display: none;
+}
+
+@media print {
+  body > :not(.print-sheet) {
+    display: none !important;
+  }
+
+  .print-sheet {
+    display: block;
+    color: var(--text);
+  }
+
+  .print-part + .print-part {
+    break-before: page;
+  }
+
+  .print-header {
+    margin-bottom: var(--sp-4);
+    text-align: center;
+  }
+
+  .print-header h1 {
+    margin: 0;
+    font-size: var(--fs-2xl);
+  }
+
+  .print-header p {
+    margin: var(--sp-1) 0 0;
+    color: var(--text-dim);
+  }
+
+  .print-header h2 {
+    margin: var(--sp-3) 0 0;
+    font-size: var(--fs-lg);
+    text-align: left;
+  }
+
+  .print-row {
+    break-inside: avoid;
+  }
+}

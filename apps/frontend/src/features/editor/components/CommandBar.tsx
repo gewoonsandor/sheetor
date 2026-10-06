@@ -3,14 +3,12 @@ import type { Dispatch, SetStateAction } from 'react';
 
 import { MenuButton } from '../../../app/MenuButton';
 import { Stepper } from './Stepper';
-import { MAX_BPM, MAX_REPEAT, MIN_BPM, MIN_REPEAT } from './songUtils';
+import { MAX_BPM, MAX_REPEAT, MIN_BPM, MIN_REPEAT, STAFF_LABELS } from './songUtils';
 import type { Clef, Staff, StaffDisplay, TimeSignature } from './types';
 
 export type MenuId = 'song' | 'measure' | 'playback' | 'view' | 'track';
 
 const CLEF_LABELS: Record<Clef, string> = { treble: 'Treble (G)', bass: 'Bass (F)' };
-
-const STAFF_LABELS: Record<StaffDisplay, string> = { both: 'Both', notation: 'Notes', tab: 'TAB' };
 
 const SPEEDS = [0.5, 0.75, 1, 1.25, 1.5, 2];
 
@@ -38,6 +36,7 @@ export interface PlaybackMenuProps {
 export interface SongMenuProps {
   startNewSong: () => void;
   handleExport: () => void;
+  exportPdf: () => void;
   handleImport: () => void;
   clearSong: () => void;
 }
@@ -209,7 +208,7 @@ const ClearSong = ({ clearSong }: { clearSong: () => void }) => {
 };
 
 const SongMenu = ({
-  open, onToggle, readOnly, startNewSong, handleExport, handleImport, clearSong,
+  open, onToggle, readOnly, startNewSong, handleExport, exportPdf, handleImport, clearSong,
 }: SongMenuProps & MenuState & { readOnly: boolean }) => (
   <MenuButton
     label="Song"
@@ -228,6 +227,7 @@ const SongMenu = ({
     <button type="button" className="btn btn-primary" onClick={startNewSong}>New song</button>
     <div className="popover-divider" />
     <span className="eyebrow">Song file</span>
+    <button type="button" className="btn" onClick={exportPdf}>Export PDF</button>
     <button type="button" className="btn" onClick={handleExport}>Export JSON</button>
     {!readOnly && <button type="button" className="btn" onClick={handleImport}>Import JSON</button>}
     {!readOnly && <div className="popover-divider" />}

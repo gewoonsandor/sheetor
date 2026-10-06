@@ -444,6 +444,9 @@ export const STAFF_DISPLAYS: Record<TrackKind, readonly StaffDisplay[]> = {
   pitched: ['notation'],
 };
 
+/** How the View menu and the PDF export name each staff choice. */
+export const STAFF_LABELS: Record<StaffDisplay, string> = { both: 'Both', notation: 'Notes', tab: 'TAB' };
+
 /** Middle C: turning on a grand staff moves every note below it to the bass staff. */
 export const GRAND_SPLIT = 60;
 

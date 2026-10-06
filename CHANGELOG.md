@@ -14,6 +14,9 @@ still change the song format or the API; from `1.0.0` on, only a major release w
   writes it in the next beat and moves on, so J J J holds a note on. The tied note is not played
   again. Notation draws the tie, across bar lines and row breaks too, and the TAB prints the tied
   fret in brackets.
+- Export PDF, in the Song menu: pick the parts to print, and for a guitar or bass part notes, TAB
+  or both. Each part starts on a new page with the song's title, and no row is split across pages.
+  The browser's print dialog saves the PDF.
 
 ### Fixed
 

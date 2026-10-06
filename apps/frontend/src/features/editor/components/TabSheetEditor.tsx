@@ -80,6 +80,9 @@ import { FretboardPanel } from './FretboardPanel';
 import { TrackSettings } from './TrackSettings';
 import { ShortcutsDialog } from './ShortcutsDialog';
 import { JsonDialog } from './JsonDialog';
+import { PdfExportDialog, PrintSheet } from './PdfExport';
+import { scoreRows } from '../printScore';
+import type { PrintedPart, PrintPart } from '../printScore';
 import { TECHNIQUE_SHORTCUTS, typeFretDigit } from '../shortcuts';
 import type { FretEntry, TechniqueId } from '../shortcuts';
 import { parseSong } from './songSchema';
@@ -247,9 +250,14 @@ export const TabSheetEditor: React.FC<TabSheetEditorProps> = ({ meta, channel })
   const role = live.role ?? meta.role;
 
   const [song, setSong] = useState<TabSong>(() => channel.snapshot() ?? createEmptySong());
-  const [activeTrackIndex, setActiveTrackIndex] = useState<number>(0);
+  const [editTrackIndex, setActiveTrackIndex] = useState<number>(0);
   const [activeMeasureIndex, setActiveMeasureIndex] = useState<number>(0);
-  const [activeBeatIndex, setActiveBeatIndex] = useState<number>(0);
+  const [cursorBeatIndex, setActiveBeatIndex] = useState<number>(0);
+  // While a PDF is made the score renders each picked part in turn, as its own track in the
+  // display picked for it, at full row width; its cursor sits on a beat every bar has.
+  const [printAs, setPrintAs] = useState<PrintPart | null>(null);
+  const activeTrackIndex = printAs?.track ?? editTrackIndex;
+  const activeBeatIndex = printAs ? 0 : cursorBeatIndex;
   const [activeStringIndex, setActiveStringIndex] = useState<number>(0);
   /** The notation cursor's line or space on a pitched track, in treble steps (2 = bottom line, 10 = top line). */
   const [cursorStep, setCursorStep] = useState<number>(6);
@@ -273,8 +281,9 @@ export const TabSheetEditor: React.FC<TabSheetEditorProps> = ({ meta, channel })
   const tuning = activeTrack.tuning ?? [];
   const stringCount = tuning.length;
   const isFrettedTrack = isFretted(activeTrack);
-  const showTab = isFrettedTrack && activeTrack.display !== 'notation';
-  const showNotation = activeTrack.display !== 'tab';
+  const display = printAs?.display ?? activeTrack.display;
+  const showTab = isFrettedTrack && display !== 'notation';
+  const showNotation = display !== 'tab';
   const grand = grandStaffOf(song.tracks, activeTrackIndex);
   const grandStaff = grand !== null;
   /** A staff reads its track's clefs, opening in `opening` when the track sets none. */
@@ -322,6 +331,9 @@ export const TabSheetEditor: React.FC<TabSheetEditorProps> = ({ meta, channel })
   const [showFretboard, setShowFretboard] = useState<boolean>(settings.showToolPanel);
   const [midiInput, setMidiInput] = useState<boolean>(settings.midiInput);
   const [showShortcuts, setShowShortcuts] = useState<boolean>(false);
+  const [showPdfExport, setShowPdfExport] = useState<boolean>(false);
+  // The parts being printed: rendered under <body> for print only, cleared once the print dialog closes.
+  const [printSheet, setPrintSheet] = useState<PrintedPart[] | null>(null);
   const [openMenu, setOpenMenu] = useState<MenuId | null>(null);
   const toggleMenu = (id: MenuId) => setOpenMenu(prev => (prev === id ? null : id));
   /** A grand staff waiting on "delete the left hand?": the instrument the part becomes. */
@@ -403,10 +415,11 @@ export const TabSheetEditor: React.FC<TabSheetEditorProps> = ({ meta, channel })
   }, [channel, song]);
 
   useEffect(() => {
+    if (printAs) return;
     if (activeMeasureId !== null && activeBeatId !== null) {
       channel.sendCursor({ trackId: activeTrack.id, measureId: activeMeasureId, beatId: activeBeatId });
     }
-  }, [channel, activeTrack.id, activeMeasureId, activeBeatId]);
+  }, [channel, activeTrack.id, activeMeasureId, activeBeatId, printAs]);
 
   // --- TRACK EDITORS ---
 
@@ -1481,7 +1494,7 @@ export const TabSheetEditor: React.FC<TabSheetEditorProps> = ({ meta, channel })
   // A staff that changes clef partway through a row writes the new clef, smaller, where it changes.
   const clefChanges = measures.map((_, mIdx) =>
     showNotation && mIdx > 0 && staves.some(staff => staff.clefs[mIdx] !== staff.clefs[mIdx - 1]));
-  const rowWidth = scoreRowWidth(canvasWidth);
+  const rowWidth = printAs ? MAX_ROW_WIDTH : scoreRowWidth(canvasWidth);
   const measureLayouts: MLayout[] = computeMeasureLayouts(
     aligned.map(a => a.minWidth), barMarks, keyRoom, clefChanges, rowWidth,
   );
@@ -1659,6 +1672,8 @@ export const TabSheetEditor: React.FC<TabSheetEditorProps> = ({ meta, channel })
 
   /* The last row needs no headroom for a row that never follows it. */
   const totalSVGHeight = cumY + 10 - STEM_TOP_PAD;
+  // Where each row's band ends: a PDF cuts the score there, so no page splits a row.
+  const rowEnds = rowYOffsets.map((top, r) => Math.min(top + ROW_HEIGHT + (rowExtra[r] || 0), totalSVGHeight));
   // A single bar wider than the row scales the score down rather than being cut off.
   const contentWidth = Math.max(rowWidth, ...measureLayouts.map(l => l.x + l.width));
 
@@ -1707,6 +1722,7 @@ export const TabSheetEditor: React.FC<TabSheetEditorProps> = ({ meta, channel })
   // the top of the band, so the music that follows it is on screen too.
   useEffect(() => {
     const root = containerRef.current;
+    if (printAs) return;
     const marker = root?.querySelector(playback.isPlaying ? '.playback-line' : '.selection-ring');
     // The panel comes before the command bar in the page, so this finds the panel
     // while it shows and the command bar once it is hidden.
@@ -1724,7 +1740,7 @@ export const TabSheetEditor: React.FC<TabSheetEditorProps> = ({ meta, channel })
     } else if (box.bottom > bottom) {
       window.scrollBy({ top: box.bottom - bottom, behavior });
     }
-  }, [activeMeasureIndex, activeBeatIndex, activeTrackIndex, playback.playbackBeat, playback.isPlaying, showFretboard, showTab, showNotation, grandStaff]);
+  }, [activeMeasureIndex, activeBeatIndex, activeTrackIndex, playback.playbackBeat, playback.isPlaying, showFretboard, showTab, showNotation, grandStaff, printAs]);
 
   // A click on the staff writes the pitch under the pointer into the beat that was
   // clicked, on that staff's track: a click on a grand staff's other hand switches
@@ -1772,6 +1788,25 @@ export const TabSheetEditor: React.FC<TabSheetEditorProps> = ({ meta, channel })
   };
 
   // --- EXPORT / IMPORT LOGIC ---
+
+  /**
+   * Draws each picked part in turn, as the score would show it at full width, keeps its rows,
+   * then hands the pages to the browser's print dialog, which saves a PDF.
+   */
+  const exportPdf = (picked: PrintPart[]) => {
+    setShowPdfExport(false);
+    const parts = picked.map(part => {
+      flushSync(() => setPrintAs(part));
+      const svg = containerRef.current?.querySelector<SVGSVGElement>('svg.music-svg');
+      return { name: song.tracks[part.track].name, rows: svg ? scoreRows(svg) : [] };
+    });
+    flushSync(() => {
+      setPrintAs(null);
+      setPrintSheet(parts);
+    });
+    window.addEventListener('afterprint', () => setPrintSheet(null), { once: true });
+    window.print();
+  };
 
   const handleExport = () => {
     setJsonText(JSON.stringify(song, null, 2));
@@ -2123,6 +2158,7 @@ export const TabSheetEditor: React.FC<TabSheetEditorProps> = ({ meta, channel })
         <svg
           viewBox={`-${SCORE_GUTTER} 0 ${contentWidth + SCORE_GUTTER} ${totalSVGHeight}`}
           className="music-svg"
+          data-row-ends={printAs ? rowEnds.join(' ') : undefined}
           aria-hidden={bpmEditIndex === null && repeatEditIndex === null ? true : undefined}
         >
           {/* Background Interactivity Catcher */}
@@ -3496,7 +3532,16 @@ export const TabSheetEditor: React.FC<TabSheetEditorProps> = ({ meta, channel })
           commitBpmDraft,
         }}
         playback={{ playbackSpeed, setPlaybackSpeed, volume, setVolume, loopPlayback, setLoopPlayback }}
-        song={{ startNewSong: () => void startNewSong(), handleExport, handleImport, clearSong }}
+        song={{
+          startNewSong: () => void startNewSong(),
+          handleExport,
+          exportPdf: () => {
+            setOpenMenu(null);
+            setShowPdfExport(true);
+          },
+          handleImport,
+          clearSong,
+        }}
         measure={{
           activeMeasureIndex,
           activeMeasureTimeSignature,
@@ -3543,6 +3588,19 @@ export const TabSheetEditor: React.FC<TabSheetEditorProps> = ({ meta, channel })
       />
 
       {showShortcuts && <ShortcutsDialog onClose={() => setShowShortcuts(false)} />}
+      {showPdfExport && (
+        <PdfExportDialog
+          parts={song.tracks.flatMap((track, index) => (grandStaffOf(song.tracks, index)?.bass === index ? [] : [{
+            track: index,
+            name: track.name,
+            fretted: isFretted(track),
+            display: track.display,
+          }]))}
+          onExport={exportPdf}
+          onClose={() => setShowPdfExport(false)}
+        />
+      )}
+      {printSheet && <PrintSheet title={song.title} artist={song.artist} parts={printSheet} />}
 
       {modalOpen && (
         <JsonDialog
