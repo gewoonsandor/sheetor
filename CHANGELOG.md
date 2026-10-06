@@ -11,8 +11,9 @@ still change the song format or the API; from `1.0.0` on, only a major release w
 
 - Ties (J, or ‿ in the note toolbar), as in MuseScore: J ties the note under the cursor to the next
   same note, over any notes in between and across bar lines (a rest ends it). With none to tie to, J
-  writes it in the next beat and moves on, so J J J holds a note on. The tied note is not played again. Notation draws the tie, across bar lines and row breaks too,
-  and the TAB prints the tied fret in brackets.
+  writes it in the next beat and moves on, so J J J holds a note on. The tied note is not played
+  again. Notation draws the tie, across bar lines and row breaks too, and the TAB prints the tied
+  fret in brackets.
 
 ### Fixed
 
