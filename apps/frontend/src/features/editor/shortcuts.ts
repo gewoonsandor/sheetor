@@ -32,6 +32,7 @@ export interface Shortcut {
 /** The key that toggles each technique on the note under the cursor. */
 export const TECHNIQUE_SHORTCUTS: Record<TechniqueId, string> = {
   slur: 'H',
+  tie: 'J',
   legatoSlide: 'S',
   vibrato: 'V',
   bend: 'B',
@@ -43,6 +44,7 @@ export const TECHNIQUE_SHORTCUTS: Record<TechniqueId, string> = {
 
 export const TECHNIQUE_LABELS: Record<TechniqueId, string> = {
   slur: 'Slur',
+  tie: 'Tie to the same note before',
   legatoSlide: 'Slide in: from the note before, from below, from above, off',
   vibrato: 'Vibrato',
   bend: 'Bend: ½, full, off',

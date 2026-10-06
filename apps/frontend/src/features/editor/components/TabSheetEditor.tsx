@@ -58,6 +58,7 @@ import {
   sameTimeSignature,
   beatRuns,
   slurSpans,
+  tiedFrom,
   BEND_LABELS,
   withNextBend,
   withNextSlideIn,
@@ -2732,6 +2733,32 @@ export const TabSheetEditor: React.FC<TabSheetEditorProps> = ({ meta, channel })
                             />
                           );
                         })()}
+                        {/* Tie: a flat arc from the same pitch in the beat before, curving away from the
+                            stem, split in two halves across a row break. */}
+                        {(() => {
+                          const from = tiedFrom(song.tracks[staff.track], { measureIndex: mIdx, beatIndex: bIdx }, n.note);
+                          if (!from) return null;
+                          const pm = from.at.measureIndex;
+                          // A chord's outer ties curve outward, the rest away from the stem.
+                          const outer = calculatedNotes.length > 1 && (n.y === highestY ? -1 : n.y === lowestY ? 1 : 0);
+                          const sign = outer || (hasStem && stemUp ? 1 : -1);
+                          const y = n.y + sign * 4;
+                          const prevY = y - rowY + getRowY(pm);
+                          const arc = (x1: number, x2: number, at: number): string =>
+                            `M ${x1} ${at} C ${x1 + 4} ${at + sign * 6}, ${x2 - 4} ${at + sign * 6}, ${x2} ${at}`;
+                          const prevX = getBeatCoordinates(pm, from.at.beatIndex, staff) + 6;
+                          return (
+                            <path
+                              d={measureLayouts[pm]?.row !== measureLayouts[mIdx]?.row
+                                ? `${arc(prevX, getMeasureX(pm) + getMeasureWidth(pm), prevY)} ${arc(getBeatCoordinates(mIdx, 0, staff) - 24, beatX - 6, y)}`
+                                : arc(prevX, beatX - 6, y)}
+                              fill="none"
+                              className="glyph-ink-stroke"
+                              strokeWidth="1.2"
+                              style={{ pointerEvents: 'none' }}
+                            />
+                          );
+                        })()}
                       </g>
                     );
                   })}
@@ -2834,7 +2861,9 @@ export const TabSheetEditor: React.FC<TabSheetEditorProps> = ({ meta, channel })
                     const stringY = rowY + tabTop + ts + n.stringIndex * 10;
                     const isSelected = isCursorNote(mIdx, bIdx, noteIndex, b.notes);
 
-                    const displayText = fretLabel(n);
+                    // A tied fret is not picked again, so the TAB prints it in brackets.
+                    const tied = tiedFrom(song.tracks[staff.track], { measureIndex: mIdx, beatIndex: bIdx }, n);
+                    const displayText = tied ? `(${fretLabel(n)})` : fretLabel(n);
                     const bgWidth = fretLabelWidth(displayText);
 
                     return (

@@ -4,7 +4,7 @@ import type { BeatPosition, TabBeat, TabSong, TabTrack } from './types';
 import { getVoice } from './audioEngine';
 import {
   firstBeatPosition, beatSeconds, beatVelocities, DEFAULT_VELOCITY, getEffectiveBpm, isAudible,
-  nextPlayPosition, resolveNoteMidi,
+  nextPlayPosition, resolveNoteMidi, tiedFrom, tiedThrough,
 } from './songUtils';
 
 const LOOKAHEAD_SECONDS = 0.1;
@@ -86,22 +86,27 @@ export const usePlayback = (
   const midiToFrequency = (midi: number): number => 440 * Math.pow(2, (midi - 69) / 12);
 
   /** `velocity` is the beat's dynamic as MIDI velocity; mf (80) plays at the track's own volume. */
-  const playBeat = (beat: TabBeat, track: TabTrack, time: number, bpm: number, velocity: number): void => {
+  const playBeat = (beat: TabBeat, at: BeatPosition, track: TabTrack, time: number, bpm: number, velocity: number): void => {
     if (beat.isRest || beat.notes.length === 0) return;
     const ctx = audioCtxRef.current;
     if (!ctx) return;
 
-    const { volume, speed } = settingsRef.current;
+    const { volume, speed, song } = settingsRef.current;
     const trackGain = ctx.createGain();
     trackGain.gain.setValueAtTime(volume * track.volume * velocity / DEFAULT_VELOCITY, time);
     trackGain.connect(ctx.destination);
 
     const build = getVoice(track.instrument);
-    const duration = beatSeconds(beat, bpm) / speed;
+    const length = beatSeconds(beat, bpm) / speed;
     beat.notes.forEach(note => {
-      // A fretted note stranded above the track's string count has no pitch.
+      // A fretted note stranded above the track's string count has no pitch; a tied one is still sounding.
       const midi = resolveNoteMidi(note, track);
-      if (midi === undefined) return;
+      if (midi === undefined || tiedFrom(track, at, note)) return;
+      // ponytail: the hold follows the written bars, not repeats; a tie across a :‖ holds into the bar after it.
+      const duration = tiedThrough(track, at, note).reduce((sum, next) => {
+        const held = track.measures[next.measureIndex].beats[next.beatIndex];
+        return sum + beatSeconds(held, getEffectiveBpm(song, next.measureIndex)) / speed;
+      }, length);
       build({ ctx, frequency: midiToFrequency(midi), time, duration, destination: trackGain });
     });
   };
@@ -182,7 +187,7 @@ export const usePlayback = (
           if (isAudible(track, current.song.tracks)) {
             // ponytail: every beat walks the whole track for its velocity; cache per measures array if songs grow long.
             const velocity = beatVelocities(track.measures)[cursor.position.measureIndex]?.[cursor.position.beatIndex] ?? DEFAULT_VELOCITY;
-            playBeat(beat, track, schedTime, bpm, velocity);
+            playBeat(beat, cursor.position, track, schedTime, bpm, velocity);
           }
 
           // Only the active track moves the on-screen cursor; the other hand of a

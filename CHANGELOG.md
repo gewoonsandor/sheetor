@@ -7,6 +7,12 @@ still change the song format or the API; from `1.0.0` on, only a major release w
 
 ## [Unreleased]
 
+### Added
+
+- Ties (J, or ‿ in the note toolbar): a note tied to the same pitch in the beat before is held on
+  instead of played again. Notation draws the tie, across bar lines and row breaks too, and the TAB
+  prints the tied fret in brackets.
+
 ### Fixed
 
 - Slurs now show in standard notation, so a piano part's slurs are visible. Consecutive slurred

@@ -91,6 +91,7 @@ export const TECHNIQUE_KEYS = [
   'ghostNote',
   'slur',
   'legatoSlide',
+  'tie',
 ] as const;
 
 /** How the score labels each bend amount. */
@@ -109,9 +110,10 @@ const NOTE_CONFLICTS: Partial<Record<Technique, Technique[]>> = {
   harmonic: ['ghostNote'],
   bend: ['ghostNote'],
   vibrato: ['ghostNote'],
-  slur: ['legatoSlide', 'slideIn'],
-  legatoSlide: ['slur'],
-  slideIn: ['slur'],
+  slur: ['legatoSlide', 'slideIn', 'tie'],
+  legatoSlide: ['slur', 'tie'],
+  slideIn: ['slur', 'tie'],
+  tie: ['slur', 'legatoSlide', 'slideIn'],
 };
 
 /** Palm mute and let ring share one line over the TAB, so they cannot share a beat. */
@@ -892,6 +894,12 @@ export const beatAt = (measure: TabMeasure, time: number): number => {
   return measure.beats.findIndex(b => (end += beatTicks(b)) / TICKS_PER_QUARTER > time);
 };
 
+/** The beat right before `at`, across the bar line from a bar's first beat. */
+const beatBefore = (measures: TabMeasure[], at: BeatPosition): BeatPosition => {
+  const m = at.beatIndex > 0 ? at.measureIndex : at.measureIndex - 1;
+  return { measureIndex: m, beatIndex: at.beatIndex > 0 ? at.beatIndex - 1 : (measures[m]?.beats.length ?? 0) - 1 };
+};
+
 /**
  * The note on a string in the beat right before, in this bar or across the bar
  * line: what a slur or a slide into a note starts from. A rest, or a beat with
@@ -902,11 +910,44 @@ export const previousNoteOnString = (
   at: BeatPosition,
   stringIndex: number,
 ): { at: BeatPosition; note: FrettedNote } | null => {
-  const m = at.beatIndex > 0 ? at.measureIndex : at.measureIndex - 1;
-  const prev = { measureIndex: m, beatIndex: at.beatIndex > 0 ? at.beatIndex - 1 : (measures[m]?.beats.length ?? 0) - 1 };
-  const note = measures[m]?.beats[prev.beatIndex]?.notes
+  const prev = beatBefore(measures, at);
+  const note = measures[prev.measureIndex]?.beats[prev.beatIndex]?.notes
     .find((nn): nn is FrettedNote => isFrettedNote(nn) && nn.stringIndex === stringIndex);
   return note ? { at: prev, note } : null;
+};
+
+type PitchedTrack = Pick<TabTrack, 'measures' | 'tuning'>;
+
+/**
+ * The note a tied note holds on from: the one sounding the same pitch in the beat
+ * right before, across a bar line too. A tie with no such note ties nothing, and plays.
+ */
+export const tiedFrom = (track: PitchedTrack, at: BeatPosition, note: TabNote): { at: BeatPosition; note: TabNote } | null => {
+  if (!note.tie) return null;
+  const prev = beatBefore(track.measures, at);
+  const beat = track.measures[prev.measureIndex]?.beats[prev.beatIndex];
+  const midi = resolveNoteMidi(note, track);
+  const from = beat && !beat.isRest && midi !== undefined
+    ? beat.notes.find(n => resolveNoteMidi(n, track) === midi)
+    : undefined;
+  return from ? { at: prev, note: from } : null;
+};
+
+/** The beats a struck note goes on sounding through: each next one holding a note tied to it. */
+export const tiedThrough = (track: PitchedTrack, at: BeatPosition, note: TabNote): BeatPosition[] => {
+  const through: BeatPosition[] = [];
+  for (let from = { at, note }; ;) {
+    const next = { measureIndex: from.at.measureIndex, beatIndex: from.at.beatIndex + 1 };
+    if (!track.measures[next.measureIndex]?.beats[next.beatIndex]) {
+      next.measureIndex += 1;
+      next.beatIndex = 0;
+    }
+    const tied = track.measures[next.measureIndex]?.beats[next.beatIndex]?.notes
+      .find(n => tiedFrom(track, next, n)?.note === from.note);
+    if (!tied) return through;
+    through.push(next);
+    from = { at: next, note: tied };
+  }
 };
 
 const coversWholeBars = (measures: TabMeasure[], from: BeatPosition, to: BeatPosition): boolean =>

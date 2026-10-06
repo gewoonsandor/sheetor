@@ -8,7 +8,7 @@ import type { TechniqueId } from '../shortcuts';
 
 /** Technique buttons in toolbar order, each with its text glyph. */
 const TECHNIQUES: [TechniqueId, string][] = [
-  ['slur', '⌢'], ['legatoSlide', '╱'], ['bend', 'b'], ['vibrato', '~~'],
+  ['tie', '‿'], ['slur', '⌢'], ['legatoSlide', '╱'], ['bend', 'b'], ['vibrato', '~~'],
   ['palmMute', 'P.M.'], ['letRing', 'Ring'], ['harmonic', '</>'], ['ghostNote', '(x)'],
 ];
 

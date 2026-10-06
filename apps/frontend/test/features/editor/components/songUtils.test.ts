@@ -43,6 +43,8 @@ import {
   beatOnset,
   beatRuns,
   slurSpans,
+  tiedFrom,
+  tiedThrough,
   withNextBend,
   withNextSlideIn,
   withNextSlideOut,
@@ -762,6 +764,23 @@ describe('beat timing', () => {
     expect(slurSpans(bars).map(span => span.map(at => `${at.measureIndex}:${at.beatIndex}`))).toEqual([
       ['0:0', '0:1', '0:2'], ['1:1', '1:2'],
     ]);
+  });
+
+  it('holds a note through every tie of the same pitch, across a bar line, and ties nothing to another pitch', () => {
+    const c = { midi: 60 };
+    const tie = { midi: 60, tie: true };
+    const track = {
+      tuning: [],
+      measures: [
+        measure([beat('4', [c]), beat('4', [tie]), beat('4', [tie])]),
+        measure([beat('4', [tie]), beat('4', [{ midi: 62, tie: true }]), beat('4', [tie])]),
+      ],
+    };
+    const at = (measureIndex: number, beatIndex: number) => ({ measureIndex, beatIndex });
+    expect(tiedThrough(track, at(0, 0), c)).toEqual([at(0, 1), at(0, 2), at(1, 0)]);
+    expect(tiedFrom(track, at(1, 0), tie)?.at).toEqual(at(0, 2));
+    expect(tiedFrom(track, at(1, 1), { midi: 62, tie: true })).toBeNull();
+    expect(tiedFrom(track, at(1, 2), tie)).toBeNull();
   });
 });
 
