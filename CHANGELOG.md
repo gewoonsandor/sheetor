@@ -9,9 +9,10 @@ still change the song format or the API; from `1.0.0` on, only a major release w
 
 ### Added
 
-- Ties (J, or ‿ in the note toolbar): a note tied to the same pitch in the beat before is held on
-  instead of played again. Notation draws the tie, across bar lines and row breaks too, and the TAB
-  prints the tied fret in brackets.
+- Ties (J, or ‿ in the note toolbar), as in MuseScore: J ties the note under the cursor to the same
+  note in the next beat, writing it there and moving on if it is not there yet, so J J J holds a note
+  on. The tied note is not played again. Notation draws the tie, across bar lines and row breaks too,
+  and the TAB prints the tied fret in brackets.
 
 ### Fixed
 
