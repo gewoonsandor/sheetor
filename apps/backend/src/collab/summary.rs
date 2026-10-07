@@ -1,7 +1,5 @@
-use serde_json::Value;
-use yrs::types::ToJson;
 use yrs::updates::decoder::Decode;
-use yrs::{Doc, Map, ReadTxn, StateVector, Transact, Update};
+use yrs::{Any, Array, Doc, Map, Number, Out, ReadTxn, StateVector, Transact, Update};
 
 use crate::database::schemas::songs::SongSummary;
 use crate::error::collab::CollabError;
@@ -11,8 +9,36 @@ pub const ROOT: &str = "song";
 
 const MAX_TEXT: usize = 200;
 
+/// Reads only the fields the library lists, never the whole tree: a client controls how deeply
+/// the document nests, and a recursive walk (`to_json`) of a deep one overflows the stack.
 pub fn summarize(state: &[u8]) -> Result<SongSummary, CollabError> {
-    summary_of(&song_json(&load_doc(state)?))
+    let doc = load_doc(state)?;
+    let song = doc.get_or_insert_map(ROOT);
+    let txn = doc.transact();
+    let tracks = song.get(&txn, "tracks").ok_or(CollabError::InvalidSong)?;
+    let track_count = length(&txn, &tracks).ok_or(CollabError::InvalidSong)?;
+    let bar_count = match &tracks {
+        Out::YArray(tracks) => match tracks.get(&txn, 0) {
+            Some(Out::YMap(track)) => track
+                .get(&txn, "measures")
+                .and_then(|bars| length(&txn, &bars)),
+            _ => None,
+        },
+        _ => None,
+    };
+
+    Ok(SongSummary {
+        title: text(song.get(&txn, "title")).unwrap_or_else(|| "Untitled".to_owned()),
+        artist: text(song.get(&txn, "artist")).unwrap_or_default(),
+        // Yjs numbers may arrive as floats.
+        bpm: match song.get(&txn, "bpm") {
+            Some(Out::Any(Any::Number(Number::Int(bpm)))) => bpm as i32,
+            Some(Out::Any(Any::Number(Number::Float(bpm)))) => bpm.round() as i32,
+            _ => 120,
+        },
+        track_count: track_count as i32,
+        bar_count: bar_count.unwrap_or(0) as i32,
+    })
 }
 
 pub fn retitle(state: &[u8], title: &str) -> Result<Vec<u8>, CollabError> {
@@ -29,28 +55,19 @@ pub fn load_doc(state: &[u8]) -> Result<Doc, CollabError> {
     Ok(doc)
 }
 
-fn song_json(doc: &Doc) -> Value {
-    let song = doc.get_or_insert_map(ROOT).to_json(&doc.transact());
-    serde_json::to_value(song).unwrap_or_default()
+/// How many items a shared array or a plain array value holds.
+fn length<T: ReadTxn>(txn: &T, value: &Out) -> Option<u32> {
+    match value {
+        Out::YArray(array) => Some(array.len(txn)),
+        Out::Any(Any::Array(items)) => Some(items.len() as u32),
+        _ => None,
+    }
 }
 
-fn summary_of(song: &Value) -> Result<SongSummary, CollabError> {
-    let tracks = song["tracks"].as_array().ok_or(CollabError::InvalidSong)?;
-    let bars = tracks
-        .first()
-        .and_then(|track| track["measures"].as_array());
-
-    Ok(SongSummary {
-        title: text(&song["title"]).unwrap_or_else(|| "Untitled".to_owned()),
-        artist: text(&song["artist"]).unwrap_or_default(),
-        // Yjs numbers may arrive as floats.
-        bpm: song["bpm"].as_f64().map_or(120, |bpm| bpm.round() as i32),
-        track_count: tracks.len() as i32,
-        bar_count: bars.map_or(0, |bars| bars.len() as i32),
-    })
-}
-
-fn text(value: &Value) -> Option<String> {
-    let trimmed = value.as_str()?.trim();
+fn text(value: Option<Out>) -> Option<String> {
+    let Some(Out::Any(Any::String(value))) = value else {
+        return None;
+    };
+    let trimmed = value.trim();
     (!trimmed.is_empty()).then(|| trimmed.chars().take(MAX_TEXT).collect())
 }

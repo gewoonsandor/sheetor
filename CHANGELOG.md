@@ -21,6 +21,12 @@ still change the song format or the API; from `1.0.0` on, only a major release w
 
 ### Fixed
 
+- A live edit nested deeply enough could crash the server for everyone; it is now refused.
+- Signing in with single sign-on to an account that was created with a password removes that
+  password, and with it every session it opened: the address was never confirmed, so whoever set
+  it may not be you. Sign in with single sign-on from then on.
+- Someone who loses access to a song is disconnected from it at once, even if their browser does
+  not close the connection itself.
 - Slurs now show in standard notation, so a piano part's slurs are visible. Consecutive slurred
   notes share one arc from the note before them; the TAB's hammer-ons and pull-offs still connect
   only to the beat right before.

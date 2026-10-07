@@ -70,7 +70,7 @@ impl Hub {
         self.with_room(song, |room| room.set_role(conn, role));
     }
 
-    /// Asks one connection to close; its session leaves the room when it does.
+    /// Takes one connection out of the room and closes it; its session's `leave` then finds it gone.
     pub fn kick(&self, song: Uuid, conn: Uuid, code: u16) {
         self.with_room(song, |room| room.kick(conn, code));
     }

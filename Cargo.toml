@@ -1,3 +1,11 @@
 [workspace]
 members = ["apps/backend"]
+# The vendored crates are dependencies, not members: their tests and lints are not ours.
+exclude = ["apps/backend/vendor"]
 resolver = "3"
+
+# yrs 0.28.0 with a depth limit on decoding nested values (`MAX_DECODE_DEPTH` in its
+# src/any.rs); without it one live update a few kilobytes long overflows the stack and
+# aborts the server. Drop this, and apps/backend/vendor/yrs, once upstream bounds the depth.
+[patch.crates-io]
+yrs = { path = "apps/backend/vendor/yrs" }

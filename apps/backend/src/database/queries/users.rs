@@ -65,7 +65,10 @@ pub async fn find_user_by_identity(
     .await
 }
 
-/// Attaches an identity to the account with that address, unless it already has one.
+/// Attaches an identity to the account with that address, unless it already has one, and drops
+/// its password. Nobody confirmed the address when that password was set, so it may be a
+/// squatter's: keeping it would let them sign in to the account the real owner now uses.
+/// Clearing it also ends every session the password opened (`session_auth_hash`).
 pub async fn link_identity(
     pool: &PgPool,
     email: &str,
@@ -74,7 +77,7 @@ pub async fn link_identity(
 ) -> Result<Option<User>, sqlx::Error> {
     sqlx::query_as!(
         User,
-        "UPDATE users SET provider = $2, provider_id = $3
+        "UPDATE users SET provider = $2, provider_id = $3, password_hash = NULL
          WHERE email = $1 AND provider_id IS NULL
          RETURNING id, username, email, password_hash, provider, provider_id",
         email,

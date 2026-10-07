@@ -103,9 +103,13 @@ impl Room {
         }
     }
 
-    pub fn kick(&self, id: Uuid, code: u16) {
-        if let Some(member) = self.members.get(&id) {
+    /// Takes a connection out of the room at once, so it gets no more edits or presence and its
+    /// updates are refused, then closes it. Waiting for the client to answer the Close would let
+    /// one that ignores it go on editing with the role it had.
+    pub fn kick(&mut self, id: Uuid, code: u16) {
+        if let Some(member) = self.members.remove(&id) {
             let _ = member.tx.send(close(code, "access changed"));
+            self.broadcast(self.presence());
         }
     }
 

@@ -39,9 +39,12 @@ pub async fn run(socket: WebSocket, state: AppState, song: Uuid, user: User, rol
     }
 }
 
+/// Writes queued messages to the socket. A Close is the last: the session then ends without
+/// waiting for the client's reply, which a client that ignores it would never send.
 async fn forward(mut rx: UnboundedReceiver<Message>, mut sink: SplitSink<WebSocket, Message>) {
     while let Some(message) = rx.recv().await {
-        if sink.send(message).await.is_err() {
+        let last = matches!(message, Message::Close(_));
+        if sink.send(message).await.is_err() || last {
             break;
         }
     }

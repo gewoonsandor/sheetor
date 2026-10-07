@@ -41,7 +41,7 @@ async fn a_new_identity_becomes_a_passwordless_account_once() {
 }
 
 #[tokio::test]
-async fn a_verified_email_links_the_existing_account() {
+async fn a_verified_email_links_the_existing_account_and_drops_its_password() {
     let Some(pool) = pool().await else {
         eprintln!("skipped: TEST_DATABASE_URL unset");
         return;
@@ -54,6 +54,9 @@ async fn a_verified_email_links_the_existing_account() {
 
     assert_eq!(linked.id, local.id);
     assert_eq!(linked.provider, PROVIDER);
+    // Signup never confirmed the address, so the password may be a squatter's.
+    assert_eq!(local.password_hash.as_deref(), Some("hash"));
+    assert_eq!(linked.password_hash, None);
 }
 
 #[tokio::test]
