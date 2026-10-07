@@ -6,6 +6,14 @@ pub enum InsertUserError {
     #[api_error(status_code = 403, message(inherit))]
     LocalDisabled,
 
+    #[error("display names must be 1 to 64 characters")]
+    #[api_error(status_code = 400, message(inherit))]
+    InvalidUsername,
+
+    #[error("enter a valid email address")]
+    #[api_error(status_code = 400, message(inherit))]
+    InvalidEmail,
+
     #[error("password does not meet requirements")]
     #[api_error(status_code = 400, message(inherit))]
     BadPassWord,
@@ -13,6 +21,14 @@ pub enum InsertUserError {
     #[error("email already registered")]
     #[api_error(status_code = 409, message(inherit))]
     EmailTaken,
+
+    #[error("too many sign-ups from this network, please try again later")]
+    #[api_error(status_code = 429, message(inherit))]
+    TooManyAttempts,
+
+    #[error("the server is busy, please try again in a moment")]
+    #[api_error(status_code = 503, message(inherit))]
+    Busy,
 
     #[error("password hashing task failed")]
     HashTaskFailed,

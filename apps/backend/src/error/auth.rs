@@ -10,6 +10,14 @@ pub enum AuthError {
     #[api_error(status_code = 403, message(inherit))]
     LocalDisabled,
 
+    #[error("too many sign-in attempts, please try again later")]
+    #[api_error(status_code = 429, message(inherit))]
+    TooManyAttempts,
+
+    #[error("the server is busy, please try again in a moment")]
+    #[api_error(status_code = 503, message(inherit))]
+    Busy,
+
     #[error("password verification task failed")]
     HashTaskFailed,
 

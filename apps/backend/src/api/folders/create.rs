@@ -25,7 +25,7 @@ pub struct CreateFolder {
     request_body = CreateFolder,
     responses(
         (status = 201, description = "Folder created", body = Folder),
-        (status = 400, description = "Invalid name"),
+        (status = 400, description = "Invalid name, or nested too deep"),
         (status = 403, description = "The parent is view-only"),
         (status = 404, description = "No such parent"),
     ),

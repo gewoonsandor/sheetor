@@ -53,6 +53,8 @@ cargo watch -q -c -w apps/backend -x run   # what `npm run dev:backend` does
 | `DATABASE_URL` | required; the dev shell exports it |
 | `PUBLIC_URL` | `http://localhost:<PORT>` (dev shell: `http://localhost:5173`) |
 | `COOKIE_SECURE` | `true` |
+| `TRUST_PROXY` | `false`: rate limits key on the TCP peer; `true` uses the last `X-Forwarded-For` address |
+| `DOCS_ENABLED` | `false` (dev shell: `true`): Swagger UI at `/docs` |
 | `OIDC_ISSUER_URL`, `OIDC_CLIENT_ID`, `OIDC_CLIENT_SECRET`, `OIDC_DISPLAY_NAME` | SSO off unless the issuer is set |
 | `LOCAL_AUTH_ENABLED` | `true` |
 

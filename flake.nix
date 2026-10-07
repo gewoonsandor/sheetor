@@ -44,6 +44,8 @@
             # The browser's origin in dev: SSO redirects and the WebSocket
             # Origin check both need Vite's port, not axum's.
             env.PUBLIC_URL = "http://localhost:5173";
+            # Swagger UI on /docs; off unless set, so production does not publish the API map.
+            env.DOCS_ENABLED = "true";
 
             # ponytail: repo-local cluster in the gitignored .direnv/, trust
             # auth, autostarted on shell entry and left running on exit. Fine

@@ -1,10 +1,13 @@
-use std::time::Instant;
+use std::sync::{Arc, Mutex};
+use std::time::{Duration, Instant};
 
+use openidconnect::core::CoreProviderMetadata;
 use openidconnect::reqwest;
 use sqlx::PgPool;
 
 use crate::collab::hub::Hub;
 use crate::config::{Config, SsoConfig};
+use crate::services::auth_service::AuthLimits;
 
 /// Handed to every handler by the `State` extractor.
 ///
@@ -18,6 +21,7 @@ pub struct AppState {
     pub public_url: String,
     pub auth: AuthSettings,
     pub collab: Hub,
+    pub limits: Arc<AuthLimits>,
 }
 
 impl AppState {
@@ -28,6 +32,7 @@ impl AppState {
             public_url,
             auth,
             collab: Hub::default(),
+            limits: Arc::default(),
         }
     }
 }
@@ -35,6 +40,8 @@ impl AppState {
 #[derive(Clone)]
 pub struct AuthSettings {
     pub local_enabled: bool,
+    /// Whether the client address is the last one in X-Forwarded-For (`auth_service::client_ip`).
+    pub trust_proxy: bool,
     pub sso: Option<Sso>,
 }
 
@@ -43,12 +50,15 @@ pub struct Sso {
     pub config: SsoConfig,
     pub redirect_url: String,
     pub http: reqwest::Client,
+    /// The provider's discovery document and when it was fetched (`sso_service::metadata`).
+    pub metadata: Arc<Mutex<Option<(Instant, CoreProviderMetadata)>>>,
 }
 
 impl AuthSettings {
     pub fn from_config(config: &Config) -> Self {
         Self {
             local_enabled: config.local_auth_enabled,
+            trust_proxy: config.trust_proxy,
             sso: config
                 .sso
                 .clone()
@@ -59,6 +69,7 @@ impl AuthSettings {
     pub fn local_only() -> Self {
         Self {
             local_enabled: true,
+            trust_proxy: false,
             sso: None,
         }
     }
@@ -66,8 +77,11 @@ impl AuthSettings {
 
 impl Sso {
     fn new(config: SsoConfig, public_url: &str) -> Self {
+        // A provider that stops answering must not hold sign-in requests open forever.
         let http = reqwest::ClientBuilder::new()
             .redirect(reqwest::redirect::Policy::none())
+            .connect_timeout(Duration::from_secs(5))
+            .timeout(Duration::from_secs(15))
             .build()
             .expect("build the OIDC http client");
 
@@ -75,6 +89,7 @@ impl Sso {
             config,
             redirect_url: format!("{public_url}/api/v1/auth/sso/callback"),
             http,
+            metadata: Arc::default(),
         }
     }
 }

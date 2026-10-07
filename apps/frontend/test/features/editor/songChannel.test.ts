@@ -14,7 +14,7 @@ class FakeSocket {
   readyState = 1;
   binaryType = 'blob';
   onmessage: ((event: { data: string | ArrayBuffer }) => void) | null = null;
-  onclose: (() => void) | null = null;
+  onclose: ((event: { code: number }) => void) | null = null;
   sent: Uint8Array[] = [];
 
   constructor() {
@@ -98,5 +98,26 @@ describe('songChannel undo', () => {
     expect(redone.song.title).toBe('Renamed');
     expect(redone.at).toEqual(editedAt);
     expect(channel.getState()).toMatchObject({ canUndo: true, canRedo: false });
+  });
+});
+
+describe('songChannel close codes', () => {
+  it.each([4413, 4429, 4503])('stops with a reason instead of retrying after %i', (code) => {
+    const channel = createSongChannel('song');
+    channel.connect();
+    FakeSocket.current.onclose?.({ code });
+
+    const { status, error } = channel.getState();
+    expect(status).toBe('unavailable');
+    expect(error).toEqual(expect.any(String));
+  });
+
+  it('reconnects after the account signed out elsewhere, to sign in again', () => {
+    const channel = createSongChannel('song');
+    channel.connect();
+    FakeSocket.current.onclose?.({ code: 4401 });
+
+    expect(channel.getState()).toMatchObject({ status: 'connecting', error: null });
+    channel.disconnect();
   });
 });

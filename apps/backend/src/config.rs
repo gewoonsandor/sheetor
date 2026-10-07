@@ -12,6 +12,8 @@ pub struct Config {
     pub cookie_secure: bool,
     pub public_url: String,
     pub local_auth_enabled: bool,
+    pub docs_enabled: bool,
+    pub trust_proxy: bool,
     pub sso: Option<SsoConfig>,
 }
 
@@ -46,6 +48,8 @@ impl Config {
                 .to_owned(),
             // Turning local sign-in off without a provider would lock everyone out.
             local_auth_enabled: var_or("LOCAL_AUTH_ENABLED", "true") != "false" || sso.is_none(),
+            docs_enabled: var_or("DOCS_ENABLED", "false") == "true",
+            trust_proxy: var_or("TRUST_PROXY", "false") == "true",
             sso,
         }
     }

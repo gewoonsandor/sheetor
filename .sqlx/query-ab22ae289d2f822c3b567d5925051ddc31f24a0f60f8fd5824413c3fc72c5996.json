@@ -1,0 +1,23 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "WITH RECURSIVE up AS (\n               SELECT id, parent_id FROM folders WHERE id = $1\n             UNION ALL\n               SELECT f.id, f.parent_id FROM folders f JOIN up ON f.id = up.parent_id\n           ), down AS (\n               SELECT id, 1 AS level FROM folders WHERE id = $2\n             UNION ALL\n               SELECT f.id, down.level + 1 FROM folders f JOIN down ON f.parent_id = down.id\n           )\n           SELECT (SELECT count(*) FROM up) + COALESCE((SELECT max(level) FROM down), 1)\n               AS \"depth!\"",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "depth!",
+        "type_info": "Int8"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "ab22ae289d2f822c3b567d5925051ddc31f24a0f60f8fd5824413c3fc72c5996"
+}

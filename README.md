@@ -122,6 +122,8 @@ Everything is configured through environment variables.
 | `HOST`               | `0.0.0.0`                 | Listen address.                                                                                                                                                                                                     |
 | `PORT`               | `4000`                    | Listen port.                                                                                                                                                                                                        |
 | `COOKIE_SECURE`      | `true`                    | Marks the session cookie `Secure`. Browsers accept it on `http://localhost`; set `false` only to drive the API over plain HTTP with `curl`.                                                                         |
+| `TRUST_PROXY`        | `false`                   | `true` behind a reverse proxy that appends `X-Forwarded-For`; see below.                                                                                                                                            |
+| `DOCS_ENABLED`       | `false`                   | `true` serves the API docs (Swagger UI) at `/docs`.                                                                                                                                                                 |
 | `LOG_LEVEL`          | `info`                    | Log filter; `RUST_LOG` overrides it.                                                                                                                                                                                |
 | `FRONTEND_DIST_DIR`  | `/app/dist` in the image  | Where the built frontend lives.                                                                                                                                                                                     |
 | `OIDC_ISSUER_URL`    | unset                     | Issuer of your OpenID Connect provider. Setting it turns single sign-on on.                                                                                                                                         |
@@ -131,7 +133,7 @@ Everything is configured through environment variables.
 | `LOCAL_AUTH_ENABLED` | `true`                    | `false` hides email-and-password sign-in and sign-up, and the API refuses them. Ignored when no provider is configured, so you cannot lock everyone out.                                                            |
 
 TLS belongs in a reverse proxy in front of Sheetor. The proxy must pass WebSocket upgrades for
-`/api/v1/songs/*/live`, which is where live editing happens.
+`/api/v1/songs/*/live`, which is where live editing happens. Set `TRUST_PROXY=true` behind it, so the sign-in limits count each client by the last `X-Forwarded-For` address (which the proxy must append) rather than all of them as the proxy; never set it when clients can reach Sheetor directly.
 
 ## Single sign-on
 

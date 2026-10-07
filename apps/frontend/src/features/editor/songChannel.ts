@@ -51,11 +51,15 @@ export interface SongChannel {
 
 const RETRY_DELAYS = [1000, 2000, 5000, 10000];
 
-// Close codes after which reconnecting cannot help.
+// Close codes after which reconnecting cannot help. Anything else reconnects, 4401 (signed
+// out somewhere) included: that is how another browser of the same account signs in again.
 const FINAL_CLOSES: Record<number, string> = {
   4400: 'The server rejected an edit. Reload the page to continue.',
   4403: 'You no longer have access to this song.',
   4404: 'This song was deleted.',
+  4413: 'This song has reached its size limit, so the last edit was not saved. Reload the page to continue.',
+  4429: 'You have too many songs open live. Close some other tabs, then reload this page.',
+  4503: 'Too many people have this song open right now. Reload the page to try again.',
 };
 
 // An update with no changes encodes as two zero bytes.

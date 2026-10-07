@@ -12,6 +12,7 @@ use crate::error::library::LibraryError;
 use crate::services::access_service;
 use crate::state::AppState;
 
+// An import replaces the whole song, which arrives as one update.
 const MAX_UPDATE_BYTES: usize = 1 << 20;
 
 /// `GET /songs/{id}/live`: the song's live editing session over a WebSocket.
@@ -30,6 +31,7 @@ pub async fn handler(
 
     Ok(ws
         .max_message_size(MAX_UPDATE_BYTES)
+        .max_frame_size(MAX_UPDATE_BYTES)
         .on_upgrade(move |socket| session::run(socket, state, id, user, role)))
 }
 

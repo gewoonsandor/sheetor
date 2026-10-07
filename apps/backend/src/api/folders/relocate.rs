@@ -24,7 +24,7 @@ pub struct MoveFolder {
     request_body = MoveFolder,
     responses(
         (status = 204, description = "Folder moved"),
-        (status = 400, description = "Cycle or a different owner's library"),
+        (status = 400, description = "Cycle, too deep, or a different owner's library"),
         (status = 403, description = "View-only access"),
         (status = 404, description = "No such folder"),
     ),

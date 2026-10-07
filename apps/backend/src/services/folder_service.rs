@@ -10,6 +10,8 @@ use crate::services::access_service::{require_folder, target_owner};
 use crate::state::AppState;
 
 const MAX_NAME: usize = 120;
+/// Keeps every walk up or down a library short; `LibraryError::TooDeep`'s message repeats it.
+pub const MAX_DEPTH: i64 = 32;
 
 pub async fn create(
     pool: &PgPool,
@@ -19,7 +21,17 @@ pub async fn create(
 ) -> Result<Folder, LibraryError> {
     let name = clean_name(name)?;
     let owner = target_owner(pool, user_id, parent).await?;
-    let id = folders::insert_folder(pool, owner, parent, &name).await?;
+
+    let mut tx = pool.begin().await?;
+    folders::lock_library(&mut tx, owner).await?;
+    if let Some(parent) = parent
+        && folders::depth_under(&mut tx, parent, None).await? > MAX_DEPTH
+    {
+        return Err(LibraryError::TooDeep);
+    }
+    let id = folders::insert_folder(&mut tx, owner, parent, &name).await?;
+    tx.commit().await?;
+
     view(pool, id, user_id).await
 }
 
@@ -49,10 +61,13 @@ pub async fn move_to(
 
     let mut tx = state.db.begin().await?;
     folders::lock_library(&mut tx, folder.owner_id).await?;
-    if let Some(parent) = parent
-        && folders::is_descendant(&mut tx, parent, id).await?
-    {
-        return Err(LibraryError::Cycle);
+    if let Some(parent) = parent {
+        if folders::is_descendant(&mut tx, parent, id).await? {
+            return Err(LibraryError::Cycle);
+        }
+        if folders::depth_under(&mut tx, parent, Some(id)).await? > MAX_DEPTH {
+            return Err(LibraryError::TooDeep);
+        }
     }
     folders::set_folder_parent(&mut tx, id, parent).await?;
     tx.commit().await?;

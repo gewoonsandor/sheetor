@@ -41,6 +41,34 @@ async fn authenticates_a_correct_password() {
     assert_eq!(user.email, email);
 }
 
+/// Signup stores the address lowercased and login lowercases what it is given, so the
+/// case someone types never decides whether they get in.
+#[tokio::test]
+async fn an_address_signs_in_whatever_its_case() {
+    let Some(pool) = pool().await else {
+        eprintln!("skipped: TEST_DATABASE_URL unset");
+        return;
+    };
+    let name = unique("Mixed");
+    user_service::create(&pool, "Ada", &format!("{name}@Example.com"), PASSWORD)
+        .await
+        .expect("signup");
+
+    for typed in [
+        format!("{}@example.com", name.to_lowercase()),
+        format!(" {}@EXAMPLE.COM ", name.to_uppercase()),
+    ] {
+        let user = Backend::new(pool.clone())
+            .authenticate(Credentials {
+                email: typed.clone(),
+                password: PASSWORD.to_owned(),
+            })
+            .await
+            .expect("authenticate");
+        assert!(user.is_some(), "{typed:?} should sign in");
+    }
+}
+
 #[tokio::test]
 async fn rejects_a_wrong_password() {
     let Some(pool) = pool().await else {

@@ -1,10 +1,12 @@
+use std::net::SocketAddr;
+
 use axum::Json;
-use axum::extract::State;
-use axum_login::Error as AuthSessionError;
+use axum::extract::{ConnectInfo, State};
+use axum::http::HeaderMap;
 
 use crate::database::schemas::users::User;
 use crate::error::auth::AuthError;
-use crate::services::auth_service::{AuthSession, Credentials};
+use crate::services::auth_service::{self, AuthSession, Credentials};
 use crate::state::AppState;
 
 #[utoipa::path(
@@ -17,38 +19,21 @@ use crate::state::AppState;
         (status = 200, description = "Logged in", body = User),
         (status = 401, description = "Invalid email or password"),
         (status = 403, description = "Email and password sign-in is disabled"),
+        (status = 429, description = "Too many attempts for this address or from this client"),
+        (status = 503, description = "Too many sign-ins at once"),
     ),
 )]
 pub async fn handler(
     State(state): State<AppState>,
+    ConnectInfo(peer): ConnectInfo<SocketAddr>,
+    headers: HeaderMap,
     mut auth_session: AuthSession,
     Json(creds): Json<Credentials>,
 ) -> Result<Json<User>, AuthError> {
     if !state.auth.local_enabled {
         return Err(AuthError::LocalDisabled);
     }
-    let user = auth_session
-        .authenticate(creds)
-        .await
-        .map_err(unwrap_session_error)?
-        .ok_or(AuthError::InvalidCredentials)?;
-
-    auth_session
-        .login(&user)
-        .await
-        .map_err(unwrap_session_error)?;
-
+    let client = auth_service::client_ip(&headers, peer, state.auth.trust_proxy);
+    let user = auth_service::login(&mut auth_session, &state.limits, client, creds).await?;
     Ok(Json(user))
-}
-
-fn unwrap_session_error(
-    error: AuthSessionError<crate::services::auth_service::Backend>,
-) -> AuthError {
-    match error {
-        AuthSessionError::Backend(error) => error,
-        AuthSessionError::Session(error) => {
-            tracing::error!(error = ?error, "session store failure");
-            AuthError::Session
-        }
-    }
 }

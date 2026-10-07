@@ -5,11 +5,14 @@ mod common;
 use common::{pool, unique, user};
 use sheetor_backend::error::sso::SsoError;
 use sheetor_backend::error::users::UpdateUserError;
-use sheetor_backend::services::sso_service::{Identity, PROVIDER, resolve_user};
+use sheetor_backend::services::sso_service::{Identity, adopt_legacy_identities, resolve_user};
 use sheetor_backend::services::user_service;
+
+const ISSUER: &str = "https://id.example.com/realms/sheetor";
 
 fn identity(email: Option<&str>, verified: bool) -> Identity {
     Identity {
+        issuer: ISSUER.to_owned(),
         subject: unique("subject"),
         email: email.map(str::to_owned),
         email_verified: verified,
@@ -28,7 +31,7 @@ async fn a_new_identity_becomes_a_passwordless_account_once() {
     let subject = first.subject.clone();
 
     let created = resolve_user(&pool, first).await.unwrap();
-    assert_eq!(created.provider, PROVIDER);
+    assert_eq!(created.provider, ISSUER);
     assert_eq!(created.provider_id.as_deref(), Some(subject.as_str()));
     assert_eq!(created.password_hash, None);
     assert_eq!(created.username, "Kay Cee");
@@ -53,7 +56,7 @@ async fn a_verified_email_links_the_existing_account_and_drops_its_password() {
         .unwrap();
 
     assert_eq!(linked.id, local.id);
-    assert_eq!(linked.provider, PROVIDER);
+    assert_eq!(linked.provider, ISSUER);
     // Signup never confirmed the address, so the password may be a squatter's.
     assert_eq!(local.password_hash.as_deref(), Some("hash"));
     assert_eq!(linked.password_hash, None);
@@ -82,6 +85,78 @@ async fn an_identity_without_email_is_refused() {
     let refused = resolve_user(&pool, identity(None, true)).await;
 
     assert!(matches!(refused, Err(SsoError::NoEmail)), "{refused:?}");
+}
+
+/// A subject is only unique at its own issuer: the same one at another provider is
+/// someone else, and must never land in the first person's account.
+#[tokio::test]
+async fn the_same_subject_at_another_issuer_is_another_account() {
+    let Some(pool) = pool().await else {
+        eprintln!("skipped: TEST_DATABASE_URL unset");
+        return;
+    };
+    let first = identity(Some(&format!("{}@example.com", unique("kc"))), true);
+    let subject = first.subject.clone();
+    let original = resolve_user(&pool, first).await.unwrap();
+
+    let elsewhere = Identity {
+        issuer: "https://other.example.com".to_owned(),
+        subject,
+        ..identity(Some(&format!("{}@example.com", unique("kc"))), true)
+    };
+    let other = resolve_user(&pool, elsewhere).await.unwrap();
+
+    assert_ne!(other.id, original.id);
+    assert_eq!(other.provider, "https://other.example.com");
+}
+
+/// Identities stored before the issuer was recorded say `oidc`; after the boot-time move
+/// they still sign in to the same account.
+#[tokio::test]
+async fn a_legacy_identity_still_reaches_its_account() {
+    let Some(pool) = pool().await else {
+        eprintln!("skipped: TEST_DATABASE_URL unset");
+        return;
+    };
+    let local = user(&pool).await;
+    let subject = unique("legacy");
+    sqlx::query!(
+        "UPDATE users SET provider = 'oidc', provider_id = $2 WHERE id = $1",
+        local.id,
+        subject,
+    )
+    .execute(&pool)
+    .await
+    .expect("store a legacy identity");
+    let issuer = format!("https://{}.example.com", unique("idp"));
+
+    adopt_legacy_identities(&pool, &issuer).await.unwrap();
+    let returning = Identity {
+        issuer,
+        subject,
+        ..identity(None, true)
+    };
+
+    assert_eq!(resolve_user(&pool, returning).await.unwrap().id, local.id);
+}
+
+#[tokio::test]
+async fn a_verified_email_links_whatever_its_case() {
+    let Some(pool) = pool().await else {
+        eprintln!("skipped: TEST_DATABASE_URL unset");
+        return;
+    };
+    let local = user(&pool).await;
+    let shouting = format!("  {}  ", local.email.to_uppercase());
+
+    let linked = resolve_user(&pool, identity(Some(&shouting), true))
+        .await
+        .unwrap();
+
+    assert_eq!(
+        linked.id, local.id,
+        "a verified address links whatever its case"
+    );
 }
 
 #[tokio::test]

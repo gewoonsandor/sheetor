@@ -1,4 +1,5 @@
 use std::io;
+use std::net::SocketAddr;
 
 use tokio::net::TcpListener;
 use tracing_subscriber::EnvFilter;
@@ -23,7 +24,15 @@ async fn main() -> io::Result<()> {
 
     let listener = TcpListener::bind((config.host.as_str(), config.port)).await?;
     tracing::info!("listening on http://{}", listener.local_addr()?);
-    tracing::info!("swagger ui on http://{}/docs", listener.local_addr()?);
+    if config.docs_enabled {
+        tracing::info!("swagger ui on http://{}/docs", listener.local_addr()?);
+    }
 
-    axum::serve(listener, app::build(&config, db).await).await
+    // The peer address feeds the per-client sign-in limits.
+    let app = app::build(&config, db).await;
+    axum::serve(
+        listener,
+        app.into_make_service_with_connect_info::<SocketAddr>(),
+    )
+    .await
 }

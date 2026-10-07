@@ -126,10 +126,29 @@ pub async fn update_username(pool: &PgPool, id: i32, username: &str) -> Result<U
     .await
 }
 
+/// Moves every identity of one provider to another name; returns how many moved.
+pub async fn rename_provider(pool: &PgPool, from: &str, to: &str) -> Result<u64, sqlx::Error> {
+    let done = sqlx::query!(
+        "UPDATE users SET provider = $2 WHERE provider = $1",
+        from,
+        to,
+    )
+    .execute(pool)
+    .await?;
+    Ok(done.rows_affected())
+}
+
+/// `users_email_key` on the address itself, `users_email_lower_key` on `lower(email)`.
+fn is_email_taken(db: &(dyn sqlx::error::DatabaseError + 'static)) -> bool {
+    db.is_unique_violation()
+        && matches!(
+            db.constraint(),
+            Some("users_email_key" | "users_email_lower_key")
+        )
+}
+
 fn classify_sso_insert_error(error: sqlx::Error) -> SsoError {
-    let taken = error
-        .as_database_error()
-        .is_some_and(|db| db.is_unique_violation() && db.constraint() == Some("users_email_key"));
+    let taken = error.as_database_error().is_some_and(is_email_taken);
     if taken {
         SsoError::EmailTaken
     } else {
@@ -138,18 +157,9 @@ fn classify_sso_insert_error(error: sqlx::Error) -> SsoError {
 }
 
 fn classify_insert_error(error: sqlx::Error) -> users::InsertUserError {
-    let taken = error.as_database_error().and_then(|db| {
-        if !db.is_unique_violation() {
-            return None;
-        }
-        match db.constraint() {
-            Some("users_email_key") => Some(users::InsertUserError::EmailTaken),
-            _ => None,
-        }
-    });
-
-    taken.unwrap_or_else(|| {
-        tracing::error!(error = ?error, "db error inserting user");
-        users::InsertUserError::Database(error)
-    })
+    if error.as_database_error().is_some_and(is_email_taken) {
+        return users::InsertUserError::EmailTaken;
+    }
+    tracing::error!(error = ?error, "db error inserting user");
+    users::InsertUserError::Database(error)
 }

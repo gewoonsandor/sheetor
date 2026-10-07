@@ -29,6 +29,7 @@ pub struct ShareFolder {
         (status = 400, description = "Owner role or sharing with yourself"),
         (status = 403, description = "Only the owner shares"),
         (status = 404, description = "No such folder or account"),
+        (status = 429, description = "Too many shares in the last ten minutes"),
     ),
 )]
 pub async fn handler(

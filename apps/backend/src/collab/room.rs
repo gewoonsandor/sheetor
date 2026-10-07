@@ -1,23 +1,55 @@
 use std::collections::HashMap;
+use std::sync::Arc;
+use std::time::{Duration, Instant};
 
 use axum::body::Bytes;
 use axum::extract::ws::Message;
-use tokio::sync::mpsc::UnboundedSender;
+use tokio::sync::mpsc::Sender;
+use tokio::sync::{Mutex as AsyncMutex, oneshot};
 use uuid::Uuid;
 use yrs::updates::decoder::Decode;
 use yrs::{Doc, ReadTxn, StateVector, Transact, Update};
 
-use super::protocol::{Cursor, Peer, ServerMessage, close, text};
+use super::protocol::{CLOSE_REVOKED, Cursor, Peer, ServerMessage, close, text};
 use super::summary::load_doc;
 use crate::database::schemas::roles::Role;
 use crate::error::collab::CollabError;
 
+/// Live connections one song takes at once.
+pub const MAX_MEMBERS: usize = 32;
+/// What a live document may grow to, encoded.
+pub const MAX_DOC_BYTES: usize = 8 << 20;
+/// Presence goes out at most this often: it is the whole list, to everyone, so sending it on
+/// every cursor move costs the square of the room.
+const PRESENCE_GAP: Duration = Duration::from_millis(50);
+
 pub struct Member {
-    pub user_id: i32,
-    pub name: String,
-    pub role: Role,
-    pub cursor: Option<Cursor>,
-    pub tx: UnboundedSender<Message>,
+    user_id: i32,
+    name: String,
+    role: Role,
+    cursor: Option<Cursor>,
+    tx: Sender<Message>,
+    /// Dropped with the member, which tells its session it is out of the room.
+    _in_room: oneshot::Sender<()>,
+}
+
+impl Member {
+    pub fn new(
+        user_id: i32,
+        name: String,
+        role: Role,
+        tx: Sender<Message>,
+        in_room: oneshot::Sender<()>,
+    ) -> Self {
+        Self {
+            user_id,
+            name,
+            role,
+            cursor: None,
+            tx,
+            _in_room: in_room,
+        }
+    }
 }
 
 /// Document state not yet written to the database.
@@ -33,6 +65,12 @@ pub struct Room {
     dirty: bool,
     flush_scheduled: bool,
     last_editor: Option<i32>,
+    /// The encoded size when last measured plus every update applied since: an overestimate,
+    /// measured again before it refuses anything.
+    size: usize,
+    presence_sent: Instant,
+    presence_due: bool,
+    saving: Arc<AsyncMutex<()>>,
 }
 
 impl Room {
@@ -43,6 +81,10 @@ impl Room {
             dirty: false,
             flush_scheduled: false,
             last_editor: None,
+            size: state.len(),
+            presence_sent: Instant::now(),
+            presence_due: false,
+            saving: Arc::default(),
         })
     }
 
@@ -52,17 +94,37 @@ impl Room {
             .encode_state_as_update_v1(&StateVector::default())
     }
 
-    pub fn add(&mut self, id: Uuid, member: Member) {
-        self.members.insert(id, member);
-        self.broadcast(self.presence());
+    pub fn saving(&self) -> Arc<AsyncMutex<()>> {
+        self.saving.clone()
     }
 
-    /// Returns true when the room is now empty.
-    pub fn remove(&mut self, id: Uuid) -> bool {
-        if self.members.remove(&id).is_some() {
-            self.broadcast(self.presence());
+    /// Queues the welcome and the whole document for a new member, under this room's lock, so
+    /// nothing relayed can overtake them.
+    pub fn add(&mut self, id: Uuid, member: Member) -> Result<(), CollabError> {
+        if self.members.len() >= MAX_MEMBERS {
+            return Err(CollabError::RoomFull);
         }
-        self.members.is_empty()
+        let welcome = ServerMessage::Welcome {
+            connection_id: id,
+            role: member.role,
+        };
+        let _ = member.tx.try_send(text(&welcome));
+        let _ = member.tx.try_send(Message::Binary(self.state().into()));
+        self.members.insert(id, member);
+        self.send_presence();
+        Ok(())
+    }
+
+    /// Removes a member and, when they were the last, returns what still needs saving.
+    pub fn leave(&mut self, id: Uuid) -> Option<Snapshot> {
+        if self.members.remove(&id).is_some() {
+            self.send_presence();
+        }
+        if self.members.is_empty() {
+            self.take_dirty()
+        } else {
+            None
+        }
     }
 
     pub fn is_idle(&self) -> bool {
@@ -78,28 +140,62 @@ impl Room {
             .filter(|member| member.role >= Role::Editor)
             .ok_or(CollabError::NotEditor)?
             .user_id;
+        if self.size + update.len() > MAX_DOC_BYTES {
+            self.size = self.state().len();
+        }
+        if self.size + update.len() > MAX_DOC_BYTES {
+            return Err(CollabError::TooLarge);
+        }
         self.doc
             .transact_mut()
             .apply_update(Update::decode_v1(update)?)?;
 
+        self.size += update.len();
         self.dirty = true;
         self.last_editor = Some(author);
-        self.relay(from, Message::Binary(Bytes::copy_from_slice(update)));
+        let relayed = Message::Binary(Bytes::copy_from_slice(update));
+        self.deliver(&relayed, |id| id != from);
         Ok(!std::mem::replace(&mut self.flush_scheduled, true))
     }
 
-    pub fn set_cursor(&mut self, id: Uuid, cursor: Cursor) {
-        if let Some(member) = self.members.get_mut(&id) {
-            member.cursor = Some(cursor);
-            self.broadcast(self.presence());
+    /// Keeps the latest cursor but sends presence at most every `PRESENCE_GAP`. When this move
+    /// is the first held back, returns how long until `flush_presence` should send it.
+    pub fn set_cursor(&mut self, id: Uuid, cursor: Cursor) -> Option<Duration> {
+        self.members.get_mut(&id)?.cursor = Some(cursor);
+        let wait = PRESENCE_GAP.saturating_sub(self.presence_sent.elapsed());
+        if wait.is_zero() {
+            self.send_presence();
+            return None;
+        }
+        (!std::mem::replace(&mut self.presence_due, true)).then_some(wait)
+    }
+
+    pub fn flush_presence(&mut self) {
+        if self.presence_due {
+            self.send_presence();
         }
     }
 
     pub fn set_role(&mut self, id: Uuid, role: Role) {
-        if let Some(member) = self.members.get_mut(&id) {
-            member.role = role;
-            let _ = member.tx.send(text(&ServerMessage::Role { role }));
-            self.broadcast(self.presence());
+        let Some(member) = self
+            .members
+            .get_mut(&id)
+            .filter(|member| member.role != role)
+        else {
+            return;
+        };
+        member.role = role;
+        self.deliver(&text(&ServerMessage::Role { role }), |to| to == id);
+        self.send_presence();
+    }
+
+    /// Brings a user's connections in line with their role now, closing them when it is gone.
+    pub fn set_access(&mut self, user: i32, role: Option<Role>) {
+        for id in self.connections_of(user) {
+            match role {
+                Some(role) => self.set_role(id, role),
+                None => self.kick(id, CLOSE_REVOKED),
+            }
         }
     }
 
@@ -108,13 +204,21 @@ impl Room {
     /// one that ignores it go on editing with the role it had.
     pub fn kick(&mut self, id: Uuid, code: u16) {
         if let Some(member) = self.members.remove(&id) {
-            let _ = member.tx.send(close(code, "access changed"));
-            self.broadcast(self.presence());
+            let _ = member.tx.try_send(close(code, "access changed"));
+            self.send_presence();
         }
     }
 
-    pub fn close_all(&self, code: u16) {
-        self.broadcast(close(code, "song closed"));
+    pub fn kick_user(&mut self, user: i32, code: u16) {
+        for id in self.connections_of(user) {
+            self.kick(id, code);
+        }
+    }
+
+    pub fn close_all(&mut self, code: u16) {
+        for (_, member) in self.members.drain() {
+            let _ = member.tx.try_send(close(code, "song closed"));
+        }
     }
 
     pub fn take_dirty(&mut self) -> Option<Snapshot> {
@@ -125,10 +229,16 @@ impl Room {
         })
     }
 
-    pub fn connections(&self) -> impl Iterator<Item = (Uuid, i32, Role)> + '_ {
+    pub fn user_ids(&self) -> impl Iterator<Item = i32> + '_ {
+        self.members.values().map(|member| member.user_id)
+    }
+
+    fn connections_of(&self, user: i32) -> Vec<Uuid> {
         self.members
             .iter()
-            .map(|(id, member)| (*id, member.user_id, member.role))
+            .filter(|(_, member)| member.user_id == user)
+            .map(|(id, _)| *id)
+            .collect()
     }
 
     fn presence(&self) -> Message {
@@ -146,17 +256,21 @@ impl Room {
         text(&ServerMessage::Presence { peers })
     }
 
-    fn broadcast(&self, message: Message) {
-        for member in self.members.values() {
-            let _ = member.tx.send(message.clone());
-        }
+    fn send_presence(&mut self) {
+        self.presence_due = false;
+        self.presence_sent = Instant::now();
+        let presence = self.presence();
+        self.deliver(&presence, |_| true);
     }
 
-    fn relay(&self, from: Uuid, message: Message) {
-        for (id, member) in &self.members {
-            if *id != from {
-                let _ = member.tx.send(message.clone());
-            }
+    /// Queues `message` for the members `to` picks. One whose queue is full has stopped reading,
+    /// and holding more for it would grow without bound: it is dropped, which ends its session.
+    fn deliver(&mut self, message: &Message, to: impl Fn(Uuid) -> bool) {
+        let before = self.members.len();
+        self.members
+            .retain(|id, member| !to(*id) || member.tx.try_send(message.clone()).is_ok());
+        if self.members.len() < before {
+            self.send_presence();
         }
     }
 }

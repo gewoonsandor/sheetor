@@ -11,4 +11,10 @@ pub enum CollabError {
 
     #[error("viewers cannot edit")]
     NotEditor,
+
+    #[error("the room is full")]
+    RoomFull,
+
+    #[error("the document has reached its size limit")]
+    TooLarge,
 }

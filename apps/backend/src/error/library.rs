@@ -28,6 +28,10 @@ pub enum LibraryError {
     #[api_error(status_code = 400, message(inherit))]
     Cycle,
 
+    #[error("folders nest at most 32 levels deep")]
+    #[api_error(status_code = 400, message(inherit))]
+    TooDeep,
+
     #[error("not a valid song document")]
     #[api_error(status_code = 400, message(inherit))]
     InvalidSong,
@@ -43,6 +47,14 @@ pub enum LibraryError {
     #[error("a share role must be viewer or editor")]
     #[api_error(status_code = 400, message(inherit))]
     OwnerRole,
+
+    #[error("too many shares at once; try again in a few minutes")]
+    #[api_error(status_code = 429, message(inherit))]
+    TooManyShares,
+
+    #[error("songs upload as application/octet-stream")]
+    #[api_error(status_code = 415, message(inherit))]
+    UnsupportedMediaType,
 
     #[error(transparent)]
     Database(#[from] sqlx::Error),

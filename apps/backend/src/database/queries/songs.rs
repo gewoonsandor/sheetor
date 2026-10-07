@@ -1,4 +1,4 @@
-use sqlx::PgPool;
+use sqlx::{PgConnection, PgPool};
 use uuid::Uuid;
 
 use crate::database::schemas::roles::Role;
@@ -63,7 +63,7 @@ pub async fn song_view(pool: &PgPool, id: Uuid, user_id: i32) -> Result<Option<S
 
 /// The songs `user_id` owns plus those inside `folder_ids`, most recently changed first.
 pub async fn accessible_songs(
-    pool: &PgPool,
+    conn: &mut PgConnection,
     user_id: i32,
     folder_ids: &[Uuid],
 ) -> Result<Vec<Song>, sqlx::Error> {
@@ -81,7 +81,7 @@ pub async fn accessible_songs(
         user_id,
         folder_ids,
     )
-    .fetch_all(pool)
+    .fetch_all(conn)
     .await
 }
 

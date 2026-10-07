@@ -2,20 +2,27 @@
 
 mod common;
 
-use common::{pool, song_state, user};
+use common::{pool, song_state, unique, user};
+use openidconnect::reqwest;
+use sheetor_backend::api;
 use sheetor_backend::collab::summary::summarize;
 use sheetor_backend::database::schemas::roles::Role;
 use sheetor_backend::error::library::LibraryError;
 use sheetor_backend::services::{folder_service, library_service, share_service, song_service};
 use sheetor_backend::state::{AppState, AuthSettings};
+use sqlx::PgPool;
+use uuid::Uuid;
 
-async fn state() -> Option<AppState> {
-    let pool = pool().await?;
-    Some(AppState::new(
+fn app_state(pool: PgPool) -> AppState {
+    AppState::new(
         pool,
         "http://localhost:4000".to_owned(),
         AuthSettings::local_only(),
-    ))
+    )
+}
+
+async fn state() -> Option<AppState> {
+    Some(app_state(pool().await?))
 }
 
 #[tokio::test]
@@ -182,6 +189,117 @@ async fn a_collaborator_can_leave_but_not_manage_shares() {
         .unwrap();
     let gone = folder_service::rename(db, ben.id, band.id, "Mine").await;
     assert!(matches!(gone, Err(LibraryError::NotFound)), "{gone:?}");
+}
+
+#[tokio::test]
+async fn folders_nest_no_deeper_than_the_cap() {
+    let Some(state) = state().await else {
+        eprintln!("skipped: TEST_DATABASE_URL unset");
+        return;
+    };
+    let db = &state.db;
+    let ada = user(db).await;
+    let mut chain: Vec<Uuid> = Vec::new();
+    for level in 1..=folder_service::MAX_DEPTH {
+        let parent = chain.last().copied();
+        let folder = folder_service::create(db, ada.id, &format!("L{level}"), parent)
+            .await
+            .unwrap();
+        chain.push(folder.id);
+    }
+    let deeper = folder_service::create(db, ada.id, "Deeper", chain.last().copied()).await;
+    assert!(matches!(deeper, Err(LibraryError::TooDeep)), "{deeper:?}");
+
+    let top = folder_service::create(db, ada.id, "Top", None)
+        .await
+        .unwrap();
+    folder_service::create(db, ada.id, "Child", Some(top.id))
+        .await
+        .unwrap();
+    let child_too_deep = chain[chain.len() - 2];
+    let moved = folder_service::move_to(&state, ada.id, top.id, Some(child_too_deep)).await;
+    assert!(matches!(moved, Err(LibraryError::TooDeep)), "{moved:?}");
+    folder_service::move_to(&state, ada.id, top.id, Some(chain[chain.len() - 3]))
+        .await
+        .unwrap();
+}
+
+#[tokio::test]
+async fn every_share_attempt_counts_against_the_owner_alone() {
+    let Some(state) = state().await else {
+        eprintln!("skipped: TEST_DATABASE_URL unset");
+        return;
+    };
+    let db = &state.db;
+    let (ada, ben) = (user(db).await, user(db).await);
+    let band = folder_service::create(db, ada.id, "Band", None)
+        .await
+        .unwrap();
+    let nobody = format!("{}@example.com", unique("nobody"));
+    for _ in 0..share_service::GRANTS_PER_WINDOW {
+        let probe = share_service::grant(&state, ada.id, band.id, &nobody, Role::Viewer).await;
+        assert!(matches!(probe, Err(LibraryError::UnknownUser)), "{probe:?}");
+    }
+
+    let limited = share_service::grant(&state, ada.id, band.id, &ben.email, Role::Viewer).await;
+    assert!(
+        matches!(limited, Err(LibraryError::TooManyShares)),
+        "{limited:?}"
+    );
+    let own = folder_service::create(db, ben.id, "Own", None)
+        .await
+        .unwrap();
+    share_service::grant(&state, ben.id, own.id, &ada.email, Role::Viewer)
+        .await
+        .unwrap();
+}
+
+#[tokio::test]
+async fn a_share_finds_the_account_whatever_the_case_of_the_address() {
+    let Some(state) = state().await else {
+        eprintln!("skipped: TEST_DATABASE_URL unset");
+        return;
+    };
+    let db = &state.db;
+    let (ada, ben) = (user(db).await, user(db).await);
+    let band = folder_service::create(db, ada.id, "Band", None)
+        .await
+        .unwrap();
+
+    let typed = format!(" {} ", ben.email.to_uppercase());
+    let share = share_service::grant(&state, ada.id, band.id, &typed, Role::Viewer)
+        .await
+        .unwrap();
+    assert_eq!(share.user_id, ben.id);
+}
+
+/// Needs no database: the content type is refused before the session or the pool is touched.
+#[tokio::test]
+async fn a_song_upload_must_be_octet_stream() {
+    let pool = PgPool::connect_lazy("postgres://localhost/unused").unwrap();
+    let (router, _) = api::router(app_state(pool));
+    let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let url = format!(
+        "http://{}/api/v1/songs/create",
+        listener.local_addr().unwrap()
+    );
+    tokio::spawn(async move { axum::serve(listener, router).await });
+
+    let client = reqwest::Client::new();
+    for (content_type, status) in [
+        ("text/plain", 415),
+        ("application/x-www-form-urlencoded", 415),
+        ("application/octet-stream", 401),
+    ] {
+        let reply = client
+            .post(&url)
+            .header("content-type", content_type)
+            .body(song_state("A"))
+            .send()
+            .await
+            .unwrap();
+        assert_eq!(reply.status().as_u16(), status, "{content_type}");
+    }
 }
 
 #[test]

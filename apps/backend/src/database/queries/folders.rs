@@ -5,7 +5,7 @@ use crate::database::schemas::folders::{Folder, FolderRecord};
 use crate::database::schemas::roles::Role;
 
 pub async fn insert_folder(
-    pool: &PgPool,
+    conn: &mut PgConnection,
     owner_id: i32,
     parent_id: Option<Uuid>,
     name: &str,
@@ -16,7 +16,7 @@ pub async fn insert_folder(
         parent_id,
         name,
     )
-    .fetch_one(pool)
+    .fetch_one(conn)
     .await
 }
 
@@ -54,12 +54,17 @@ pub async fn folder_view(
 
 /// Every folder `user_id` owns or reaches through a share, with their best role on each.
 /// A folder whose parent they cannot see arrives with `parent_id = NULL`.
-pub async fn accessible_folders(pool: &PgPool, user_id: i32) -> Result<Vec<Folder>, sqlx::Error> {
+pub async fn accessible_folders(
+    conn: &mut PgConnection,
+    user_id: i32,
+) -> Result<Vec<Folder>, sqlx::Error> {
+    // UNION, not UNION ALL: a share inside another share would otherwise walk its subtree
+    // once per share above it, quadratic in a chain of nested shares.
     sqlx::query_as!(
         Folder,
         r#"WITH RECURSIVE shared AS (
                SELECT s.folder_id AS id, s.role FROM folder_shares s WHERE s.user_id = $1
-             UNION ALL
+             UNION
                SELECT f.id, shared.role FROM folders f JOIN shared ON f.parent_id = shared.id
            ), access AS (
                SELECT id, 'owner'::text AS role FROM folders WHERE owner_id = $1
@@ -80,7 +85,7 @@ pub async fn accessible_folders(pool: &PgPool, user_id: i32) -> Result<Vec<Folde
            ORDER BY f.name"#,
         user_id,
     )
-    .fetch_all(pool)
+    .fetch_all(conn)
     .await
 }
 
@@ -98,6 +103,21 @@ pub async fn folder_role(
     .await
 }
 
+/// Until the transaction ends, Postgres cancels any statement running longer than `timeout`
+/// (a duration such as `5s`).
+pub async fn set_statement_timeout(
+    conn: &mut PgConnection,
+    timeout: &str,
+) -> Result<(), sqlx::Error> {
+    sqlx::query_scalar!(
+        r#"SELECT set_config('statement_timeout', $1, true) AS "timeout!""#,
+        timeout,
+    )
+    .fetch_one(conn)
+    .await?;
+    Ok(())
+}
+
 pub async fn rename_folder(pool: &PgPool, id: Uuid, name: &str) -> Result<(), sqlx::Error> {
     sqlx::query!("UPDATE folders SET name = $2 WHERE id = $1", id, name)
         .execute(pool)
@@ -106,7 +126,7 @@ pub async fn rename_folder(pool: &PgPool, id: Uuid, name: &str) -> Result<(), sq
 }
 
 /// Serialises tree changes within one owner's library until the transaction ends, so two
-/// concurrent moves cannot each pass the cycle check and together build a loop.
+/// concurrent changes cannot each pass the cycle or depth check and together break it.
 pub async fn lock_library(conn: &mut PgConnection, owner_id: i32) -> Result<(), sqlx::Error> {
     sqlx::query_scalar!(
         r#"SELECT true AS "locked!" FROM pg_advisory_xact_lock($1)"#,
@@ -132,6 +152,32 @@ pub async fn is_descendant(
            SELECT EXISTS (SELECT 1 FROM up WHERE id = $2) AS "found!""#,
         candidate,
         ancestor,
+    )
+    .fetch_one(conn)
+    .await
+}
+
+/// How many levels deep the lowest folder would sit if `folder`'s subtree, or a new folder
+/// when `None`, hung under `parent`.
+pub async fn depth_under(
+    conn: &mut PgConnection,
+    parent: Uuid,
+    folder: Option<Uuid>,
+) -> Result<i64, sqlx::Error> {
+    sqlx::query_scalar!(
+        r#"WITH RECURSIVE up AS (
+               SELECT id, parent_id FROM folders WHERE id = $1
+             UNION ALL
+               SELECT f.id, f.parent_id FROM folders f JOIN up ON f.id = up.parent_id
+           ), down AS (
+               SELECT id, 1 AS level FROM folders WHERE id = $2
+             UNION ALL
+               SELECT f.id, down.level + 1 FROM folders f JOIN down ON f.parent_id = down.id
+           )
+           SELECT (SELECT count(*) FROM up) + COALESCE((SELECT max(level) FROM down), 1)
+               AS "depth!""#,
+        parent,
+        folder,
     )
     .fetch_one(conn)
     .await

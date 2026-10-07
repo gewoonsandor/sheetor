@@ -61,6 +61,14 @@ async fn sign_in(
 
     let identity = sso_service::complete(sso, pending, code, csrf).await?;
     let user = sso_service::resolve_user(&state.db, identity).await?;
+    // Back to the default lifetime, from the short one the pending login had; and
+    // a fresh id, because axum-login only cycles the id of a session nobody is signed in to.
+    auth_session.session.set_expiry(None);
+    auth_session
+        .session
+        .cycle_id()
+        .await
+        .map_err(|_| SsoError::Session)?;
     auth_session
         .login(&user)
         .await

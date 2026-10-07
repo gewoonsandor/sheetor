@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE users SET provider = $2 WHERE provider = $1",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Varchar"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "3b36058ec2d2f27e3509e6695ca2dfc707831e91d4dea43db6b7eb84bf62da96"
+}

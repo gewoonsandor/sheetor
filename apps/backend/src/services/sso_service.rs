@@ -1,3 +1,6 @@
+use std::sync::PoisonError;
+use std::time::{Duration, Instant};
+
 use openidconnect::core::{CoreAuthenticationFlow, CoreClient, CoreProviderMetadata};
 use openidconnect::{
     AuthorizationCode, ClientId, ClientSecret, CsrfToken, EndpointMaybeSet, EndpointNotSet,
@@ -10,12 +13,15 @@ use sqlx::PgPool;
 use crate::database::queries::users;
 use crate::database::schemas::users::User;
 use crate::error::sso::SsoError;
+use crate::services::user_service::{MAX_USERNAME, normalize_email};
 use crate::state::Sso;
 
-pub const PROVIDER: &str = "oidc";
 pub const PENDING_KEY: &str = "sso.pending";
 
-const MAX_USERNAME: usize = 64;
+/// What `provider` said for every identity before it held the issuer.
+const LEGACY_PROVIDER: &str = "oidc";
+/// How long a discovery document is trusted before it is fetched again.
+const METADATA_TTL: Duration = Duration::from_secs(60 * 60);
 
 /// The secrets of a started sign-in, kept in the session until the provider redirects back.
 #[derive(Serialize, Deserialize)]
@@ -26,6 +32,8 @@ pub struct PendingLogin {
 }
 
 pub struct Identity {
+    /// The provider's issuer URL; with `subject`, what names one person.
+    pub issuer: String,
     pub subject: String,
     pub email: Option<String>,
     pub email_verified: bool,
@@ -88,9 +96,14 @@ pub async fn complete(
         .ok_or_else(|| SsoError::Token("no id token".to_owned()))?;
     let claims = id_token
         .claims(&client.id_token_verifier(), &Nonce::new(pending.nonce))
-        .map_err(|error| SsoError::Token(error.to_string()))?;
+        .map_err(|error| {
+            // Perhaps signed with a key newer than the cached document: fetch it again.
+            *sso.metadata.lock().unwrap_or_else(PoisonError::into_inner) = None;
+            SsoError::Token(error.to_string())
+        })?;
 
     Ok(Identity {
+        issuer: sso.config.issuer_url.clone(),
         subject: claims.subject().to_string(),
         email: claims.email().map(|email| email.to_string()),
         email_verified: claims.email_verified().unwrap_or(false),
@@ -105,34 +118,61 @@ pub async fn complete(
 /// verified email, else a new one. An unverified address never links to an existing
 /// account, because anyone can claim any address at a provider that does not verify.
 pub async fn resolve_user(pool: &PgPool, identity: Identity) -> Result<User, SsoError> {
-    if let Some(user) = users::find_user_by_identity(pool, PROVIDER, &identity.subject).await? {
+    let issuer = identity.issuer.as_str();
+    if let Some(user) = users::find_user_by_identity(pool, issuer, &identity.subject).await? {
         return Ok(user);
     }
-    let email = identity.email.as_deref().ok_or(SsoError::NoEmail)?;
+    let email = normalize_email(identity.email.as_deref().ok_or(SsoError::NoEmail)?);
     if identity.email_verified
-        && let Some(user) = users::link_identity(pool, email, PROVIDER, &identity.subject).await?
+        && let Some(user) = users::link_identity(pool, &email, issuer, &identity.subject).await?
     {
         return Ok(user);
     }
-    let name = display_name(&identity, email);
-    users::insert_sso_user(pool, &name, email, PROVIDER, &identity.subject).await
+    let name = display_name(&identity, &email);
+    users::insert_sso_user(pool, &name, &email, issuer, &identity.subject).await
+}
+
+/// Moves the identities stored as `oidc` to the configured issuer; returns how many moved.
+// ponytail: assumes OIDC_ISSUER_URL never changed before this release, since an `oidc`
+// row does not say which issuer it came from.
+pub async fn adopt_legacy_identities(pool: &PgPool, issuer: &str) -> Result<u64, sqlx::Error> {
+    users::rename_provider(pool, LEGACY_PROVIDER, issuer).await
 }
 
 async fn client(sso: &Sso) -> Result<OidcClient, SsoError> {
-    let issuer = IssuerUrl::new(sso.config.issuer_url.clone())
-        .map_err(|error| SsoError::Discovery(error.to_string()))?;
     let redirect = RedirectUrl::new(sso.redirect_url.clone())
         .map_err(|error| SsoError::Discovery(error.to_string()))?;
-    let metadata = CoreProviderMetadata::discover_async(issuer, &sso.http)
-        .await
-        .map_err(|error| SsoError::Discovery(format!("{error:?}")))?;
 
     Ok(CoreClient::from_provider_metadata(
-        metadata,
+        metadata(sso).await?,
         ClientId::new(sso.config.client_id.clone()),
         Some(ClientSecret::new(sso.config.client_secret.clone())),
     )
     .set_redirect_uri(redirect))
+}
+
+/// The provider's discovery document, fetched at most once per `METADATA_TTL` rather than
+/// per sign-in. Still lazy, so the app boots while the provider is down.
+async fn metadata(sso: &Sso) -> Result<CoreProviderMetadata, SsoError> {
+    let cached = sso
+        .metadata
+        .lock()
+        .unwrap_or_else(PoisonError::into_inner)
+        .clone();
+    if let Some((fetched, metadata)) = cached
+        && fetched.elapsed() < METADATA_TTL
+    {
+        return Ok(metadata);
+    }
+
+    let issuer = IssuerUrl::new(sso.config.issuer_url.clone())
+        .map_err(|error| SsoError::Discovery(error.to_string()))?;
+    let metadata = CoreProviderMetadata::discover_async(issuer, &sso.http)
+        .await
+        .map_err(|error| SsoError::Discovery(format!("{error:?}")))?;
+    *sso.metadata.lock().unwrap_or_else(PoisonError::into_inner) =
+        Some((Instant::now(), metadata.clone()));
+    Ok(metadata)
 }
 
 fn display_name(identity: &Identity, email: &str) -> String {

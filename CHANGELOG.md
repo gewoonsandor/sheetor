@@ -19,8 +19,24 @@ still change the song format or the API; from `1.0.0` on, only a major release w
   next, like a score, with every part's bars lined up. No line is split across pages. The browser's
   print dialog saves the PDF.
 
+### Changed
+
+- Sign-in and sign-up are rate-limited per address and per client, and so is sharing folders.
+  Behind a reverse proxy, set `TRUST_PROXY=true` so clients are told apart.
+- Email addresses are case-insensitive: `Ada@Example.com` and `ada@example.com` are one account.
+- The API docs at `/docs` are off unless `DOCS_ENABLED=true`.
+- Folders nest at most 32 levels deep.
+- A song is limited to 8 MiB, a room to 32 open connections and a person to 16. Signing out closes
+  your live connections in other tabs too, which then reconnect if still signed in.
+
 ### Fixed
 
+- Security hardening: security headers (a content security policy, no framing, `nosniff`, HSTS
+  over HTTPS); a slow or flooding live connection can no longer exhaust the server's memory;
+  one busy song no longer holds up every other; saves can no longer land out of order; access
+  changes are re-checked once instead of once per request; a login takes as long for an unknown
+  address as for a wrong password; signup checks the name and address; and single sign-on
+  identities are tied to their provider.
 - A live edit nested deeply enough could crash the server for everyone; it is now refused.
 - Signing in with single sign-on to an account that was created with a password removes that
   password, and with it every session it opened: the address was never confirmed, so whoever set

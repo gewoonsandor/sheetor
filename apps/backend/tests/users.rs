@@ -7,6 +7,9 @@ use sheetor_backend::database::queries::appearance::{find_appearance, upsert_app
 use sheetor_backend::database::queries::users::insert_user;
 use sheetor_backend::database::schemas::appearance::{Accent, Appearance, Theme};
 use sheetor_backend::error::users::InsertUserError;
+use sheetor_backend::services::user_service;
+
+const PASSWORD: &str = "Str0ng-Passw0rd!";
 
 #[tokio::test]
 async fn creates_a_user() {
@@ -51,6 +54,66 @@ async fn rejects_a_duplicate_email() {
         matches!(error, InsertUserError::EmailTaken),
         "expected EmailTaken, got {error:?}"
     );
+}
+
+/// Addresses are stored trimmed and lowercased, so one differing only by case or by
+/// surrounding spaces is the same address, and taken.
+#[tokio::test]
+async fn a_signup_differing_only_by_case_is_taken() {
+    let Some(pool) = pool().await else {
+        eprintln!("skipped: TEST_DATABASE_URL unset");
+        return;
+    };
+    let name = unique("Case");
+
+    let created = user_service::create(&pool, "Ada", &format!(" {name}@Example.COM "), PASSWORD)
+        .await
+        .expect("first signup");
+    assert_eq!(
+        created.email,
+        format!("{}@example.com", name.to_lowercase())
+    );
+
+    let again = user_service::create(&pool, "Ada", &format!("{name}@example.com"), PASSWORD).await;
+    assert!(
+        matches!(again, Err(InsertUserError::EmailTaken)),
+        "expected EmailTaken, got {again:?}"
+    );
+}
+
+/// Refused before any hashing or insert, so the junk never costs argon2 time or a row.
+#[tokio::test]
+async fn a_signup_with_a_bad_name_or_address_is_refused() {
+    let Some(pool) = pool().await else {
+        eprintln!("skipped: TEST_DATABASE_URL unset");
+        return;
+    };
+    let email = format!("{}@example.com", unique("valid"));
+    let too_long_name = "x".repeat(65);
+    let too_long_email = format!("{}@example.com", "x".repeat(244));
+
+    for name in ["", "   ", too_long_name.as_str()] {
+        let result = user_service::create(&pool, name, &email, PASSWORD).await;
+        assert!(
+            matches!(result, Err(InsertUserError::InvalidUsername)),
+            "{name:?}: {result:?}"
+        );
+    }
+
+    for address in [
+        "",
+        "ada",
+        "@example.com",
+        "ada@",
+        "ada@b@c",
+        too_long_email.as_str(),
+    ] {
+        let result = user_service::create(&pool, "Ada", address, PASSWORD).await;
+        assert!(
+            matches!(result, Err(InsertUserError::InvalidEmail)),
+            "{address:?}: {result:?}"
+        );
+    }
 }
 
 /// Usernames are deliberately not unique - the migration puts `UNIQUE` on

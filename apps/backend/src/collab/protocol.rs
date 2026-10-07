@@ -5,8 +5,13 @@ use uuid::Uuid;
 use crate::database::schemas::roles::Role;
 
 pub const CLOSE_INVALID: u16 = 4400;
+/// The user signed out somewhere: the client reconnects, which signs it in again or fails.
+pub const CLOSE_SIGNED_OUT: u16 = 4401;
 pub const CLOSE_REVOKED: u16 = 4403;
 pub const CLOSE_GONE: u16 = 4404;
+pub const CLOSE_TOO_LARGE: u16 = 4413;
+pub const CLOSE_TOO_MANY: u16 = 4429;
+pub const CLOSE_ROOM_FULL: u16 = 4503;
 pub const CLOSE_UNAVAILABLE: u16 = 1011;
 
 const MAX_ID: usize = 64;
