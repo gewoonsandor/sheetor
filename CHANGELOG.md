@@ -30,6 +30,8 @@ still change the song format or the API; from `1.0.0` on, only a major release w
   your live connections in other tabs too, which then reconnect if still signed in.
 - Repeats are shared by every part again: setting a repeat sign sets it on all tracks, and a song
   whose parts had their own repeats opens with the first track's on every part.
+- An exported PDF no longer prints the browser's date, page title, URL and page numbers around
+  each page.
 
 ### Fixed
 

@@ -1150,6 +1150,12 @@
 }
 
 @media print {
+  /* Declaring any margin box turns off the browser's own date, title, URL and page number. */
+  @page {
+    @top-center { content: ''; }
+    @bottom-center { content: ''; }
+  }
+
   body > :not(.print-sheet) {
     display: none !important;
   }
