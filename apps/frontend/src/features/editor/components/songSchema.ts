@@ -7,7 +7,7 @@ import {
   SONG_FORMAT, STAFF_DISPLAYS,
   TECHNIQUE_KEYS,
   createId, createTrack, defaultTuning, normalizeTrackLengths, pruneNotesToStringCount, requiredStringCount,
-  resizeTuning, syncRepeats, trackKind,
+  resizeTuning, trackKind, withRepeatsOf,
 } from './songUtils';
 
 export type ParseSongResult =
@@ -274,8 +274,12 @@ export const parseSong = (value: unknown): ParseSongResult => {
     }];
   }
 
-  // Repeats are shared: every part plays track 0's, whatever an older save held.
-  tracks = syncRepeats(normalizeTrackLengths(tracks));
+  tracks = normalizeTrackLengths(tracks);
+  // Before format 2 every part played track 0's repeats: give each part a copy. A later song keeps
+  // each track's as saved, so a 1.1.0 song whose parts repeat differently still plays as it did.
+  if (value.format !== SONG_FORMAT) {
+    tracks = tracks.map(track => ({ ...track, measures: withRepeatsOf(track.measures, tracks[0].measures) }));
+  }
 
   return {
     ok: true,

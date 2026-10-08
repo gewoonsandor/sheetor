@@ -184,19 +184,19 @@ describe('parseSong', () => {
     expect(result.song.tracks.map(t => t.measures.length)).toEqual([2, 2]);
   });
 
-  it('gives every part track 1\'s repeats, in old and per-part saves alike', () => {
+  it('gives every part track 1\'s repeats in a song saved before they were per track, and no later', () => {
     const beats = [{ duration: '1', isRest: true }];
     const tracks = [
       { instrument: 'guitar', measures: [{ repeatStart: true, beats }, { repeatEnd: 3, beats }, { beats }] },
       { instrument: 'piano', measures: [{ beats }, { beats }, { repeatEnd: 2, beats }] },
     ];
-    for (const format of [undefined, 2]) {
+    const repeats = (format?: number) => {
       const result = parseSong({ title: 'T', bpm: 100, timeSignature: { numerator: 4, denominator: 4 }, tracks, format });
-      expect(result.ok).toBe(true);
-      if (!result.ok) return;
-      expect(result.song.tracks[1].measures.map(m => [m.repeatStart, m.repeatEnd]))
-        .toEqual([[true, undefined], [undefined, 3], [undefined, undefined]]);
-    }
+      return result.ok ? result.song.tracks[1].measures.map(m => [m.repeatStart, m.repeatEnd]) : null;
+    };
+    expect(repeats()).toEqual([[true, undefined], [undefined, 3], [undefined, undefined]]);
+    // A 1.1.0 song plays as it did: each track's as saved.
+    expect(repeats(2)).toEqual([[undefined, undefined], [undefined, undefined], [undefined, 2]]);
   });
 
   it('rejects a pitched note outside the midi range', () => {

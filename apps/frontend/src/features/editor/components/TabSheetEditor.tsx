@@ -19,7 +19,7 @@ import {
   midiToNoteName,
   midiToNoteOctave,
   normalizeTrackLengths,
-  syncRepeats,
+  withRepeatsOf,
   MAX_BPM,
   MIN_BPM,
   resolveNoteMidi,
@@ -480,7 +480,13 @@ export const TabSheetEditor: React.FC<TabSheetEditorProps> = ({ meta, channel })
   const addTrack = () => {
     if (readOnly) return;
     const track = createTrack('guitar', measures.length);
-    editSong(prev => ({ ...prev, tracks: syncRepeats(normalizeTrackLengths([...prev.tracks, track])) }));
+    editSong(prev => {
+      const tracks = normalizeTrackLengths([...prev.tracks, track]);
+      const last = tracks.length - 1;
+      // The new part repeats with the one it was added from.
+      tracks[last] = { ...tracks[last], measures: withRepeatsOf(tracks[last].measures, tracks[activeTrackIndex].measures) };
+      return { ...prev, tracks };
+    });
     setActiveTrackIndex(song.tracks.length);
     setActiveBeatIndex(0);
     setActiveStringIndex(0);
@@ -658,12 +664,21 @@ export const TabSheetEditor: React.FC<TabSheetEditorProps> = ({ meta, channel })
     });
   };
 
-  /** Repeats are shared by every part, so each track's bar gets the same mark. */
+  /**
+   * Repeats are shared by every part: the active part's bar decides, and every track's bar gets its
+   * marks, so a 1.1.0 song whose parts repeat differently comes into step bar by bar as it is edited.
+   */
   const setPartMeasure = (index: number, patch: (measure: TabMeasure) => TabMeasure) => {
-    editSong(prev => ({
-      ...prev,
-      tracks: prev.tracks.map(t => ({ ...t, measures: t.measures.map((m, idx) => (idx === index ? patch(m) : m)) })),
-    }));
+    editSong(prev => {
+      const marks = patch(prev.tracks[activeTrackIndex].measures[index]);
+      return {
+        ...prev,
+        tracks: prev.tracks.map(t => ({
+          ...t,
+          measures: t.measures.map((m, idx) => (idx === index ? withRepeatsOf([m], [marks])[0] : m)),
+        })),
+      };
+    });
   };
 
   const toggleRepeatStart = () => setPartMeasure(activeMeasureIndex, measure => {

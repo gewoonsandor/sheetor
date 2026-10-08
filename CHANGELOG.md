@@ -28,8 +28,8 @@ still change the song format or the API; from `1.0.0` on, only a major release w
 - Folders nest at most 32 levels deep.
 - A song is limited to 8 MiB, a room to 32 open connections and a person to 16. Signing out closes
   your live connections in other tabs too, which then reconnect if still signed in.
-- Repeats are shared by every part again: setting a repeat sign sets it on all tracks, and a song
-  whose parts had their own repeats opens with the first track's on every part.
+- Repeats are shared by every part again: setting or clearing a repeat sign does it on every
+  track. A song whose parts repeat differently still plays as saved until its repeats are edited.
 - An exported PDF no longer prints the browser's date, page title, URL and page numbers around
   each page.
 
