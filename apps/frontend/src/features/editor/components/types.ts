@@ -122,9 +122,9 @@ export interface TabMeasure {
   beats: TabBeat[];
   bpm?: number;
   timeSignature?: TimeSignature;
-  /** This track's own, so one part can repeat while another plays on: a ‖: opens a repeated section here. */
+  /** Shared by every part (each track's bar holds the same): a ‖: opens a repeated section here. */
   repeatStart?: boolean;
-  /** This track's own: a :‖ closes one here, and how many times the section plays in all. */
+  /** Shared by every part: a :‖ closes one here, and how many times the section plays in all. */
   repeatEnd?: number;
   /** This track's own: its staff switches to this clef here, until the next change. */
   clef?: Clef;

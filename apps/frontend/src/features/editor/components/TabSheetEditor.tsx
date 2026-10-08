@@ -19,6 +19,7 @@ import {
   midiToNoteName,
   midiToNoteOctave,
   normalizeTrackLengths,
+  syncRepeats,
   MAX_BPM,
   MIN_BPM,
   resolveNoteMidi,
@@ -479,7 +480,7 @@ export const TabSheetEditor: React.FC<TabSheetEditorProps> = ({ meta, channel })
   const addTrack = () => {
     if (readOnly) return;
     const track = createTrack('guitar', measures.length);
-    editSong(prev => ({ ...prev, tracks: normalizeTrackLengths([...prev.tracks, track]) }));
+    editSong(prev => ({ ...prev, tracks: syncRepeats(normalizeTrackLengths([...prev.tracks, track])) }));
     setActiveTrackIndex(song.tracks.length);
     setActiveBeatIndex(0);
     setActiveStringIndex(0);
@@ -657,14 +658,11 @@ export const TabSheetEditor: React.FC<TabSheetEditorProps> = ({ meta, channel })
     });
   };
 
-  /** Repeats are the part's own, so one instrument can repeat while another plays on; a grand staff's hands share them. */
+  /** Repeats are shared by every part, so each track's bar gets the same mark. */
   const setPartMeasure = (index: number, patch: (measure: TabMeasure) => TabMeasure) => {
-    const members = handsOf(activeTrackIndex);
     editSong(prev => ({
       ...prev,
-      tracks: prev.tracks.map((t, i) => (members.includes(i)
-        ? { ...t, measures: t.measures.map((m, idx) => (idx === index ? patch(m) : m)) }
-        : t)),
+      tracks: prev.tracks.map(t => ({ ...t, measures: t.measures.map((m, idx) => (idx === index ? patch(m) : m)) })),
     }));
   };
 

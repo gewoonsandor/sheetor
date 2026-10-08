@@ -7,7 +7,7 @@ import {
   SONG_FORMAT, STAFF_DISPLAYS,
   TECHNIQUE_KEYS,
   createId, createTrack, defaultTuning, normalizeTrackLengths, pruneNotesToStringCount, requiredStringCount,
-  resizeTuning, trackKind,
+  resizeTuning, syncRepeats, trackKind,
 } from './songUtils';
 
 export type ParseSongResult =
@@ -274,19 +274,8 @@ export const parseSong = (value: unknown): ParseSongResult => {
     }];
   }
 
-  tracks = normalizeTrackLengths(tracks);
-  // Before format 2 every part played track 0's repeats: give each part its own copy.
-  if (value.format !== SONG_FORMAT) {
-    const conductor = tracks[0].measures;
-    tracks = tracks.map(track => ({
-      ...track,
-      measures: track.measures.map((measure, m) => ({
-        ...measure,
-        repeatStart: conductor[m].repeatStart,
-        repeatEnd: conductor[m].repeatEnd,
-      })),
-    }));
-  }
+  // Repeats are shared: every part plays track 0's, whatever an older save held.
+  tracks = syncRepeats(normalizeTrackLengths(tracks));
 
   return {
     ok: true,

@@ -604,9 +604,25 @@ export const normalizeTrackLengths = (tracks: TabTrack[]): TabTrack[] => {
   });
 };
 
+/** Repeats are shared by every part: each track's bars carry track 0's ‖: and :‖. */
+export const syncRepeats = (tracks: TabTrack[]): TabTrack[] => {
+  const conductor = tracks[0]?.measures ?? [];
+  return tracks.map((track, t) => (t === 0 ? track : {
+    ...track,
+    measures: track.measures.map((measure, m) => {
+      const bar = { ...measure };
+      delete bar.repeatStart;
+      delete bar.repeatEnd;
+      if (conductor[m]?.repeatStart) bar.repeatStart = true;
+      if (conductor[m]?.repeatEnd !== undefined) bar.repeatEnd = conductor[m].repeatEnd;
+      return bar;
+    }),
+  }));
+};
+
 /**
- * Bumped when stored songs mean something new. 2: repeats are each part's own,
- * where 1.0.0 (no marker) kept them on track 0 for every part.
+ * Bumped when stored songs mean something new. 2 marked repeats as each part's own;
+ * they are shared again, and `parseSong` syncs every part to track 0's.
  */
 export const SONG_FORMAT = 2;
 
