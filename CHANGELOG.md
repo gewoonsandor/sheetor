@@ -7,6 +7,8 @@ still change the song format or the API; from `1.0.0` on, only a major release w
 
 ## [Unreleased]
 
+## [1.2.0] - 2026-10-08
+
 ### Added
 
 - Ties (J, or ‿ in the note toolbar), as in MuseScore: J ties the note under the cursor to the next

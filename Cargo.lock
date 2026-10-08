@@ -2528,7 +2528,7 @@ dependencies = [
 
 [[package]]
 name = "sheetor-backend"
-version = "1.1.0"
+version = "1.2.0"
 dependencies = [
  "api-error",
  "argon2",
